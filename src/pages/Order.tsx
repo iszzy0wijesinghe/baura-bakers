@@ -7,8 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 
 const WHATSAPP_NUMBER = "94764433616"; // ✅ no + for wa.me
 
-const pickmeFoodLogo = "../../images/logos/pickme-food2.webp";
-const uberEatsLogo = "../../images/logos/ubereats.webp";
+import  pickmeFoodLogo from "../../images/logos/pickme-food2.webp";
+import  uberEatsLogo from "../../images/logos/ubereats.webp";
 
 type FormState = {
   customerName: string;
