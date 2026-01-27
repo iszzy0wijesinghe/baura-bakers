@@ -467,9 +467,18 @@ export default function Order() {
                     </button>
                   </div>
 
-                  <p className="mt-4 text-[11px] text-brand-ink/60">
-                    Note: WhatsApp message content is generated from your form +
-                    cart items.
+                  <p className="mt-4 text-[11px] leading-relaxed text-brand-ink/60">
+                    <span className="block">
+                      <span className="font-semibold text-brand-ink">
+                        Note:
+                      </span>{" "}
+                      We generate the WhatsApp message for you - please send it
+                      as it is.
+                    </span>
+                    <span className="block">
+                      If you order via PickMe Food / Uber Eats, you may need to
+                      re-enter the details in the app.
+                    </span>
                   </p>
                 </div>
               </div>
@@ -480,5 +489,3 @@ export default function Order() {
     </Page>
   );
 }
-
-
