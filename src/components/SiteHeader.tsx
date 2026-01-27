@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Menu as MenuIcon, X } from "lucide-react";
-import logo from "../assets/logo.webp";
+import logo from "../../images/logos/logo.webp";
 
 const links = [
   { to: "/", label: "Home" },
