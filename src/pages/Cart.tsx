@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import { useCart } from "../app/cart";
+import Page from "../components/Page";
 
 export default function Cart() {
   const { items, subtotal, updateQty, removeItem, clear } = useCart();
 
   return (
+    <Page>
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -112,5 +114,6 @@ export default function Cart() {
         </div>
       )}
     </div>
+    </Page>
   );
 }

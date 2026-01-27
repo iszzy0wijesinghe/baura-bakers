@@ -1,11 +1,12 @@
 import { Link} from "react-router-dom";
 import { X } from "lucide-react";
 import { useCart } from "../app/cart";
+import Page from "../components/Page";
 
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 
-const WHATSAPP_NUMBER = "94764433616"; // ✅ no + for wa.me
+const WHATSAPP_NUMBER = "94769878770"; 
 
 import  pickmeFoodLogo from "../../images/logos/pickme-food2.webp";
 import  uberEatsLogo from "../../images/logos/ubereats.webp";
@@ -118,6 +119,7 @@ export default function Order() {
   }
 
   return (
+    <Page>
     <div className="space-y-10">
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -452,6 +454,7 @@ export default function Order() {
           document.body,
         )}
     </div>
+    </Page>
   );
 }
 

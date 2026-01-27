@@ -8,6 +8,7 @@ import ProcessSteps from "../components/ProcessSteps";
 import { products } from "../content/products";
 import { getProductClicks } from "../lib/productClicks";
 import { Link } from "react-router-dom";
+import Page from "../components/Page";
 
 import heroJarcakes from "../../images/home/hero-jarcakes.webp.webp";
 import heroJarcakes2 from "../../images/home/hero-image2.webp";
@@ -76,7 +77,9 @@ export default function Home() {
   }, []);
 
   return (
+    <Page>
     <div className="space-y-14">
+      
       {/* HERO */}
       <section className="relative overflow-hidden rounded-3xl border border-black/10 p-6 shadow-sm sm:p-10">
         {/* Background slideshow */}
@@ -283,5 +286,6 @@ export default function Home() {
         </div>
       </section>
     </div>
+    </Page>
   );
 }

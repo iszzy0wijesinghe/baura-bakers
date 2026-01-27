@@ -10,6 +10,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trackProductClick } from "../lib/productClicks";
 import DeliveryBadges from "../components/DeliveryBadges";
+import Page from "../components/Page";
 
 function GalleryMainImage({ src, alt }: { src: string; alt: string }) {
   const reduce = useReducedMotion();
@@ -109,6 +110,7 @@ export default function ProductDetails() {
   };
 
   return (
+    <Page>
     <div className="space-y-10">
       <Link to="/menu" className="text-sm text-brand-ink/70 underline">
         ← Back to menu
@@ -347,6 +349,7 @@ export default function ProductDetails() {
         </section>
       </div>
     </div>
+    </Page>
   );
 }
 

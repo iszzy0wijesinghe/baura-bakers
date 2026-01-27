@@ -2,6 +2,7 @@ import ButtonLink from "../components/ButtonLink";
 import Section from "../components/Section";
 import DeliveryBadges from "../components/DeliveryBadges";
 import { Heart, Leaf, ShieldCheck, Sparkles } from "lucide-react";
+import Page from "../components/Page";
 
 const values = [
   {
@@ -28,6 +29,7 @@ const values = [
 
 export default function About() {
   return (
+    <Page>
     <div className="space-y-12">
       {/* HERO */}
       <section className="rounded-3xl border border-black/10 bg-white/50 p-6 shadow-sm backdrop-blur sm:p-10">
@@ -196,5 +198,6 @@ export default function About() {
         </div>
       </section>
     </div>
+    </Page>
   );
 }
