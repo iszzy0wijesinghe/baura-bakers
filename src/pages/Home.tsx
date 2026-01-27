@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import ButtonLink from "../components/ButtonLink";
 import Section from "../components/Section";
 import FadeSentences from "../components/FadeSentences";
@@ -14,28 +14,6 @@ import heroJarcakes2 from "../../images/home/hero-image2.webp";
 import heroJarcakes4 from "../../images/home/hero-image5.webp";
 import heroJarcakes5 from "../../images/home/hero-image6.1.webp";
 
-const bestSellers = [
-  {
-    name: "Chocolate Fudge Cake",
-    note: "Rich, soft layers • premium cocoa",
-    price: "From LKR 2,900",
-  },
-  {
-    name: "Butter Croissant",
-    note: "Flaky, golden • baked fresh daily",
-    price: "From LKR 350",
-  },
-  {
-    name: "Classic Sandwich Bread",
-    note: "Soft crumb • perfect for breakfast",
-    price: "From LKR 520",
-  },
-  {
-    name: "Red Velvet Cupcakes",
-    note: "Creamy frosting • party favorite",
-    price: "From LKR 180",
-  },
-];
 
 const trustPoints = [
   {

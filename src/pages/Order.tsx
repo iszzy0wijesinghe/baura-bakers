@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link} from "react-router-dom";
 import { X } from "lucide-react";
 import { useCart } from "../app/cart";
 
@@ -34,7 +34,6 @@ function formatLkr(n: number) {
 }
 
 export default function Order() {
-  const nav = useNavigate();
   const { items } = useCart();
 
   const totalLkr = useMemo(() => {
