@@ -1,5 +1,5 @@
-const pickmeFoodLogo = "/images/logos/pickme-food2.webp";
-const uberEatsLogo = "/images/logos/ubereats.webp";
+const pickmeFoodLogo = "../../images/logos/pickme-food2.webp";
+const uberEatsLogo = "../../images/logos/ubereats.webp";
 
 type Props = {
   compact?: boolean;
