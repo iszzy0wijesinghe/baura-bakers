@@ -1,25 +1,26 @@
-import { Link } from "react-router-dom";
-import { X } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { useCart } from "../app/cart";
 import Page from "../components/Page";
-
-import { createPortal } from "react-dom";
-import { useEffect, useMemo, useState } from "react";
+import { createGuestOrder } from "../lib/orders";
+import { startPayHerePayment } from "../lib/payhere";
 
 const WHATSAPP_NUMBER = "94769878770";
+const DELIVERY_METHOD = "Baura Bakers delivery arrangement";
 
-import pickmeFoodLogo from "../../images/logos/pickme-food2.webp";
-import uberEatsLogo from "../../images/logos/ubereats.webp";
+type StepNo = 1 | 2 | 3;
 
 type FormState = {
   customerName: string;
+  customerEmail: string;
   contactNumber: string;
-  customerAddress: string;
+  billingAddress: string;
   deliveryAddress: string;
+  deliveryLocationUrl: string;
+  deliveryLat: number | null;
+  deliveryLng: number | null;
   note: string;
 };
-
-type DeliveryApp = "PickMe Food" | "Uber Eats";
 
 function makeOrderId() {
   const s = Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -35,42 +36,43 @@ function formatLkr(n: number) {
 }
 
 export default function Order() {
-  const { items, clear } = useCart();
+  const navigate = useNavigate();
+  const { items } = useCart();
+
+  const [step, setStep] = useState<StepNo>(1);
+  const [orderId] = useState(() => makeOrderId());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [savedOrderNo, setSavedOrderNo] = useState<string | null>(null);
+
+  const [form, setForm] = useState<FormState>({
+    customerName: "",
+    customerEmail: "",
+    contactNumber: "",
+    billingAddress: "",
+    deliveryAddress: "",
+    deliveryLocationUrl: "",
+    deliveryLat: null,
+    deliveryLng: null,
+    note: "",
+  });
 
   const totalLkr = useMemo(() => {
     return items.reduce((sum, it) => sum + it.unitPriceLkr * it.quantity, 0);
   }, [items]);
 
-  const [open, setOpen] = useState(false);
-  const [orderId] = useState(() => makeOrderId());
-  const [deliveryApp, setDeliveryApp] = useState<DeliveryApp>("PickMe Food");
-
-  const [form, setForm] = useState<FormState>({
-    customerName: "",
-    contactNumber: "",
-    customerAddress: "",
-    deliveryAddress: "",
-    note: "",
-  });
-
-  // lock scroll when modal open (prevents weird gaps / scroll bleed)
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
-  const canSubmit = useMemo(() => {
+  const billingValid = useMemo(() => {
     return (
       form.customerName.trim().length >= 2 &&
       onlyDigitsPhone(form.contactNumber).trim().length >= 9 &&
-      form.customerAddress.trim().length >= 5 &&
-      form.deliveryAddress.trim().length >= 5
+      form.billingAddress.trim().length >= 5
     );
   }, [form]);
+
+  const deliveryValid = useMemo(() => {
+    return form.deliveryAddress.trim().length >= 5;
+  }, [form.deliveryAddress]);
 
   const cartLines = useMemo(() => {
     return items.map((it, idx) => {
@@ -81,19 +83,24 @@ export default function Order() {
     });
   }, [items]);
 
-  const message = useMemo(() => {
+  const whatsappMessage = useMemo(() => {
     const safePhone = onlyDigitsPhone(form.contactNumber);
 
     return [
-      "🧁 *Baura Bakers — New Order*",
+      "🧁 *Baura Bakers — Bank Transfer Order*",
       `🆔 *Order ID:* ${orderId}`,
       "",
-      "👤 *Customer Details*",
+      "👤 *Billing Details*",
       `Name: ${form.customerName || "-"}`,
+      `Email: ${form.customerEmail || "-"}`,
       `Contact: ${safePhone || "-"}`,
-      `Address: ${form.customerAddress || "-"}`,
+      `Billing Address: ${form.billingAddress || "-"}`,
+      "",
+      "🚚 *Delivery Details*",
       `Delivery Address: ${form.deliveryAddress || "-"}`,
-      `Delivery app: ${deliveryApp}`,
+      form.deliveryLocationUrl
+        ? `Exact Location: ${form.deliveryLocationUrl}`
+        : "",
       form.note.trim() ? `Note: ${form.note.trim()}` : "",
       "",
       "🛍️ *Order Items*",
@@ -101,390 +108,594 @@ export default function Order() {
       "",
       `💰 *Total:* ${formatLkr(totalLkr)}`,
       "",
-      "🚚 *Delivery:* PickMe Food / Uber Eats (in-range) • PickMe Flash (WhatsApp)",
+      "🏦 *Payment Method:* Bank transfer",
+      "Please share bank transfer details and I will send the payment slip here.",
     ]
       .filter(Boolean)
       .join("\n");
-  }, [form, orderId, cartLines, totalLkr, deliveryApp]);
+  }, [form, orderId, cartLines, totalLkr]);
 
-  function openModal() {
-    setOpen(true);
+  const canGoNext =
+    step === 1 ? billingValid : step === 2 ? deliveryValid : true;
+
+  function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function placeViaWhatsApp() {
-    clear();
-    setOpen(false);
+  function goNext() {
+    setSubmitError("");
 
-    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-      message,
-    )}`;
-    window.location.href = url;
+    if (step === 1 && !billingValid) {
+      setSubmitError("Please complete your billing details.");
+      return;
+    }
+
+    if (step === 2 && !deliveryValid) {
+      setSubmitError("Please complete your delivery address.");
+      return;
+    }
+
+    setStep((prev) => Math.min(prev + 1, 3) as StepNo);
   }
 
-  function placeViaPickMe(p0: string) {
-    clear();
-    setOpen(false);
-    // put your real PickMe Food URL here (or your store link)
-    window.location.href = "https://pickme.lk/food";
+  function goBack() {
+    setSubmitError("");
+    setStep((prev) => Math.max(prev - 1, 1) as StepNo);
   }
 
-  function placeViaUber(p0: string) {
-    clear();
-    setOpen(false);
-    // put your real Uber Eats URL here (or your store link)
-    window.location.href = "https://www.ubereats.com/";
+  function copyBillingToDelivery() {
+    setForm((prev) => ({
+      ...prev,
+      deliveryAddress: prev.billingAddress,
+    }));
   }
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setSubmitError("Location is not supported by this browser.");
+      return;
+    }
+
+    setIsLocating(true);
+    setSubmitError("");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = Number(position.coords.latitude.toFixed(7));
+        const lng = Number(position.coords.longitude.toFixed(7));
+        const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+
+        setForm((prev) => ({
+          ...prev,
+          deliveryLat: lat,
+          deliveryLng: lng,
+          deliveryLocationUrl: mapUrl,
+        }));
+
+        setIsLocating(false);
+      },
+      () => {
+        setSubmitError(
+          "Could not get your location. Please allow location permission or paste your Google Maps location link.",
+        );
+        setIsLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+      },
+    );
+  }
+
+  async function saveOrderOnce(paymentMethod: string) {
+    if (savedOrderNo === orderId) {
+      return;
+    }
+
+    const savedOrder = await createGuestOrder({
+      orderNo: orderId,
+      customerName: form.customerName,
+      customerEmail: form.customerEmail,
+      contactNumber: onlyDigitsPhone(form.contactNumber),
+      customerAddress: form.billingAddress,
+      deliveryAddress: form.deliveryAddress,
+      deliveryLocationUrl: form.deliveryLocationUrl,
+      deliveryLat: form.deliveryLat,
+      deliveryLng: form.deliveryLng,
+      deliveryApp: DELIVERY_METHOD,
+      paymentMethod,
+      note: form.note,
+      items,
+    });
+
+    console.log("Order saved successfully:", savedOrder);
+    setSavedOrderNo(orderId);
+  }
+
+  async function payOnline() {
+    if (!billingValid || !deliveryValid || !items.length || isSubmitting) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setSubmitError("");
+
+      await saveOrderOnce("ONLINE_PAYMENT");
+
+      localStorage.setItem(
+        "baura_pending_payment_v1",
+        JSON.stringify({
+          orderNo: orderId,
+          items,
+          savedAt: new Date().toISOString(),
+        }),
+      );
+
+      // Do not clear cart here. Cart clears only after payment success.
+      await startPayHerePayment(orderId);
+    } catch (error) {
+      console.error("Pay online failed:", error);
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Could not start online payment. Please try again.",
+      );
+      setIsSubmitting(false);
+    }
+  }
+
+  async function bankTransferViaWhatsApp() {
+    if (!billingValid || !deliveryValid || !items.length || isSubmitting) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setSubmitError("");
+
+      await saveOrderOnce("BANK_TRANSFER_WHATSAPP");
+
+      localStorage.setItem(
+        "baura_pending_bank_transfer_v1",
+        JSON.stringify({
+          orderNo: orderId,
+          items,
+          savedAt: new Date().toISOString(),
+        }),
+      );
+
+      // Do not clear cart here. User may come back after sending slip.
+      const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+        whatsappMessage,
+      )}`;
+
+      window.location.href = url;
+    } catch (error) {
+      console.error("Bank transfer order failed:", error);
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Order could not be saved. Please try again.",
+      );
+      setIsSubmitting(false);
+    }
+  }
+
+  const stepMeta = [
+    {
+      id: 1,
+      label: "Step 1",
+      title: "Billing details",
+    },
+    {
+      id: 2,
+      label: "Step 2",
+      title: "Delivery details",
+    },
+    {
+      id: 3,
+      label: "Step 3",
+      title: "Confirm & pay",
+    },
+  ] as const;
 
   return (
     <Page>
-      <div className="space-y-10">
+      <div className="space-y-8">
         <header className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            Order
+          <p className="text-xs font-semibold tracking-[0.28em] text-brand-ink/55">
+            CHECKOUT
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-brand-ink sm:text-4xl">
+            Complete your order
           </h1>
-          <p className="max-w-2xl text-sm leading-relaxed text-brand-ink/75">
-            Calm, simple ordering. Fill your details — we’ll confirm fast via
-            WhatsApp.
+          <p className="max-w-2xl text-sm leading-relaxed text-brand-ink/70">
+            Follow the steps below. Your cart will stay saved while you complete
+            payment or contact us through WhatsApp.
           </p>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[1.15fr_.85fr]">
-          {/* FORM */}
-          <section className="rounded-3xl border border-black/10 bg-white/50 p-6 shadow-sm backdrop-blur sm:p-8">
-            <div className="grid gap-5">
-              {/* Customer name */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                  CUSTOMER NAME
-                </label>
-                <input
-                  value={form.customerName}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, customerName: e.target.value }))
-                  }
-                  className="w-full rounded-2xl border border-black/10 bg-white/60 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
-                  placeholder="Your name"
-                  autoComplete="name"
-                />
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
+          <section className="rounded-3xl border border-black/10 bg-white/55 p-5 shadow-sm backdrop-blur sm:p-8">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {stepMeta.map((item) => {
+                const active = step === item.id;
+                const done = step > item.id;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      if (item.id === 1) setStep(1);
+                      if (item.id === 2 && billingValid) setStep(2);
+                      if (item.id === 3 && billingValid && deliveryValid) {
+                        setStep(3);
+                      }
+                    }}
+                    className={[
+                      "rounded-2xl border px-4 py-3 text-left transition",
+                      active
+                        ? "border-brand-ink/35 bg-brand-ink text-brand-bg"
+                        : done
+                          ? "border-brand-ink/20 bg-brand-bg/80 text-brand-ink"
+                          : "border-black/10 bg-white/45 text-brand-ink/55",
+                    ].join(" ")}
+                  >
+                    <p className="text-[11px] font-semibold tracking-widest opacity-80">
+                      {item.label}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">{item.title}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {submitError && (
+              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {submitError}
               </div>
+            )}
 
-              {/* Contact number */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                  CONTACT NUMBER
-                </label>
-                <input
-                  value={form.contactNumber}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, contactNumber: e.target.value }))
-                  }
-                  className="w-full rounded-2xl border border-black/10 bg-white/60 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
-                  placeholder="07X XXXX XXX (or +94...)"
-                  inputMode="tel"
-                  autoComplete="tel"
-                />
-                <p className="text-[11px] text-brand-ink/60">
-                  Tip: Use WhatsApp number for faster confirmation.
-                </p>
-              </div>
+            <div className="mt-6">
+              {step === 1 && (
+                <div className="space-y-5">
+                  <div>
+                    <h2 className="text-xl font-semibold text-brand-ink">
+                      Billing details
+                    </h2>
+                    <p className="mt-1 text-sm text-brand-ink/65">
+                      These details are used for order confirmation and receipt.
+                    </p>
+                  </div>
 
-              {/* Customer address */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                  CUSTOMER ADDRESS
-                </label>
-                <textarea
-                  value={form.customerAddress}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, customerAddress: e.target.value }))
-                  }
-                  className="min-h-[92px] w-full rounded-2xl border border-black/10 bg-white/60 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
-                  placeholder="Your home address"
-                />
-              </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                        CUSTOMER NAME
+                      </label>
+                      <input
+                        value={form.customerName}
+                        onChange={(e) =>
+                          updateForm("customerName", e.target.value)
+                        }
+                        className="w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                        placeholder="Your name"
+                        autoComplete="name"
+                      />
+                    </div>
 
-              {/* Delivery address */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                  DELIVERY ADDRESS
-                </label>
-                <textarea
-                  value={form.deliveryAddress}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, deliveryAddress: e.target.value }))
-                  }
-                  className="min-h-[92px] w-full rounded-2xl border border-black/10 bg-white/60 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
-                  placeholder="Where should we deliver?"
-                />
-                <p className="text-[11px] text-brand-ink/60">
-                  Delivery is arranged via PickMe Food / Uber Eats. Out of range
-                  → PickMe Flash via WhatsApp.
-                </p>
-              </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                        CONTACT NUMBER
+                      </label>
+                      <input
+                        value={form.contactNumber}
+                        onChange={(e) =>
+                          updateForm("contactNumber", e.target.value)
+                        }
+                        className="w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                        placeholder="07X XXXX XXX"
+                        inputMode="tel"
+                        autoComplete="tel"
+                      />
+                    </div>
+                  </div>
 
-              {/* Note */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                  NOTE (OPTIONAL)
-                </label>
-                <textarea
-                  value={form.note}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, note: e.target.value }))
-                  }
-                  className="min-h-[80px] w-full rounded-2xl border border-black/10 bg-white/60 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
-                  placeholder="Any preferences? time, toppings, message, etc."
-                />
-              </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                      EMAIL OPTIONAL
+                    </label>
+                    <input
+                      value={form.customerEmail}
+                      onChange={(e) =>
+                        updateForm("customerEmail", e.target.value)
+                      }
+                      className="w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                      placeholder="For receipt and order updates"
+                      type="email"
+                      autoComplete="email"
+                    />
+                  </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <Link
-                  to="/menu"
-                  className="text-sm text-brand-ink/70 underline"
-                >
-                  ← View menu
-                </Link>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                      BILLING ADDRESS
+                    </label>
+                    <textarea
+                      value={form.billingAddress}
+                      onChange={(e) =>
+                        updateForm("billingAddress", e.target.value)
+                      }
+                      className="min-h-[110px] w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                      placeholder="Your billing address"
+                    />
+                  </div>
+                </div>
+              )}
 
+              {step === 2 && (
+                <div className="space-y-5">
+                  <div>
+                    <h2 className="text-xl font-semibold text-brand-ink">
+                      Delivery details
+                    </h2>
+                    <p className="mt-1 text-sm text-brand-ink/65">
+                      Add the address and exact location so we can arrange
+                      delivery clearly.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={copyBillingToDelivery}
+                    className="rounded-2xl border border-brand-ink/20 bg-white/55 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white/70"
+                  >
+                    Use billing address as delivery address
+                  </button>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                      DELIVERY ADDRESS
+                    </label>
+                    <textarea
+                      value={form.deliveryAddress}
+                      onChange={(e) =>
+                        updateForm("deliveryAddress", e.target.value)
+                      }
+                      className="min-h-[120px] w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                      placeholder="Where should we deliver?"
+                    />
+                  </div>
+
+                  <div className="rounded-3xl border border-black/10 bg-white/55 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                          EXACT LOCATION
+                        </p>
+                        <p className="mt-1 text-xs text-brand-ink/65">
+                          Use your current location or paste a Google Maps link.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={useCurrentLocation}
+                        disabled={isLocating}
+                        className={[
+                          "rounded-2xl px-4 py-2 text-xs font-semibold",
+                          isLocating
+                            ? "cursor-not-allowed bg-brand-ink/40 text-brand-bg"
+                            : "bg-brand-ink text-brand-bg hover:bg-brand-ink/95",
+                        ].join(" ")}
+                      >
+                        {isLocating ? "Getting location..." : "Use my location"}
+                      </button>
+                    </div>
+
+                    <input
+                      value={form.deliveryLocationUrl}
+                      onChange={(e) =>
+                        updateForm("deliveryLocationUrl", e.target.value)
+                      }
+                      className="mt-4 w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                      placeholder="Paste Google Maps location link"
+                    />
+
+                    {form.deliveryLat && form.deliveryLng && (
+                      <div className="mt-4 overflow-hidden rounded-2xl border border-black/10 bg-white">
+                        <iframe
+                          title="Delivery location map"
+                          className="h-56 w-full"
+                          loading="lazy"
+                          src={`https://www.google.com/maps?q=${form.deliveryLat},${form.deliveryLng}&z=16&output=embed`}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                      DELIVERY NOTE OPTIONAL
+                    </label>
+                    <textarea
+                      value={form.note}
+                      onChange={(e) => updateForm("note", e.target.value)}
+                      className="min-h-[90px] w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                      placeholder="Landmarks, preferred delivery time, special instructions..."
+                    />
+                  </div>
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="space-y-5">
+                  <div>
+                    <h2 className="text-xl font-semibold text-brand-ink">
+                      Confirm and choose payment
+                    </h2>
+                    <p className="mt-1 text-sm text-brand-ink/65">
+                      Review your order and continue with online payment or bank
+                      transfer confirmation through WhatsApp.
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-black/10 bg-brand-bg/75 p-5">
+                    <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                      ORDER ID
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-brand-ink">
+                      {orderId}
+                    </p>
+
+                    <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 p-4 text-sm text-brand-ink/75">
+                      Delivery will be arranged after order confirmation based
+                      on your address and exact location. For bank transfer,
+                      continue to WhatsApp and send the payment slip there.
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={payOnline}
+                      disabled={isSubmitting || !items.length}
+                      className={[
+                        "rounded-2xl px-5 py-4 text-sm font-semibold text-brand-bg",
+                        isSubmitting || !items.length
+                          ? "cursor-not-allowed bg-brand-ink/50"
+                          : "bg-brand-ink hover:bg-brand-ink/95",
+                      ].join(" ")}
+                    >
+                      {isSubmitting ? "Starting..." : "Proceed to Pay Online"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={bankTransferViaWhatsApp}
+                      disabled={isSubmitting || !items.length}
+                      className={[
+                        "rounded-2xl border px-5 py-4 text-sm font-semibold",
+                        isSubmitting || !items.length
+                          ? "cursor-not-allowed border-brand-ink/10 bg-black/5 text-brand-ink/40"
+                          : "border-brand-ink/25 bg-white/55 text-brand-ink hover:bg-white/75",
+                      ].join(" ")}
+                    >
+                      Bank Transfer via WhatsApp
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate("/cart")}
+                    className="w-full rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    Cancel and return to cart
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-5">
+              <button
+                type="button"
+                onClick={goBack}
+                disabled={step === 1}
+                className={[
+                  "rounded-2xl border px-5 py-3 text-sm font-semibold",
+                  step === 1
+                    ? "cursor-not-allowed border-black/10 text-brand-ink/30"
+                    : "border-brand-ink/25 text-brand-ink hover:bg-black/5",
+                ].join(" ")}
+              >
+                Back
+              </button>
+
+              {step < 3 ? (
                 <button
                   type="button"
-                  onClick={openModal}
-                  disabled={!canSubmit}
+                  onClick={goNext}
+                  disabled={!canGoNext}
                   className={[
-                    "rounded-2xl px-5 py-3 text-sm font-semibold transition",
-                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink",
-                    canSubmit
-                      ? "bg-brand-ink text-brand-bg hover:bg-brand-ink/95"
-                      : "cursor-not-allowed bg-black/10 text-brand-ink/40",
+                    "rounded-2xl px-5 py-3 text-sm font-semibold text-brand-bg",
+                    canGoNext
+                      ? "bg-brand-ink hover:bg-brand-ink/95"
+                      : "cursor-not-allowed bg-brand-ink/40",
                   ].join(" ")}
                 >
-                  Order now
+                  Continue
                 </button>
-              </div>
-
-              {!canSubmit && (
-                <p className="text-[11px] text-brand-ink/60">
-                  Please fill name, contact number, and both addresses to
-                  continue.
-                </p>
+              ) : (
+                <Link
+                  to="/cart"
+                  className="rounded-2xl border border-brand-ink/25 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-black/5"
+                >
+                  Edit cart
+                </Link>
               )}
             </div>
           </section>
-          {/* SUMMARY */}
-          <aside className="rounded-3xl border border-black/10 bg-white/50 p-6 shadow-sm backdrop-blur sm:p-8">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                  ORDER SUMMARY
-                </p>
 
-                {/* ✅ Edit order -> Cart */}
-                <Link
-                  to="/cart"
-                  className="inline-flex items-center gap-2 rounded-xl border border-brand-ink/15 bg-white/45 px-3 py-2 text-xs font-semibold text-brand-ink/80 hover:bg-white/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink"
-                >
-                  Edit order
-                </Link>
-              </div>
+          <aside className="rounded-3xl border border-black/10 bg-white/55 p-5 shadow-sm backdrop-blur sm:p-8">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                ORDER SUMMARY
+              </p>
 
-              {items.length ? (
-                <div className="space-y-3">
-                  {items.map((it) => (
-                    <div
-                      key={`${it.productSlug}-${it.size.id}-${it.sugar}`}
-                      className="flex items-start justify-between gap-3 rounded-2xl border border-black/10 bg-white/55 p-4"
-                    >
+              <Link
+                to="/cart"
+                className="rounded-xl border border-brand-ink/15 bg-white/45 px-3 py-2 text-xs font-semibold text-brand-ink/80 hover:bg-white/60"
+              >
+                Edit cart
+              </Link>
+            </div>
+
+            {items.length ? (
+              <div className="mt-4 space-y-3">
+                {items.map((it) => (
+                  <div
+                    key={`${it.productSlug}-${it.size.id}-${it.sugar}`}
+                    className="rounded-2xl border border-black/10 bg-white/60 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold">
+                        <p className="text-sm font-semibold text-brand-ink">
                           {it.productName}
                         </p>
-                        <p className="mt-1 text-xs text-brand-ink/70">
+                        <p className="mt-1 text-xs text-brand-ink/65">
                           {it.size.label} • Sugar: {it.sugar} • Qty:{" "}
                           {it.quantity}
                         </p>
                       </div>
-                      <p className="text-xs font-semibold text-brand-ink/70">
+
+                      <p className="text-xs font-semibold text-brand-ink/75">
                         {formatLkr(it.unitPriceLkr * it.quantity)}
                       </p>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-black/10 bg-white/55 p-4 text-sm text-brand-ink/70">
-                  Your cart is empty. You can still place a custom order via
-                  WhatsApp.
-                </div>
-              )}
-
-              <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-brand-bg/70 px-4 py-3">
-                <p className="text-sm font-semibold text-brand-ink">Total</p>
-                <p className="text-sm font-semibold text-brand-ink">
-                  {formatLkr(totalLkr)}
-                </p>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-black/10 bg-white/60 p-4 text-sm text-brand-ink/70">
+                Your cart is empty. Please add products before checkout.
+              </div>
+            )}
 
-              <p className="text-[11px] text-brand-ink/60">
-                Need to change items? Click{" "}
-                <span className="font-semibold">Edit order</span> to go to the
-                cart.
-                <br />
-                After you click <span className="font-semibold">Order now</span>
-                , we’ll open WhatsApp with your full order details.
+            <div className="mt-4 flex items-center justify-between rounded-2xl border border-black/10 bg-brand-bg/75 px-4 py-3">
+              <p className="text-sm font-semibold text-brand-ink">Total</p>
+              <p className="text-sm font-semibold text-brand-ink">
+                {formatLkr(totalLkr)}
               </p>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-black/10 bg-white/55 p-4 text-xs leading-relaxed text-brand-ink/65">
+              Your cart stays saved while you complete payment. It should only
+              be cleared after a successful payment or final order confirmation.
             </div>
           </aside>
         </div>
-
-        {/* MODAL (PORTAL to body to guarantee full-screen overlay) */}
-        {open &&
-          createPortal(
-            <div
-              className="fixed inset-0 z-[2147483647] bg-black/60"
-              style={{ width: "100vw", height: "100dvh" }}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Place order"
-              onMouseDown={(e) => {
-                if (e.target === e.currentTarget) setOpen(false);
-              }}
-            >
-              <div className="grid h-full w-full place-items-center p-4 sm:p-6">
-                <div className="w-full max-w-xl rounded-3xl border border-black/10 bg-brand-bg p-5 shadow-xl sm:p-6">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-brand-ink">
-                        Choose delivery option
-                      </p>
-                      <p className="mt-1 text-xs text-brand-ink/70">
-                        PickMe Food / Uber Eats (in-range). PickMe Flash via
-                        WhatsApp (out of range).
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="rounded-xl p-2 text-brand-ink/70 hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink"
-                      onClick={() => setOpen(false)}
-                      aria-label="Close"
-                    >
-                      <X className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                  </div>
-
-                  {/* Delivery app options */}
-                  <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 p-4">
-                    <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                      DELIVERY APP
-                    </p>
-
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        onClick={() => placeViaPickMe("PickMe Food")}
-                        className={[
-                          "flex items-center gap-3 rounded-2xl border p-3 text-left transition",
-                          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink",
-                          deliveryApp === "PickMe Food"
-                            ? "border-brand-ink/35 bg-brand-bg/80"
-                            : "border-brand-ink/15 bg-white/40 hover:bg-white/55",
-                        ].join(" ")}
-                      >
-                        <img
-                          src={pickmeFoodLogo}
-                          alt="PickMe Food"
-                          className="h-10 w-auto"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <div>
-                          <p className="text-sm font-semibold text-brand-ink">
-                            PickMe Food
-                          </p>
-                          <p className="text-[11px] text-brand-ink/70">
-                            Order via app (in-range)
-                          </p>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => placeViaUber("Uber Eats")}
-                        className={[
-                          "flex items-center gap-3 rounded-2xl border p-3 text-left transition",
-                          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink",
-                          deliveryApp === "Uber Eats"
-                            ? "border-brand-ink/35 bg-brand-bg/80"
-                            : "border-brand-ink/15 bg-white/40 hover:bg-white/55",
-                        ].join(" ")}
-                      >
-                        <img
-                          src={uberEatsLogo}
-                          alt="Uber Eats"
-                          className="h-10 w-auto"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <div>
-                          <p className="text-sm font-semibold text-brand-ink">
-                            Uber Eats
-                          </p>
-                          <p className="text-[11px] text-brand-ink/70">
-                            Order via app (in-range)
-                          </p>
-                        </div>
-                      </button>
-                    </div>
-
-                    <p className="mt-3 text-[11px] text-brand-ink/70">
-                      Out of range? We’ll arrange{" "}
-                      <span className="font-semibold">PickMe Flash</span> via
-                      WhatsApp.
-                    </p>
-                  </div>
-
-                  <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 p-4 text-xs text-brand-ink/80">
-                    <p className="font-semibold">Order ID: {orderId}</p>
-                    <p className="mt-2 text-brand-ink/70">
-                      When you tap the button below, WhatsApp will open with
-                      your full order details ready to send.
-                    </p>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={placeViaWhatsApp}
-                      className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink"
-                    >
-                      Order Via WhatsApp for PickMe Flash orders
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setOpen(false)}
-                      className="rounded-2xl border border-brand-ink/25 bg-transparent px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink"
-                    >
-                      Back to edit
-                    </button>
-                  </div>
-
-                  <p className="mt-4 text-[11px] leading-relaxed text-brand-ink/60">
-                    <span className="block">
-                      <span className="font-semibold text-brand-ink">
-                        Note:
-                      </span>{" "}
-                      We generate the WhatsApp message for you - please send it
-                      as it is.
-                    </span>
-                    <span className="block">
-                      If you order via PickMe Food / Uber Eats, you may need to
-                      re-enter the details in the app.
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )}
       </div>
     </Page>
   );
