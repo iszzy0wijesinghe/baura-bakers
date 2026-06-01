@@ -1,3 +1,5 @@
+/** @format */
+
 import type { CartItem } from "../app/cart";
 import { supabase } from "./supabase";
 
@@ -40,6 +42,10 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
     (sum, item) => sum + item.unitPriceLkr * item.quantity,
     0,
   );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { error: orderError } = await supabase.from("orders").insert({
     id: orderId,
