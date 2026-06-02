@@ -1,18 +1,22 @@
-import React, {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-} from "react";
-import type { SizeOption, SugarLevel } from "../content/products";
+import React, { createContext, useContext, useMemo, useState } from "react";
+
+export type CartSize = {
+  id: string;
+  label: string;
+  serves?: string | null;
+  priceLkr: number;
+};
 
 export type CartItem = {
   id: string;
+  itemId: string;
+  itemSizeId: string;
+  sugarLevelId: number;
   productSlug: string;
   productName: string;
   image?: string;
-  size: SizeOption;
-  sugar: SugarLevel;
+  size: CartSize;
+  sugar: string;
   quantity: number;
   unitPriceLkr: number;
 };
@@ -30,6 +34,23 @@ const CartContext = createContext<CartCtx | null>(null);
 
 const LS_KEY = "baura_cart_v1";
 
+function isValidCartItem(item: unknown): item is CartItem {
+  const x = item as CartItem;
+
+  return Boolean(
+    x &&
+      typeof x.itemId === "string" &&
+      typeof x.itemSizeId === "string" &&
+      typeof x.sugarLevelId === "number" &&
+      typeof x.productSlug === "string" &&
+      typeof x.productName === "string" &&
+      typeof x.quantity === "number" &&
+      typeof x.unitPriceLkr === "number" &&
+      x.size &&
+      typeof x.size.id === "string",
+  );
+}
+
 function loadCartFromStorage(): CartItem[] {
   if (typeof window === "undefined") return [];
 
@@ -41,18 +62,9 @@ function loadCartFromStorage(): CartItem[] {
 
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.filter((item) => {
-      return (
-        item &&
-        typeof item.id === "string" &&
-        typeof item.productSlug === "string" &&
-        typeof item.productName === "string" &&
-        typeof item.quantity === "number" &&
-        typeof item.unitPriceLkr === "number"
-      );
-    });
+    return parsed.filter(isValidCartItem);
   } catch (error) {
-    console.error("Failed to load cart from localStorage:", error);
+    console.error("Failed to load cart:", error);
     return [];
   }
 }
@@ -63,7 +75,7 @@ function saveCartToStorage(items: CartItem[]) {
   try {
     window.localStorage.setItem(LS_KEY, JSON.stringify(items));
   } catch (error) {
-    console.error("Failed to save cart to localStorage:", error);
+    console.error("Failed to save cart:", error);
   }
 }
 
@@ -79,7 +91,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addItem: CartCtx["addItem"] = (item) => {
-    const id = `${item.productSlug}|${item.size.id}|${item.sugar}`;
+    const id = `${item.itemId}|${item.itemSizeId}|${item.sugarLevelId}`;
 
     updateCart((prev) => {
       const found = prev.find((x) => x.id === id);
@@ -112,6 +124,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clear = () => {
     setItems([]);
+
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(LS_KEY);
     }
@@ -124,14 +137,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <CartContext.Provider
-      value={{
-        items,
-        addItem,
-        updateQty,
-        removeItem,
-        clear,
-        subtotal,
-      }}
+      value={{ items, addItem, updateQty, removeItem, clear, subtotal }}
     >
       {children}
     </CartContext.Provider>

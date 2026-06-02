@@ -1,5 +1,3 @@
-/** @format */
-
 import type { CartItem } from "../app/cart";
 import { supabase } from "./supabase";
 
@@ -36,6 +34,16 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
     throw new Error("Cart is empty.");
   }
 
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const user = session?.user;
+
+  if (!user) {
+    throw new Error("Please login or create an account before completing your order.");
+  }
+
   const orderId = createBrowserUuid();
 
   const subtotalLkr = input.items.reduce(
@@ -43,15 +51,13 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
     0,
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const { error: orderError } = await supabase.from("orders").insert({
     id: orderId,
     order_no: input.orderNo,
+    user_id: user.id,
+
     customer_name: input.customerName.trim(),
-    customer_email: input.customerEmail?.trim() || null,
+    customer_email: input.customerEmail?.trim() || user.email || null,
     contact_number: input.contactNumber.trim(),
     customer_address: input.customerAddress.trim(),
     delivery_address: input.deliveryAddress.trim(),
@@ -59,7 +65,7 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
     delivery_lat: input.deliveryLat ?? null,
     delivery_lng: input.deliveryLng ?? null,
     delivery_app: input.deliveryApp,
-    payment_method: input.paymentMethod || "WHATSAPP_ORDER",
+    payment_method: input.paymentMethod || "BANK_TRANSFER_WHATSAPP",
     note: input.note?.trim() || null,
     subtotal_lkr: subtotalLkr,
     payment_status: "PENDING_PAYMENT",

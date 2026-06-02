@@ -39,7 +39,7 @@ function formatLkr(n: number) {
 
 export default function Order() {
   const navigate = useNavigate();
-  const { items } = useCart();
+  const { items, clear } = useCart();
 
   const [step, setStep] = useState<StepNo>(1);
   const [orderId] = useState(() => makeOrderId());
@@ -215,39 +215,9 @@ export default function Order() {
   }
 
   async function payOnline() {
-    if (!billingValid || !deliveryValid || !items.length || isSubmitting) {
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setSubmitError("");
-
-      await saveOrderOnce("ONLINE_PAYMENT");
-
-      localStorage.setItem(
-        "baura_pending_payment_v1",
-        JSON.stringify({
-          orderNo: orderId,
-          items,
-          savedAt: new Date().toISOString(),
-        }),
-      );
-
-      // Do not clear cart here. Cart clears only after payment success.
-      setSubmitError(
-        "Online card payment is coming soon. Please use Bank Transfer via WhatsApp for now.",
-      );
-      setIsSubmitting(false);
-    } catch (error) {
-      console.error("Pay online failed:", error);
-      setSubmitError(
-        error instanceof Error
-          ? error.message
-          : "Could not start online payment. Please try again.",
-      );
-      setIsSubmitting(false);
-    }
+    setSubmitError(
+      "Online card payment is coming soon. Please use Bank Transfer via WhatsApp for now.",
+    );
   }
 
   async function bankTransferViaWhatsApp() {
@@ -262,15 +232,15 @@ export default function Order() {
       await saveOrderOnce("BANK_TRANSFER_WHATSAPP");
 
       localStorage.setItem(
-        "baura_pending_bank_transfer_v1",
+        "baura_completed_bank_transfer_v1",
         JSON.stringify({
           orderNo: orderId,
-          items,
           savedAt: new Date().toISOString(),
         }),
       );
 
-      // Do not clear cart here. User may come back after sending slip.
+      clear();
+
       const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
         whatsappMessage,
       )}`;
@@ -316,8 +286,8 @@ export default function Order() {
             Complete your order
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-brand-ink/70">
-            Follow the steps below. Your cart will stay saved while you complete
-            payment or contact us through WhatsApp.
+            Follow the steps below. Your cart will be cleared after the order is
+            saved successfully.
           </p>
         </header>
 
@@ -346,7 +316,8 @@ export default function Order() {
                         : done
                           ? "border-brand-ink/20 bg-brand-bg/80 text-brand-ink"
                           : "border-black/10 bg-white/45 text-brand-ink/55",
-                    ].join(" ")}>
+                    ].join(" ")}
+                  >
                     <p className="text-[11px] font-semibold tracking-widest opacity-80">
                       {item.label}
                     </p>
@@ -454,7 +425,8 @@ export default function Order() {
                   <button
                     type="button"
                     onClick={copyBillingToDelivery}
-                    className="rounded-2xl border border-brand-ink/20 bg-white/55 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white/70">
+                    className="rounded-2xl border border-brand-ink/20 bg-white/55 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white/70"
+                  >
                     Use billing address as delivery address
                   </button>
 
@@ -492,7 +464,8 @@ export default function Order() {
                           isLocating
                             ? "cursor-not-allowed bg-brand-ink/40 text-brand-bg"
                             : "bg-brand-ink text-brand-bg hover:bg-brand-ink/95",
-                        ].join(" ")}>
+                        ].join(" ")}
+                      >
                         {isLocating ? "Getting location..." : "Use my location"}
                       </button>
                     </div>
@@ -569,7 +542,8 @@ export default function Order() {
                         isSubmitting || !items.length
                           ? "cursor-not-allowed bg-brand-ink/50"
                           : "bg-brand-ink hover:bg-brand-ink/95",
-                      ].join(" ")}>
+                      ].join(" ")}
+                    >
                       {isSubmitting ? "Starting..." : "Proceed to Pay Online"}
                     </button>
 
@@ -582,7 +556,8 @@ export default function Order() {
                         isSubmitting || !items.length
                           ? "cursor-not-allowed border-brand-ink/10 bg-black/5 text-brand-ink/40"
                           : "border-brand-ink/25 bg-white/55 text-brand-ink hover:bg-white/75",
-                      ].join(" ")}>
+                      ].join(" ")}
+                    >
                       Bank Transfer via WhatsApp
                     </button>
                   </div>
@@ -590,7 +565,8 @@ export default function Order() {
                   <button
                     type="button"
                     onClick={() => navigate("/cart")}
-                    className="w-full rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">
+                    className="w-full rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100"
+                  >
                     Cancel and return to cart
                   </button>
                 </div>
@@ -607,7 +583,8 @@ export default function Order() {
                   step === 1
                     ? "cursor-not-allowed border-black/10 text-brand-ink/30"
                     : "border-brand-ink/25 text-brand-ink hover:bg-black/5",
-                ].join(" ")}>
+                ].join(" ")}
+              >
                 Back
               </button>
 
@@ -621,13 +598,15 @@ export default function Order() {
                     canGoNext
                       ? "bg-brand-ink hover:bg-brand-ink/95"
                       : "cursor-not-allowed bg-brand-ink/40",
-                  ].join(" ")}>
+                  ].join(" ")}
+                >
                   Continue
                 </button>
               ) : (
                 <Link
                   to="/cart"
-                  className="rounded-2xl border border-brand-ink/25 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-black/5">
+                  className="rounded-2xl border border-brand-ink/25 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-black/5"
+                >
                   Edit cart
                 </Link>
               )}
@@ -642,7 +621,8 @@ export default function Order() {
 
               <Link
                 to="/cart"
-                className="rounded-xl border border-brand-ink/15 bg-white/45 px-3 py-2 text-xs font-semibold text-brand-ink/80 hover:bg-white/60">
+                className="rounded-xl border border-brand-ink/15 bg-white/45 px-3 py-2 text-xs font-semibold text-brand-ink/80 hover:bg-white/60"
+              >
                 Edit cart
               </Link>
             </div>
@@ -652,7 +632,8 @@ export default function Order() {
                 {items.map((it) => (
                   <div
                     key={`${it.productSlug}-${it.size.id}-${it.sugar}`}
-                    className="rounded-2xl border border-black/10 bg-white/60 p-4">
+                    className="rounded-2xl border border-black/10 bg-white/60 p-4"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-brand-ink">
@@ -685,8 +666,7 @@ export default function Order() {
             </div>
 
             <div className="mt-5 rounded-2xl border border-black/10 bg-white/55 p-4 text-xs leading-relaxed text-brand-ink/65">
-              Your cart stays saved while you complete payment. It should only
-              be cleared after a successful payment or final order confirmation.
+              Your cart will clear only after your order is saved successfully.
             </div>
           </aside>
         </div>

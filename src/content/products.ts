@@ -1,17 +1,14 @@
-// ✅ Import images from src (Vite will bundle them)
-// Update these file names to match what you actually have.
-import jarRedVelvet from "../../images/products/jar-red-velvet.webp";
+const jarRedVelvet = "/images/products/jar-red-velvet.webp";
 
-// Example placeholders (rename these to your real image filenames)
-import jarChocolate1 from "../../images/products/jar-red-velvet.webp";
-import jarChocolate2 from "../../images/products/chocolate-cake-in-jar-600x600.webp";
-import jarChocolate3 from "../../images/products/choco-chip-jar-cake-set-of-2.webp";
-import jarChocolate4 from "../../images/products/jar-red-velvet.webp";
+const jarChocolate1 = "/images/products/jar-red-velvet.webp";
+const jarChocolate2 = "/images/products/chocolate-cake-in-jar-600x600.webp";
+const jarChocolate3 = "/images/products/choco-chip-jar-cake-set-of-2.webp";
+const jarChocolate4 = "/images/products/jar-red-velvet.webp";
 
-import dessert1 from "../../images/products/jar-red-velvet.webp";
-import dessert2 from "../../images/products/jar-red-velvet.webp";
-import dessert3 from "../../images/products/jar-red-velvet.webp";
-import dessert4 from "../../images/products/jar-red-velvet.webp";
+const dessert1 = "/images/products/jar-red-velvet.webp";
+const dessert2 = "/images/products/jar-red-velvet.webp";
+const dessert3 = "/images/products/jar-red-velvet.webp";
+const dessert4 = "/images/products/jar-red-velvet.webp";
 
 export type SugarLevel = "Normal" | "Less" | "No sugar*";
 export type SizeOption = { id: string; label: string; serves?: string; priceLkr: number };

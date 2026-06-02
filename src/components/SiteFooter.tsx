@@ -1,16 +1,7 @@
-import { buildInfo } from "../lib/buildInfo";
+import { APP_VERSION } from "../lib/appVersion";
 
 function short(thing: string, n: number) {
   return thing ? thing.slice(0, n) : "";
-}
-
-function buildVersion() {
-  // V1.<deployId(4)>.<commit(4)>.<commit(4)>
-  // looks like: V1.9f3a.a12b.c34d
-  const a = short(buildInfo.deployId.replace(/[^a-zA-Z0-9]/g, ""), 4) || "0";
-  const b = short(buildInfo.commit, 4) || "0";
-  const c = short(buildInfo.commit.slice(4), 4) || "0";
-  return `V1.${a}.${b}.${c}`;
 }
 
 export default function SiteFooter() {
@@ -20,7 +11,7 @@ export default function SiteFooter() {
         <div className="flex flex-wrap items-baseline gap-2">
           <p className="text-base font-semibold tracking-tight">Baura Bakers</p>
           <span className="text-[11px] font-medium text-brand-bg/55">
-            {buildVersion()}
+            {APP_VERSION}
           </span>
         </div>
 
@@ -35,6 +26,3 @@ export default function SiteFooter() {
     </footer>
   );
 }
-
-
-
