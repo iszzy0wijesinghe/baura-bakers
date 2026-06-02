@@ -45,6 +45,7 @@ const orderStatuses = [
   "CONFIRMED",
   "PREPARING",
   "READY",
+  "DISPATCHED",
   "COMPLETED",
   "CANCELLED",
 ];
@@ -71,8 +72,11 @@ function getStatusClass(status: string) {
   switch (status) {
     case "PAID":
     case "COMPLETED":
-    case "READY":
       return "bg-green-50 text-green-700 border-green-200";
+    case "READY":
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    case "DISPATCHED":
+      return "bg-indigo-50 text-indigo-700 border-indigo-200";
     case "PENDING_PAYMENT":
     case "NEW":
     case "PREPARING":
@@ -485,9 +489,7 @@ function OrderDetailsPanel({
   if (!order) {
     return (
       <div className="rounded-3xl border border-black/10 bg-white/55 p-8 text-center shadow-sm backdrop-blur">
-        <p className="text-sm font-semibold text-brand-ink">
-          Select an order
-        </p>
+        <p className="text-sm font-semibold text-brand-ink">Select an order</p>
         <p className="mt-1 text-xs text-brand-ink/55">
           Order details will appear here.
         </p>
