@@ -210,6 +210,15 @@ function getOrderStatusClass(status: string) {
   }
 }
 
+function canViewReceipt(order: OrderRow) {
+  return (
+    order.payment_status === "PAID" &&
+    ["CONFIRMED", "PREPARING", "READY", "DISPATCHED", "COMPLETED"].includes(
+      order.order_status,
+    )
+  );
+}
+
 function OrderProgressStepper({ status }: { status: string }) {
   const currentIndex = getStepIndex(status);
 
@@ -436,12 +445,14 @@ export default function OrderHistory() {
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Link
-                    to={`/receipt/${order.order_no}`}
-                    className="rounded-xl bg-brand-ink px-4 py-2 text-xs font-semibold text-brand-bg hover:bg-brand-ink/95"
-                  >
-                    View receipt
-                  </Link>
+                  {canViewReceipt(order) && (
+                    <Link
+                      to={`/receipt/${order.order_no}`}
+                      className="rounded-xl bg-brand-ink px-4 py-2 text-xs font-semibold text-brand-bg hover:bg-brand-ink/95"
+                    >
+                      View receipt
+                    </Link>
+                  )}
 
                   {order.delivery_location_url && (
                     <a
