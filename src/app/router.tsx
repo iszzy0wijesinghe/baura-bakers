@@ -5,7 +5,7 @@ import AppLayout from "../components/AppLayout";
 import Home from "../pages/Home";
 import Menu from "../pages/Menu";
 import ProductDetails from "../pages/ProductDetails";
-import Cart from"../pages/Cart";
+import Cart from "../pages/Cart";
 import Order from "../pages/Order";
 import Contact from "../pages/Contact";
 import About from "../pages/About";
@@ -17,27 +17,56 @@ import Account from "../pages/Account";
 import OrderHistory from "../pages/OrderHistory";
 import AdminOrders from "../pages/AdminOrders";
 import AdminDashboard from "../pages/AdminDashboard";
+import ComingSoonPage from "../pages/system/ComingSoonPage";
+import CriticalBreakPage from "../pages/system/CriticalBreakPage";
+import ErrorStatusPage from "../pages/system/ErrorStatusPage";
+import MaintenancePage from "../pages/system/MaintenancePage";
 
 export const router = createBrowserRouter([
   {
     element: <AppLayout />,
+    errorElement: <ErrorStatusPage statusCode={500} />,
     children: [
+      { path: "/", element: <Home /> },
+
       { path: "/menu", element: <Menu /> },
+      { path: "/menu/:slug", element: <ProductDetails /> },
+
+      { path: "/cart", element: <Cart /> },
+      { path: "/order", element: <Order /> },
+
+      { path: "/contact", element: <Contact /> },
+      { path: "/about-us", element: <About /> },
+
+      { path: "/payment-success", element: <PaymentSuccess /> },
+      { path: "/payment-cancelled", element: <PaymentCancelled /> },
+
       { path: "/login", element: <Login /> },
       { path: "/register", element: <Register /> },
       { path: "/account", element: <Account /> },
-      { path: "/", element: <Home /> },
-      { path: "/menu/:slug", element: <ProductDetails /> },
-      { path: "/cart", element: <Cart /> },
-      { path: "/order", element: <Order /> },
-      { path: "/contact", element: <Contact /> },
-      { path: "/about-us", element: <About /> },
-      { path: "/payment-success", element: <PaymentSuccess /> },
-      { path: "/payment-cancelled", element: <PaymentCancelled /> },
       { path: "/orders", element: <OrderHistory /> },
 
       { path: "/admin/dashboard", element: <AdminDashboard /> },
       { path: "/admin/orders", element: <AdminOrders /> },
+
+      { path: "/coming-soon", element: <ComingSoonPage /> },
+      {
+        path: "/site-maintenance",
+        element: <MaintenancePage />,
+      },
+      {
+        path: "/critical-break",
+        element: <CriticalBreakPage />,
+      },
+
+      { path: "/400", element: <ErrorStatusPage statusCode={400} /> },
+      { path: "/401", element: <ErrorStatusPage statusCode={401} /> },
+      { path: "/403", element: <ErrorStatusPage statusCode={403} /> },
+      { path: "/404", element: <ErrorStatusPage statusCode={404} /> },
+      { path: "/500", element: <ErrorStatusPage statusCode={500} /> },
+      { path: "/server-error", element: <ErrorStatusPage statusCode={500} /> },
+
+      { path: "*", element: <ErrorStatusPage statusCode={404} /> },
     ],
   },
 ]);
