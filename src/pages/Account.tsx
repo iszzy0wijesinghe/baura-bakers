@@ -1,4 +1,18 @@
 import type { User } from "@supabase/supabase-js";
+import {
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Clock3,
+  LogOut,
+  Mail,
+  Phone,
+  Save,
+  ShoppingBag,
+  ShoppingCart,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
@@ -17,6 +31,11 @@ type OrderStats = {
   pending: number;
   paid: number;
   completed: number;
+};
+
+type OrderStatsRow = {
+  payment_status: string;
+  order_status: string;
 };
 
 export default function Account() {
@@ -47,6 +66,7 @@ export default function Account() {
   async function loadAccount() {
     setIsLoading(true);
     setErrorText("");
+    setSuccessText("");
 
     const {
       data: { user: currentUser },
@@ -79,11 +99,12 @@ export default function Account() {
       .select("payment_status, order_status")
       .eq("user_id", currentUser.id);
 
-    const rows = orderRows || [];
+    const rows = (orderRows || []) as OrderStatsRow[];
 
     setStats({
       total: rows.length,
-      pending: rows.filter((x) => x.payment_status === "PENDING_PAYMENT").length,
+      pending: rows.filter((x) => x.payment_status === "PENDING_PAYMENT")
+        .length,
       paid: rows.filter((x) => x.payment_status === "PAID").length,
       completed: rows.filter((x) => x.order_status === "COMPLETED").length,
     });
@@ -98,19 +119,29 @@ export default function Account() {
   async function handleSaveProfile() {
     if (!user) return;
 
+    const cleanName = formName.trim();
+    const cleanPhone = formPhone.trim();
+
+    if (!cleanName) {
+      setErrorText("Please enter your full name.");
+      setSuccessText("");
+      return;
+    }
+
     try {
       setIsSaving(true);
       setErrorText("");
       setSuccessText("");
 
-      const { error } = await supabase
+      const { data: updatedProfile, error } = await supabase
         .from("profiles")
         .update({
-          full_name: formName.trim(),
-          phone: formPhone.trim() || null,
-          updated_at: new Date().toISOString(),
+          full_name: cleanName,
+          phone: cleanPhone || null,
         })
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .select("id, full_name, phone, role")
+        .single();
 
       if (error) {
         throw new Error(error.message);
@@ -118,21 +149,14 @@ export default function Account() {
 
       await supabase.auth.updateUser({
         data: {
-          full_name: formName.trim(),
-          phone: formPhone.trim(),
+          full_name: cleanName,
+          phone: cleanPhone,
         },
       });
 
-      setProfile((prev) =>
-        prev
-          ? {
-              ...prev,
-              full_name: formName.trim(),
-              phone: formPhone.trim() || null,
-            }
-          : prev,
-      );
-
+      setProfile(updatedProfile as ProfileRow);
+      setFormName(updatedProfile?.full_name || "");
+      setFormPhone(updatedProfile?.phone || "");
       setSuccessText("Profile updated successfully.");
     } catch (error) {
       setErrorText(
@@ -151,50 +175,43 @@ export default function Account() {
   if (isLoading) {
     return (
       <Page>
-        <div className="rounded-3xl border border-black/10 bg-white/55 p-8 text-sm text-brand-ink/70 shadow-sm backdrop-blur">
-          Loading your profile...
+        <div className="mx-auto max-w-3xl rounded-2xl border border-black/10 bg-white/70 p-4 text-sm font-semibold text-brand-ink/65 shadow-sm">
+          Loading your account...
         </div>
       </Page>
     );
   }
 
+  const displayName = profile?.full_name || "Customer";
+  const initials = displayName
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
     <Page>
-      <div className="space-y-8">
-        <section className="overflow-hidden rounded-3xl border border-black/10 bg-white/55 shadow-sm backdrop-blur">
-          <div className="bg-brand-ink px-6 py-8 text-brand-bg sm:px-8">
-            <p className="text-xs font-semibold tracking-[0.3em] text-brand-bg/70">
-              MY BAURA ACCOUNT
+      <div className="mx-auto max-w-5xl space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-brand-ink/45">
+              Account
             </p>
-
-            <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Welcome, {profile?.full_name || "Customer"}
-                </h1>
-                <p className="mt-2 text-sm text-brand-bg/75">
-                  Manage your profile details and track your bakery orders.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-brand-bg/60">
-                  Role
-                </p>
-                <p className="mt-1 text-sm font-semibold capitalize">
-                  {profile?.role || "customer"}
-                </p>
-              </div>
-            </div>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-brand-ink">
+              My profile
+            </h1>
           </div>
 
-          <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4 sm:p-6">
-            <ProfileStat label="Total orders" value={stats.total} />
-            <ProfileStat label="Pending payments" value={stats.pending} />
-            <ProfileStat label="Paid orders" value={stats.paid} />
-            <ProfileStat label="Completed" value={stats.completed} />
-          </div>
-        </section>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+          >
+            <LogOut size={15} />
+            Logout
+          </button>
+        </div>
 
         {errorText && (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -208,126 +225,271 @@ export default function Account() {
           </div>
         )}
 
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-3xl border border-black/10 bg-white/55 p-6 shadow-sm backdrop-blur">
-            <p className="text-xs font-semibold tracking-[0.25em] text-brand-ink/55">
-              PROFILE DETAILS
-            </p>
-
-            <div className="mt-5 grid gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                  FULL NAME
-                </label>
-                <input
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-sm text-brand-ink outline-none focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
-                  placeholder="Your name"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                  PHONE NUMBER
-                </label>
-                <input
-                  value={formPhone}
-                  onChange={(e) => setFormPhone(e.target.value)}
-                  className="w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-sm text-brand-ink outline-none focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
-                  placeholder="07X XXX XXXX"
-                />
-              </div>
-
-              <div className="rounded-2xl border border-black/10 bg-brand-bg/70 p-4">
-                <p className="text-xs font-semibold tracking-widest text-brand-ink/50">
-                  EMAIL
-                </p>
-                <p className="mt-1 text-sm font-semibold text-brand-ink">
-                  {user?.email}
-                </p>
-                <p className="mt-1 text-xs text-brand-ink/55">
-                  Email is used for login and order history.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                disabled={isSaving}
-                onClick={handleSaveProfile}
-                className={[
-                  "rounded-2xl px-5 py-3 text-sm font-semibold text-brand-bg transition",
-                  isSaving
-                    ? "cursor-not-allowed bg-brand-ink/50"
-                    : "bg-brand-ink hover:bg-brand-ink/95",
-                ].join(" ")}
-              >
-                {isSaving ? "Saving..." : "Save profile"}
-              </button>
-            </div>
-          </div>
-
+        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-4">
-            <div className="rounded-3xl border border-black/10 bg-white/55 p-6 shadow-sm backdrop-blur">
-              <p className="text-xs font-semibold tracking-[0.25em] text-brand-ink/55">
-                QUICK ACTIONS
-              </p>
+            <div className="rounded-[1.6rem] border border-black/10 bg-white/75 p-4 shadow-[0_18px_45px_rgba(47,31,22,0.08)] backdrop-blur">
+              <div className="flex items-center gap-3">
+                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-ink text-lg font-semibold text-brand-bg shadow-sm">
+                  {initials || <UserRound size={23} />}
+                </div>
 
-              <div className="mt-5 grid gap-3">
-                <Link
-                  to="/orders"
-                  className="rounded-2xl bg-brand-ink px-5 py-3 text-center text-sm font-semibold text-brand-bg transition hover:bg-brand-ink/95"
-                >
-                  My orders
-                </Link>
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-semibold text-brand-ink">
+                    {displayName}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs font-medium text-brand-ink/55">
+                    {user?.email}
+                  </p>
+                  <span className="mt-2 inline-flex rounded-full bg-brand-bg px-3 py-1 text-[10px] font-semibold capitalize text-brand-ink/65">
+                    {profile?.role || "customer"}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-                <Link
-                  to="/menu"
-                  className="rounded-2xl border border-brand-ink/20 bg-white/60 px-5 py-3 text-center text-sm font-semibold text-brand-ink transition hover:bg-white/80"
-                >
-                  Browse menu
-                </Link>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveProfile();
+              }}
+              className="rounded-[1.6rem] border border-black/10 bg-white/75 p-4 shadow-[0_18px_45px_rgba(47,31,22,0.08)] backdrop-blur sm:p-5"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-ink/45">
+                    Edit Details
+                  </p>
+                  <h2 className="mt-1 text-lg font-semibold text-brand-ink">
+                    Personal information
+                  </h2>
+                </div>
 
-                <Link
-                  to="/cart"
-                  className="rounded-2xl border border-brand-ink/20 bg-white/60 px-5 py-3 text-center text-sm font-semibold text-brand-ink transition hover:bg-white/80"
-                >
-                  View cart
-                </Link>
+                <div className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-bg text-brand-ink">
+                  <UserRound size={19} />
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                <ProfileInput
+                  label="Full name"
+                  icon={UserRound}
+                  value={formName}
+                  placeholder="Your full name"
+                  onChange={setFormName}
+                />
+
+                <ProfileInput
+                  label="Phone number"
+                  icon={Phone}
+                  value={formPhone}
+                  placeholder="07X XXX XXXX"
+                  onChange={setFormPhone}
+                />
+
+                <div className="rounded-2xl border border-black/10 bg-brand-bg/70 p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/80 text-brand-ink">
+                      <Mail size={16} />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-ink/45">
+                        Email
+                      </p>
+                      <p className="mt-1 truncate text-sm font-semibold text-brand-ink">
+                        {user?.email}
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-brand-ink/55">
+                        Email is used for login and cannot be changed here.
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
                 <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                  type="submit"
+                  disabled={isSaving}
+                  className={[
+                    "mt-1 flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-brand-bg transition",
+                    isSaving
+                      ? "cursor-not-allowed bg-brand-ink/50"
+                      : "bg-brand-ink hover:bg-brand-ink/95",
+                  ].join(" ")}
                 >
-                  Logout
+                  <Save size={17} />
+                  {isSaving ? "Saving..." : "Save changes"}
                 </button>
+              </div>
+            </form>
+          </div>
+
+          <aside className="space-y-4">
+            <div className="rounded-[1.6rem] border border-black/10 bg-white/75 p-4 shadow-[0_18px_45px_rgba(47,31,22,0.08)] backdrop-blur sm:p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-ink/45">
+                Quick Actions
+              </p>
+
+              <div className="mt-4 grid gap-2">
+                <ActionLink
+                  to="/orders"
+                  label="My orders"
+                  description="Track recent orders"
+                  icon={ClipboardList}
+                  dark
+                />
+
+                <ActionLink
+                  to="/menu"
+                  label="Browse menu"
+                  description="Choose fresh bakes"
+                  icon={ShoppingBag}
+                />
+
+                <ActionLink
+                  to="/cart"
+                  label="View cart"
+                  description="Continue checkout"
+                  icon={ShoppingCart}
+                />
               </div>
             </div>
 
-            <div className="rounded-3xl border border-black/10 bg-brand-bg/70 p-6">
-              <p className="text-sm font-semibold text-brand-ink">
-                Order note
+            <div className="rounded-[1.6rem] border border-black/10 bg-white/75 p-4 shadow-[0_18px_45px_rgba(47,31,22,0.08)] backdrop-blur sm:p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-ink/45">
+                Order Summary
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-brand-ink/65">
-                Bank transfer and WhatsApp orders stay pending until Baura
-                Bakers confirms the payment slip manually.
-              </p>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <StatCard label="Total" value={stats.total} icon={ClipboardList} />
+                <StatCard label="Pending" value={stats.pending} icon={Clock3} />
+                <StatCard label="Paid" value={stats.paid} icon={CheckCircle2} />
+                <StatCard
+                  label="Completed"
+                  value={stats.completed}
+                  icon={CheckCircle2}
+                />
+              </div>
             </div>
-          </div>
+          </aside>
         </section>
       </div>
     </Page>
   );
 }
 
-function ProfileStat({ label, value }: { label: string; value: number }) {
+function ProfileInput({
+  label,
+  icon: Icon,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  icon: LucideIcon;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/65 p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-ink/50">
+    <label className="block">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-ink/45">
         {label}
+      </span>
+
+      <span className="mt-1.5 flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-3 py-3 shadow-sm focus-within:border-brand-ink/30 focus-within:ring-2 focus-within:ring-brand-ink/10">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-brand-bg text-brand-ink/70">
+          <Icon size={16} />
+        </span>
+
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-transparent text-sm font-semibold text-brand-ink outline-none placeholder:text-brand-ink/35"
+          placeholder={placeholder}
+        />
+      </span>
+    </label>
+  );
+}
+
+function ActionLink({
+  to,
+  label,
+  description,
+  icon: Icon,
+  dark = false,
+}: {
+  to: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  dark?: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      className={[
+        "group flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 transition",
+        dark
+          ? "border-brand-ink bg-brand-ink text-brand-bg hover:bg-brand-ink/95"
+          : "border-black/10 bg-white text-brand-ink hover:bg-white/90",
+      ].join(" ")}
+    >
+      <span className="flex min-w-0 items-center gap-3">
+        <span
+          className={[
+            "grid h-10 w-10 shrink-0 place-items-center rounded-2xl",
+            dark ? "bg-brand-bg/10 text-brand-bg" : "bg-brand-bg text-brand-ink",
+          ].join(" ")}
+        >
+          <Icon size={18} />
+        </span>
+
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">{label}</span>
+          <span
+            className={[
+              "block truncate text-xs",
+              dark ? "text-brand-bg/60" : "text-brand-ink/50",
+            ].join(" ")}
+          >
+            {description}
+          </span>
+        </span>
+      </span>
+
+      <ChevronRight
+        size={17}
+        className={dark ? "text-brand-bg/70" : "text-brand-ink/35"}
+      />
+    </Link>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: number;
+  icon: LucideIcon;
+}) {
+  return (
+    <div className="rounded-2xl border border-black/10 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-ink/45">
+          {label}
+        </p>
+
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-brand-bg text-brand-ink/65">
+          <Icon size={14} />
+        </span>
+      </div>
+
+      <p className="mt-2 text-xl font-semibold leading-none text-brand-ink">
+        {value}
       </p>
-      <p className="mt-2 text-3xl font-semibold text-brand-ink">{value}</p>
     </div>
   );
 }

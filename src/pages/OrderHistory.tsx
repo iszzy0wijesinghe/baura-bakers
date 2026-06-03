@@ -353,13 +353,6 @@ export default function OrderHistory() {
               Track your recent Baura Bakers orders and open receipts.
             </p>
           </div>
-
-          <Link
-            to="/account"
-            className="rounded-xl border border-brand-ink/20 bg-white/55 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white/75"
-          >
-            Back to account
-          </Link>
         </header>
 
         {errorText && (

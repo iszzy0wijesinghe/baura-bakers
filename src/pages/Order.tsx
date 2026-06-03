@@ -262,38 +262,41 @@ export default function Order() {
       id: 1,
       label: "Step 1",
       title: "Billing details",
+      shortTitle: "Billing",
     },
     {
       id: 2,
       label: "Step 2",
       title: "Delivery details",
+      shortTitle: "Delivery",
     },
     {
       id: 3,
       label: "Step 3",
       title: "Confirm & pay",
+      shortTitle: "Pay",
     },
   ] as const;
 
   return (
     <Page>
-      <div className="space-y-8">
-        <header className="space-y-2">
-          <p className="text-xs font-semibold tracking-[0.28em] text-brand-ink/55">
+      <div className="space-y-5 sm:space-y-8">
+        <header className="space-y-1.5 sm:space-y-2">
+          <p className="text-[10px] font-semibold tracking-[0.26em] text-brand-ink/55 sm:text-xs sm:tracking-[0.28em]">
             CHECKOUT
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-brand-ink sm:text-4xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-brand-ink sm:text-4xl">
             Complete your order
           </h1>
-          <p className="max-w-2xl text-sm leading-relaxed text-brand-ink/70">
+          <p className="hidden max-w-2xl text-sm leading-relaxed text-brand-ink/70 sm:block">
             Follow the steps below. Your cart will be cleared after the order is
             saved successfully.
           </p>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
-          <section className="rounded-3xl border border-black/10 bg-white/55 p-5 shadow-sm backdrop-blur sm:p-8">
-            <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr] lg:gap-6">
+          <section className="rounded-3xl border border-black/10 bg-white/55 p-4 shadow-sm backdrop-blur sm:p-8">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {stepMeta.map((item) => {
                 const active = step === item.id;
                 const done = step > item.id;
@@ -310,7 +313,7 @@ export default function Order() {
                       }
                     }}
                     className={[
-                      "rounded-2xl border px-4 py-3 text-left transition",
+                      "rounded-2xl border px-2 py-2.5 text-left transition sm:px-4 sm:py-3",
                       active
                         ? "border-brand-ink/35 bg-brand-ink text-brand-bg"
                         : done
@@ -318,36 +321,58 @@ export default function Order() {
                           : "border-black/10 bg-white/45 text-brand-ink/55",
                     ].join(" ")}
                   >
-                    <p className="text-[11px] font-semibold tracking-widest opacity-80">
-                      {item.label}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold">{item.title}</p>
+                    <div className="flex items-center gap-2 sm:block">
+                      <span
+                        className={[
+                          "grid h-7 w-7 shrink-0 place-items-center rounded-xl text-[11px] font-bold sm:hidden",
+                          active
+                            ? "bg-brand-bg/15 text-brand-bg"
+                            : done
+                              ? "bg-brand-ink text-brand-bg"
+                              : "bg-white/70 text-brand-ink/50",
+                        ].join(" ")}
+                      >
+                        {done ? "✓" : item.id}
+                      </span>
+
+                      <div className="min-w-0">
+                        <p className="hidden text-[11px] font-semibold tracking-widest opacity-80 sm:block">
+                          {item.label}
+                        </p>
+                        <p className="truncate text-[11px] font-semibold sm:mt-1 sm:text-sm">
+                          <span className="sm:hidden">{item.shortTitle}</span>
+                          <span className="hidden sm:inline">
+                            {item.title}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
                   </button>
                 );
               })}
             </div>
 
             {submitError && (
-              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 sm:mt-5">
                 {submitError}
               </div>
             )}
 
-            <div className="mt-6">
+            <div className="mt-5 sm:mt-6">
               {step === 1 && (
-                <div className="space-y-5">
+                <div className="space-y-4 sm:space-y-5">
                   <div>
-                    <h2 className="text-xl font-semibold text-brand-ink">
+                    <h2 className="text-lg font-semibold text-brand-ink sm:text-xl">
                       Billing details
                     </h2>
                     <p className="mt-1 text-sm text-brand-ink/65">
-                      These details are used for order confirmation and receipt.
+                      Used for order confirmation and receipt.
                     </p>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                      <label className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
                         CUSTOMER NAME
                       </label>
                       <input
@@ -355,14 +380,14 @@ export default function Order() {
                         onChange={(e) =>
                           updateForm("customerName", e.target.value)
                         }
-                        className="w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                        className="w-full rounded-2xl border border-black/10 bg-white/65 px-3.5 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10 sm:px-4"
                         placeholder="Your name"
                         autoComplete="name"
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                      <label className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
                         CONTACT NUMBER
                       </label>
                       <input
@@ -370,7 +395,7 @@ export default function Order() {
                         onChange={(e) =>
                           updateForm("contactNumber", e.target.value)
                         }
-                        className="w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                        className="w-full rounded-2xl border border-black/10 bg-white/65 px-3.5 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10 sm:px-4"
                         placeholder="07X XXXX XXX"
                         inputMode="tel"
                         autoComplete="tel"
@@ -379,7 +404,7 @@ export default function Order() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                    <label className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
                       EMAIL OPTIONAL
                     </label>
                     <input
@@ -387,7 +412,7 @@ export default function Order() {
                       onChange={(e) =>
                         updateForm("customerEmail", e.target.value)
                       }
-                      className="w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                      className="w-full rounded-2xl border border-black/10 bg-white/65 px-3.5 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10 sm:px-4"
                       placeholder="For receipt and order updates"
                       type="email"
                       autoComplete="email"
@@ -395,7 +420,7 @@ export default function Order() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                    <label className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
                       BILLING ADDRESS
                     </label>
                     <textarea
@@ -403,7 +428,7 @@ export default function Order() {
                       onChange={(e) =>
                         updateForm("billingAddress", e.target.value)
                       }
-                      className="min-h-[110px] w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                      className="min-h-[95px] w-full rounded-2xl border border-black/10 bg-white/65 px-3.5 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10 sm:min-h-[110px] sm:px-4"
                       placeholder="Your billing address"
                     />
                   </div>
@@ -411,14 +436,13 @@ export default function Order() {
               )}
 
               {step === 2 && (
-                <div className="space-y-5">
+                <div className="space-y-4 sm:space-y-5">
                   <div>
-                    <h2 className="text-xl font-semibold text-brand-ink">
+                    <h2 className="text-lg font-semibold text-brand-ink sm:text-xl">
                       Delivery details
                     </h2>
                     <p className="mt-1 text-sm text-brand-ink/65">
-                      Add the address and exact location so we can arrange
-                      delivery clearly.
+                      Add delivery address and exact location.
                     </p>
                   </div>
 
@@ -427,11 +451,11 @@ export default function Order() {
                     onClick={copyBillingToDelivery}
                     className="rounded-2xl border border-brand-ink/20 bg-white/55 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white/70"
                   >
-                    Use billing address as delivery address
+                    Use billing address
                   </button>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                    <label className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
                       DELIVERY ADDRESS
                     </label>
                     <textarea
@@ -439,19 +463,19 @@ export default function Order() {
                       onChange={(e) =>
                         updateForm("deliveryAddress", e.target.value)
                       }
-                      className="min-h-[120px] w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                      className="min-h-[100px] w-full rounded-2xl border border-black/10 bg-white/65 px-3.5 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10 sm:min-h-[120px] sm:px-4"
                       placeholder="Where should we deliver?"
                     />
                   </div>
 
-                  <div className="rounded-3xl border border-black/10 bg-white/55 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="rounded-3xl border border-black/10 bg-white/55 p-3.5 sm:p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                        <p className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
                           EXACT LOCATION
                         </p>
                         <p className="mt-1 text-xs text-brand-ink/65">
-                          Use your current location or paste a Google Maps link.
+                          Use current location or paste a Google Maps link.
                         </p>
                       </div>
 
@@ -460,7 +484,7 @@ export default function Order() {
                         onClick={useCurrentLocation}
                         disabled={isLocating}
                         className={[
-                          "rounded-2xl px-4 py-2 text-xs font-semibold",
+                          "w-full rounded-2xl px-4 py-2.5 text-xs font-semibold sm:w-auto sm:py-2",
                           isLocating
                             ? "cursor-not-allowed bg-brand-ink/40 text-brand-bg"
                             : "bg-brand-ink text-brand-bg hover:bg-brand-ink/95",
@@ -475,7 +499,7 @@ export default function Order() {
                       onChange={(e) =>
                         updateForm("deliveryLocationUrl", e.target.value)
                       }
-                      className="mt-4 w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
+                      className="mt-3 w-full rounded-2xl border border-black/10 bg-white/70 px-3.5 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10 sm:mt-4 sm:px-4"
                       placeholder="Paste Google Maps location link"
                     />
 
@@ -483,7 +507,7 @@ export default function Order() {
                       <div className="mt-4 overflow-hidden rounded-2xl border border-black/10 bg-white">
                         <iframe
                           title="Delivery location map"
-                          className="h-56 w-full"
+                          className="h-48 w-full sm:h-56"
                           loading="lazy"
                           src={`https://www.google.com/maps?q=${form.deliveryLat},${form.deliveryLng}&z=16&output=embed`}
                         />
@@ -492,32 +516,31 @@ export default function Order() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                    <label className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
                       DELIVERY NOTE OPTIONAL
                     </label>
                     <textarea
                       value={form.note}
                       onChange={(e) => updateForm("note", e.target.value)}
-                      className="min-h-[90px] w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
-                      placeholder="Landmarks, preferred delivery time, special instructions..."
+                      className="min-h-[85px] w-full rounded-2xl border border-black/10 bg-white/65 px-3.5 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10 sm:min-h-[90px] sm:px-4"
+                      placeholder="Landmarks, preferred time, special instructions..."
                     />
                   </div>
                 </div>
               )}
 
               {step === 3 && (
-                <div className="space-y-5">
+                <div className="space-y-4 sm:space-y-5">
                   <div>
-                    <h2 className="text-xl font-semibold text-brand-ink">
+                    <h2 className="text-lg font-semibold text-brand-ink sm:text-xl">
                       Confirm and choose payment
                     </h2>
                     <p className="mt-1 text-sm text-brand-ink/65">
-                      Review your order and continue with online payment or bank
-                      transfer confirmation through WhatsApp.
+                      Review and continue with payment.
                     </p>
                   </div>
 
-                  <div className="rounded-3xl border border-black/10 bg-brand-bg/75 p-5">
+                  <div className="rounded-3xl border border-black/10 bg-brand-bg/75 p-4 sm:p-5">
                     <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
                       ORDER ID
                     </p>
@@ -525,10 +548,10 @@ export default function Order() {
                       {orderId}
                     </p>
 
-                    <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 p-4 text-sm text-brand-ink/75">
-                      Delivery will be arranged after order confirmation based
-                      on your address and exact location. For bank transfer,
-                      continue to WhatsApp and send the payment slip there.
+                    <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 p-3.5 text-sm text-brand-ink/75 sm:p-4">
+                      Delivery will be arranged after order confirmation. For
+                      bank transfer, continue to WhatsApp and send the payment
+                      slip there.
                     </div>
                   </div>
 
@@ -538,7 +561,7 @@ export default function Order() {
                       onClick={payOnline}
                       disabled={isSubmitting || !items.length}
                       className={[
-                        "rounded-2xl px-5 py-4 text-sm font-semibold text-brand-bg",
+                        "rounded-2xl px-5 py-3.5 text-sm font-semibold text-brand-bg sm:py-4",
                         isSubmitting || !items.length
                           ? "cursor-not-allowed bg-brand-ink/50"
                           : "bg-brand-ink hover:bg-brand-ink/95",
@@ -552,7 +575,7 @@ export default function Order() {
                       onClick={bankTransferViaWhatsApp}
                       disabled={isSubmitting || !items.length}
                       className={[
-                        "rounded-2xl border px-5 py-4 text-sm font-semibold",
+                        "rounded-2xl border px-5 py-3.5 text-sm font-semibold sm:py-4",
                         isSubmitting || !items.length
                           ? "cursor-not-allowed border-brand-ink/10 bg-black/5 text-brand-ink/40"
                           : "border-brand-ink/25 bg-white/55 text-brand-ink hover:bg-white/75",
@@ -573,13 +596,13 @@ export default function Order() {
               )}
             </div>
 
-            <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-5">
+            <div className="mt-6 flex items-center justify-between gap-3 border-t border-black/10 pt-4 sm:mt-8 sm:pt-5">
               <button
                 type="button"
                 onClick={goBack}
                 disabled={step === 1}
                 className={[
-                  "rounded-2xl border px-5 py-3 text-sm font-semibold",
+                  "rounded-2xl border px-4 py-3 text-sm font-semibold sm:px-5",
                   step === 1
                     ? "cursor-not-allowed border-black/10 text-brand-ink/30"
                     : "border-brand-ink/25 text-brand-ink hover:bg-black/5",
@@ -613,9 +636,9 @@ export default function Order() {
             </div>
           </section>
 
-          <aside className="rounded-3xl border border-black/10 bg-white/55 p-5 shadow-sm backdrop-blur sm:p-8">
+          <aside className="rounded-3xl border border-black/10 bg-white/55 p-4 shadow-sm backdrop-blur sm:p-8">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
+              <p className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
                 ORDER SUMMARY
               </p>
 
@@ -628,15 +651,15 @@ export default function Order() {
             </div>
 
             {items.length ? (
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 space-y-2.5 sm:space-y-3">
                 {items.map((it) => (
                   <div
                     key={`${it.productSlug}-${it.size.id}-${it.sugar}`}
-                    className="rounded-2xl border border-black/10 bg-white/60 p-4"
+                    className="rounded-2xl border border-black/10 bg-white/60 p-3 sm:p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-brand-ink">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-brand-ink">
                           {it.productName}
                         </p>
                         <p className="mt-1 text-xs text-brand-ink/65">
@@ -645,7 +668,7 @@ export default function Order() {
                         </p>
                       </div>
 
-                      <p className="text-xs font-semibold text-brand-ink/75">
+                      <p className="shrink-0 text-xs font-semibold text-brand-ink/75">
                         {formatLkr(it.unitPriceLkr * it.quantity)}
                       </p>
                     </div>
@@ -665,7 +688,7 @@ export default function Order() {
               </p>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-black/10 bg-white/55 p-4 text-xs leading-relaxed text-brand-ink/65">
+            <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 p-3.5 text-xs leading-relaxed text-brand-ink/65 sm:mt-5 sm:p-4">
               Your cart will clear only after your order is saved successfully.
             </div>
           </aside>
