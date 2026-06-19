@@ -248,34 +248,71 @@ export async function POST(request: Request) {
       },
     });
 
+
     const { data: profile, error: profileError } = await admin
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+  .from("profiles")
+  .select("role")
+  .eq("id", user.id)
+  .maybeSingle();
+
+const role = String(profile?.role || "").trim().toLowerCase();
+
+const adminEmails = String(process.env.ADMIN_EMAILS || "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
+const userEmail = String(user.email || "").trim().toLowerCase();
+
+const isAdminByRole = role === "admin";
+const isAdminByEmail = adminEmails.includes(userEmail);
+
+if (!isAdminByRole && !isAdminByEmail) {
+  return Response.json(
+    {
+      error: "Admin access required.",
+      debug: {
+        userId: user.id,
+        email: user.email,
+        profileRole: profile?.role || null,
+        profileError: profileError?.message || null,
+        isAdminByRole,
+        isAdminByEmail,
+        adminEmailsConfigured: adminEmails.length,
+      },
+    },
+    { status: 403 },
+  );
+}
+
+    // const { data: profile, error: profileError } = await admin
+    //   .from("profiles")
+    //   .select("role")
+    //   .eq("id", user.id)
+    //   .single();
 
     // if (profileError || profile?.role !== "admin") {
     //   return Response.json({ error: "Admin access required." }, { status: 403 });
     // }
 
-    const role = String(profile?.role || "")
-      .trim()
-      .toLowerCase();
+ 
 
-    if (profileError || role !== "admin") {
-      return Response.json(
-        {
-          error: "Admin access required.",
-          debug: {
-            userId: user.id,
-            email: user.email,
-            role: profile?.role || null,
-            profileError: profileError?.message || null,
-          },
-        },
-        { status: 403 },
-      );
-    }
+    // if (profileError || role !== "admin") {
+    //   return Response.json(
+    //     {
+    //       error: "Admin access required.",
+    //       debug: {
+    //         userId: user.id,
+    //         email: user.email,
+    //         role: profile?.role || null,
+    //         profileError: profileError?.message || null,
+    //       },
+    //     },
+    //     { status: 403 },
+    //   );
+    // }
+
+    
 
     const { data, error } = await admin
       .from("orders")
