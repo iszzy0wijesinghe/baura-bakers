@@ -23,3 +23,22 @@ a {
     @apply w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-sm text-brand-ink outline-none placeholder:text-brand-ink/35 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10;
   }
 }
+
+.input-order {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgb(0 0 0 / 0.1);
+  background: rgb(255 255 255 / 0.65);
+  padding: 0.75rem 0.875rem;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.input-order::placeholder {
+  color: rgb(55 38 25 / 0.4);
+}
+
+.input-order:focus {
+  border-color: rgb(55 38 25 / 0.3);
+  box-shadow: 0 0 0 2px rgb(55 38 25 / 0.1);
+}
