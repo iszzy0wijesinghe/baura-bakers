@@ -238,6 +238,8 @@ function OrderProgressStepper({ status }: { status: string }) {
     );
   }
 
+  
+
   return (
     <div className="rounded-2xl border border-brand-ink/10 bg-white/55 px-3 py-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -317,35 +319,117 @@ export default function OrderHistory() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+
+  async function loadOrders(silent = false) {
+  if (!silent) {
+    setIsLoading(true);
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    navigate("/login");
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      "id, order_no, customer_name, contact_number, customer_address, delivery_address, delivery_location_url, subtotal_lkr, payment_status, order_status, payment_method, created_at",
+    )
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    setErrorText(error.message);
+  } else {
+    setOrders((data || []) as OrderRow[]);
+    setLastUpdatedAt(new Date().toISOString());
+  }
+
+  if (!silent) {
+    setIsLoading(false);
+  }
+}
+
+  // useEffect(() => {
+  //   async function loadOrders() {
+  //     const {
+  //       data: { user },
+  //     } = await supabase.auth.getUser();
+
+  //     if (!user) {
+  //       navigate("/login");
+  //       return;
+  //     }
+
+  //     const { data, error } = await supabase
+  //       .from("orders")
+  //       .select(
+  //         "id, order_no, customer_name, contact_number, customer_address, delivery_address, delivery_location_url, subtotal_lkr, payment_status, order_status, payment_method, created_at",
+  //       )
+  //       .order("created_at", { ascending: false });
+
+  //     if (error) {
+  //       setErrorText(error.message);
+  //     } else {
+  //       setOrders((data || []) as OrderRow[]);
+  //     }
+
+  //     setIsLoading(false);
+  //   }
+
+  //   loadOrders();
+  // }, [navigate]);
+
   useEffect(() => {
-    async function loadOrders() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  let channel: ReturnType<typeof supabase.channel> | null = null;
+  let mounted = true;
 
-      if (!user) {
-        navigate("/login");
-        return;
-      }
+  async function setupRealtimeOrders() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-      const { data, error } = await supabase
-        .from("orders")
-        .select(
-          "id, order_no, customer_name, contact_number, customer_address, delivery_address, delivery_location_url, subtotal_lkr, payment_status, order_status, payment_method, created_at",
-        )
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        setErrorText(error.message);
-      } else {
-        setOrders((data || []) as OrderRow[]);
-      }
-
-      setIsLoading(false);
+    if (!user) {
+      navigate("/login");
+      return;
     }
 
-    loadOrders();
-  }, [navigate]);
+    await loadOrders();
+
+    if (!mounted) return;
+
+    channel = supabase
+      .channel(`customer-orders-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "orders",
+          filter: `user_id=eq.${user.id}`,
+        },
+        async () => {
+          await loadOrders(true);
+        },
+      )
+      .subscribe();
+  }
+
+  setupRealtimeOrders();
+
+  return () => {
+    mounted = false;
+
+    if (channel) {
+      supabase.removeChannel(channel);
+    }
+  };
+}, [navigate]);
 
   return (
     <Page>
