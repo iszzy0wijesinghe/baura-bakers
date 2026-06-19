@@ -22,6 +22,8 @@ import ComingSoonPage from "../pages/system/ComingSoonPage";
 import CriticalBreakPage from "../pages/system/CriticalBreakPage";
 import ErrorStatusPage from "../pages/system/ErrorStatusPage";
 import MaintenancePage from "../pages/system/MaintenancePage";
+import AdminProducts from "../pages/AdminProducts";
+import AdminPromotions from "../pages/AdminPromotions";
 
 export const router = createBrowserRouter([
   // isolated system pages
@@ -58,6 +60,8 @@ export const router = createBrowserRouter([
       { path: "/receipt/:orderNo", element: <Receipt /> },
       { path: "/admin/dashboard", element: <AdminDashboard /> },
       { path: "/admin/orders", element: <AdminOrders /> },
+      { path: "/admin/products", element: <AdminProducts /> },
+      { path: "/admin/promotions", element: <AdminPromotions /> },
     ],
   },
 

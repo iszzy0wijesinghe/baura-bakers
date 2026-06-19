@@ -14,6 +14,12 @@ type CreateGuestOrderInput = {
   deliveryApp: string;
   paymentMethod?: string;
   note?: string;
+
+  couponCode?: string | null;
+  promotionId?: string | null;
+  discountLkr?: number;
+  grandTotalLkr?: number;
+
   items: CartItem[];
 };
 
@@ -41,7 +47,9 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
   const user = session?.user;
 
   if (!user) {
-    throw new Error("Please login or create an account before completing your order.");
+    throw new Error(
+      "Please login or create an account before completing your order.",
+    );
   }
 
   const orderId = createBrowserUuid();
@@ -50,6 +58,9 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
     (sum, item) => sum + item.unitPriceLkr * item.quantity,
     0,
   );
+
+  const discountLkr = Number(input.discountLkr || 0);
+  const grandTotalLkr = Number(input.grandTotalLkr ?? subtotalLkr - discountLkr);
 
   const { error: orderError } = await supabase.from("orders").insert({
     id: orderId,
@@ -60,14 +71,22 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
     customer_email: input.customerEmail?.trim() || user.email || null,
     contact_number: input.contactNumber.trim(),
     customer_address: input.customerAddress.trim(),
+
     delivery_address: input.deliveryAddress.trim(),
     delivery_location_url: input.deliveryLocationUrl?.trim() || null,
     delivery_lat: input.deliveryLat ?? null,
     delivery_lng: input.deliveryLng ?? null,
     delivery_app: input.deliveryApp,
-    payment_method: input.paymentMethod || "BANK_TRANSFER_WHATSAPP",
+
+    payment_method: input.paymentMethod || "WHATSAPP_ORDER",
     note: input.note?.trim() || null,
+
     subtotal_lkr: subtotalLkr,
+    coupon_code: input.couponCode?.trim().toUpperCase() || null,
+    promotion_id: input.promotionId || null,
+    discount_lkr: discountLkr,
+    grand_total_lkr: grandTotalLkr,
+
     payment_status: "PENDING_PAYMENT",
     order_status: "NEW",
   });
@@ -78,10 +97,15 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
 
   const orderItems = input.items.map((item) => ({
     order_id: orderId,
+
+    item_id: item.itemId,
+    item_size_id: item.itemSizeId,
+
     product_slug: item.productSlug,
     product_name: item.productName,
     size_label: item.size.label,
     sugar_level: item.sugar,
+
     quantity: item.quantity,
     unit_price_lkr: item.unitPriceLkr,
     line_total_lkr: item.unitPriceLkr * item.quantity,

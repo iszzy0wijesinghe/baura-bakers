@@ -21,6 +21,7 @@ export default function AdminDashboard() {
     paidOrders: 0,
     completedOrders: 0,
   });
+
   const [isLoading, setIsLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
@@ -89,12 +90,14 @@ export default function AdminDashboard() {
             <p className="text-xs font-semibold tracking-[0.28em] text-brand-ink/55">
               ADMIN DASHBOARD
             </p>
+
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-brand-ink sm:text-4xl">
               Welcome, {adminName}
             </h1>
+
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/70">
-              Manage customer orders, payment confirmations, and delivery
-              preparation from one place.
+              Manage orders, menu products, categories, coupons, and promotion
+              campaigns from one place.
             </p>
           </div>
 
@@ -126,35 +129,27 @@ export default function AdminDashboard() {
               <StatCard label="Completed" value={stats.completedOrders} />
             </section>
 
-            <section className="grid gap-4 lg:grid-cols-2">
-              <Link
+            <section className="grid gap-4 lg:grid-cols-3">
+              <AdminLinkCard
                 to="/admin/orders"
-                className="rounded-3xl border border-black/10 bg-white/60 p-6 shadow-sm transition hover:bg-white/75"
-              >
-                <p className="text-xs font-semibold tracking-widest text-brand-ink/55">
-                  ORDER MANAGEMENT
-                </p>
-                <h2 className="mt-3 text-2xl font-semibold text-brand-ink">
-                  Manage orders
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-brand-ink/65">
-                  View WhatsApp/bank transfer orders, mark payments as paid, and
-                  update preparation status.
-                </p>
-              </Link>
+                eyebrow="ORDER MANAGEMENT"
+                title="Manage orders"
+                description="View WhatsApp orders, mark payments as paid, and update preparation status."
+              />
 
-              <div className="rounded-3xl border border-black/10 bg-white/60 p-6 shadow-sm">
-                <p className="text-xs font-semibold tracking-widest text-brand-ink/55">
-                  NEXT MODULE
-                </p>
-                <h2 className="mt-3 text-2xl font-semibold text-brand-ink">
-                  Products & reports
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-brand-ink/65">
-                  Product management and sales reports can be added after order
-                  management is stable.
-                </p>
-              </div>
+              <AdminLinkCard
+                to="/admin/products"
+                eyebrow="PRODUCT MANAGEMENT"
+                title="Products & categories"
+                description="Add/edit menu products, active/inactive status, categories, subcategories, prices, and image URLs."
+              />
+
+              <AdminLinkCard
+                to="/admin/promotions"
+                eyebrow="PROMOTION MANAGEMENT"
+                title="Offers & coupons"
+                description="Manage coupon codes, QR offers, happy-hour offers, and category/product-wise campaigns."
+              />
             </section>
           </>
         )}
@@ -169,7 +164,37 @@ function StatCard({ label, value }: { label: string; value: number }) {
       <p className="text-xs font-semibold tracking-widest text-brand-ink/55">
         {label.toUpperCase()}
       </p>
+
       <p className="mt-3 text-3xl font-semibold text-brand-ink">{value}</p>
     </div>
+  );
+}
+
+function AdminLinkCard({
+  to,
+  eyebrow,
+  title,
+  description,
+}: {
+  to: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className="rounded-3xl border border-black/10 bg-white/60 p-6 shadow-sm transition hover:-translate-y-0.5 hover:bg-white/75"
+    >
+      <p className="text-xs font-semibold tracking-widest text-brand-ink/55">
+        {eyebrow}
+      </p>
+
+      <h2 className="mt-3 text-2xl font-semibold text-brand-ink">{title}</h2>
+
+      <p className="mt-2 text-sm leading-relaxed text-brand-ink/65">
+        {description}
+      </p>
+    </Link>
   );
 }
