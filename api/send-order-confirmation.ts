@@ -254,8 +254,27 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .single();
 
-    if (profileError || profile?.role !== "admin") {
-      return Response.json({ error: "Admin access required." }, { status: 403 });
+    // if (profileError || profile?.role !== "admin") {
+    //   return Response.json({ error: "Admin access required." }, { status: 403 });
+    // }
+
+    const role = String(profile?.role || "")
+      .trim()
+      .toLowerCase();
+
+    if (profileError || role !== "admin") {
+      return Response.json(
+        {
+          error: "Admin access required.",
+          debug: {
+            userId: user.id,
+            email: user.email,
+            role: profile?.role || null,
+            profileError: profileError?.message || null,
+          },
+        },
+        { status: 403 },
+      );
     }
 
     const { data, error } = await admin
@@ -353,10 +372,6 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
-
-
-
-  
 }
 
 export async function GET() {
