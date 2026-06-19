@@ -28,6 +28,7 @@ type AdminOrder = {
   payment_method: string | null;
   admin_note: string | null;
   note: string | null;
+  confirmation_email_sent_at: string | null;
   created_at: string;
   order_items?: OrderItemRow[];
 };
@@ -152,10 +153,11 @@ export default function AdminOrders() {
         subtotal_lkr,
         payment_status,
         order_status,
-        payment_method,
-        admin_note,
-        note,
-        created_at,
+       payment_method,
+admin_note,
+note,
+confirmation_email_sent_at,
+created_at,
         order_items (
           id,
           product_name,
@@ -234,6 +236,85 @@ export default function AdminOrders() {
     };
   }, [orders]);
 
+  async function sendConfirmationEmail(orderId: string) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("Admin session not found.");
+    }
+
+    const response = await fetch("/api/send-order-confirmation", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        orderId,
+      }),
+    });
+
+    const text = await response.text();
+
+    let result: any = null;
+
+    try {
+      result = JSON.parse(text);
+    } catch {
+      result = {
+        raw: text,
+      };
+    }
+
+    console.log("Email API response:", response.status, result);
+
+    if (!response.ok) {
+      throw new Error(
+        result?.error ||
+          result?.reason ||
+          result?.raw ||
+          `Email API failed with status ${response.status}`,
+      );
+    }
+
+    return result;
+  }
+
+  async function handleManualSendConfirmationEmail(orderId: string) {
+    try {
+      setSavingId(orderId);
+      setErrorText("");
+
+      const result = await sendConfirmationEmail(orderId);
+
+      console.log("Manual confirmation email result:", result);
+
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === orderId
+            ? {
+                ...order,
+                confirmation_email_sent_at: new Date().toISOString(),
+              }
+            : order,
+        ),
+      );
+
+      alert("Confirmation email sent successfully.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown email sending error.";
+
+      console.error("Manual email send failed:", error);
+
+      setErrorText(`Email failed: ${message}`);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   async function updateOrder(
     orderId: string,
     updates: Partial<
@@ -256,9 +337,47 @@ export default function AdminOrders() {
         throw new Error(error.message);
       }
 
+      const oldOrder = orders.find((order) => order.id === orderId);
+
+      const nextPaymentStatus =
+        updates.payment_status || oldOrder?.payment_status;
+
+      const nextOrderStatus = updates.order_status || oldOrder?.order_status;
+
+      const shouldSendConfirmationEmail =
+        nextPaymentStatus === "PAID" &&
+        nextOrderStatus === "CONFIRMED" &&
+        !oldOrder?.confirmation_email_sent_at;
+
+      if (shouldSendConfirmationEmail) {
+        try {
+          const emailResult = await sendConfirmationEmail(orderId);
+          console.log("Confirmation email sent:", emailResult);
+        } catch (emailError) {
+          const message =
+            emailError instanceof Error
+              ? emailError.message
+              : "Unknown email sending error.";
+
+          console.error("Confirmation email failed:", emailError);
+
+          setErrorText(
+            `Order status updated, but confirmation email failed: ${message}`,
+          );
+        }
+      }
+
       setOrders((prev) =>
         prev.map((order) =>
-          order.id === orderId ? { ...order, ...updates } : order,
+          order.id === orderId
+            ? {
+                ...order,
+                ...updates,
+                confirmation_email_sent_at: shouldSendConfirmationEmail
+                  ? new Date().toISOString()
+                  : order.confirmation_email_sent_at,
+              }
+            : order,
         ),
       );
     } catch (error) {
@@ -447,6 +566,7 @@ export default function AdminOrders() {
               order={selectedOrder}
               savingId={savingId}
               onUpdate={updateOrder}
+              onSendConfirmationEmail={handleManualSendConfirmationEmail}
             />
           </section>
         )}
@@ -470,6 +590,7 @@ function OrderDetailsPanel({
   order,
   savingId,
   onUpdate,
+  onSendConfirmationEmail,
 }: {
   order: AdminOrder | null;
   savingId: string | null;
@@ -479,6 +600,7 @@ function OrderDetailsPanel({
       Pick<AdminOrder, "payment_status" | "order_status" | "admin_note">
     >,
   ) => void;
+  onSendConfirmationEmail: (orderId: string) => void;
 }) {
   const [noteDraft, setNoteDraft] = useState("");
 
@@ -670,6 +792,30 @@ function OrderDetailsPanel({
         </div>
 
         <div className="flex flex-wrap gap-3 border-t border-black/10 pt-5">
+          {order.payment_status === "PAID" &&
+            order.order_status === "CONFIRMED" &&
+            !order.confirmation_email_sent_at && (
+              <button
+                type="button"
+                onClick={() => onSendConfirmationEmail(order.id)}
+                disabled={isSaving}
+                className={[
+                  "rounded-2xl px-5 py-3 text-sm font-semibold text-brand-bg",
+                  isSaving
+                    ? "cursor-not-allowed bg-brand-ink/45"
+                    : "bg-green-700 hover:bg-green-800",
+                ].join(" ")}
+              >
+                {isSaving ? "Sending email..." : "Send confirmation email"}
+              </button>
+            )}
+
+          {order.confirmation_email_sent_at && (
+            <span className="inline-flex items-center rounded-2xl border border-green-200 bg-green-50 px-5 py-3 text-sm font-semibold text-green-700">
+              Confirmation email sent
+            </span>
+          )}
+
           <a
             href={`https://wa.me/${whatsappPhone}`}
             target="_blank"
