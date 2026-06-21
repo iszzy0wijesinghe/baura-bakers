@@ -161,6 +161,13 @@ export default function AdminDashboard() {
                 title="Delivery schedule"
                 description="Manage available delivery dates, morning/afternoon slots, and delivery settings."
               />
+
+              <AdminLinkCard
+                to="/admin/site-settings"
+                eyebrow="SITE SETTINGS"
+                title="Site switch modes"
+                description="Turn on/off Coming Soon, Maintenance, and Critical Break modes."
+              />
             </section>
           </>
         )}

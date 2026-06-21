@@ -26,6 +26,7 @@ import AdminProducts from "../pages/AdminProducts";
 import AdminPromotions from "../pages/AdminPromotions";
 import OrderTracking from "../pages/OrderTracking";
 import AdminDeliveryManagement from "../pages/AdminDeliveryManagement";
+import AdminSiteSettings from "../pages/AdminSiteSettings";
 
 export const router = createBrowserRouter([
   // isolated system pages
@@ -70,6 +71,7 @@ export const router = createBrowserRouter([
       { path: "/admin/products", element: <AdminProducts /> },
       { path: "/admin/promotions", element: <AdminPromotions /> },
       { path: "/admin/delivery", element: <AdminDeliveryManagement /> },
+      { path: "/admin/site-settings", element: <AdminSiteSettings /> },
     ],
   },
 
