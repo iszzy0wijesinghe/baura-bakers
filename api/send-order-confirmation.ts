@@ -1,3 +1,5 @@
+/** @format */
+
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 
@@ -26,16 +28,29 @@ type OrderRow = {
   confirmation_email_sent_at: string | null;
   created_at: string;
   order_items: OrderItem[];
+  tracking_token: string | null;
 };
 
-function requireEnv(name: string) {
-  const value = process.env[name];
+// function requireEnv(name: string) {
+//   const value = process.env[name];
 
-  if (!value) {
-    throw new Error(`${name} is missing.`);
+//   if (!value) {
+//     throw new Error(`${name} is missing.`);
+//   }
+
+//   return value;
+// }
+
+function requireEnv(...names: string[]) {
+  for (const name of names) {
+    const value = process.env[name];
+
+    if (value && value.trim()) {
+      return value.trim();
+    }
   }
 
-  return value;
+  throw new Error(`${names.join(" or ")} is missing.`);
 }
 
 function formatLkr(value: number) {
@@ -50,12 +65,16 @@ function escapeHtml(value: unknown) {
     .replaceAll('"', "&quot;");
 }
 
-function buildInvoiceHtml(order: OrderRow) {
-  const siteUrl = requireEnv("SITE_URL");
+function buildInvoiceHtml(order: OrderRow, siteUrl: string) {
   const logoUrl = process.env.BAURA_LOGO_URL || "";
 
-  const trackUrl = `${siteUrl}/orders`;
-  const receiptUrl = `${siteUrl}/receipt/${encodeURIComponent(order.order_no)}`;
+  const orderNo = encodeURIComponent(order.order_no);
+  const token = order.tracking_token
+    ? `?t=${encodeURIComponent(order.tracking_token)}`
+    : "";
+
+  const trackUrl = `${siteUrl}/track/${orderNo}${token}`;
+  const receiptUrl = `${siteUrl}/receipt/${orderNo}${token}`;
 
   const rows = (order.order_items || [])
     .map(
@@ -201,8 +220,8 @@ async function readRequestJson(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const supabaseUrl = requireEnv("SUPABASE_URL");
-    const anonKey = requireEnv("SUPABASE_ANON_KEY");
+    const supabaseUrl = requireEnv("SUPABASE_URL", "VITE_SUPABASE_URL");
+    const anonKey = requireEnv("SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY");
     const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 
     const gmailUser = requireEnv("GMAIL_USER");
@@ -248,42 +267,45 @@ export async function POST(request: Request) {
       },
     });
 
-
     const { data: profile, error: profileError } = await admin
-  .from("profiles")
-  .select("role")
-  .eq("id", user.id)
-  .maybeSingle();
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
 
-const role = String(profile?.role || "").trim().toLowerCase();
+    const role = String(profile?.role || "")
+      .trim()
+      .toLowerCase();
 
-const adminEmails = String(process.env.ADMIN_EMAILS || "")
-  .split(",")
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
+    const adminEmails = String(process.env.ADMIN_EMAILS || "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
 
-const userEmail = String(user.email || "").trim().toLowerCase();
+    const userEmail = String(user.email || "")
+      .trim()
+      .toLowerCase();
 
-const isAdminByRole = role === "admin";
-const isAdminByEmail = adminEmails.includes(userEmail);
+    const isAdminByRole = role === "admin";
+    const isAdminByEmail = adminEmails.includes(userEmail);
 
-if (!isAdminByRole && !isAdminByEmail) {
-  return Response.json(
-    {
-      error: "Admin access required.",
-      debug: {
-        userId: user.id,
-        email: user.email,
-        profileRole: profile?.role || null,
-        profileError: profileError?.message || null,
-        isAdminByRole,
-        isAdminByEmail,
-        adminEmailsConfigured: adminEmails.length,
-      },
-    },
-    { status: 403 },
-  );
-}
+    if (!isAdminByRole && !isAdminByEmail) {
+      return Response.json(
+        {
+          error: "Admin access required.",
+          debug: {
+            userId: user.id,
+            email: user.email,
+            profileRole: profile?.role || null,
+            profileError: profileError?.message || null,
+            isAdminByRole,
+            isAdminByEmail,
+            adminEmailsConfigured: adminEmails.length,
+          },
+        },
+        { status: 403 },
+      );
+    }
 
     // const { data: profile, error: profileError } = await admin
     //   .from("profiles")
@@ -294,8 +316,6 @@ if (!isAdminByRole && !isAdminByEmail) {
     // if (profileError || profile?.role !== "admin") {
     //   return Response.json({ error: "Admin access required." }, { status: 403 });
     // }
-
- 
 
     // if (profileError || role !== "admin") {
     //   return Response.json(
@@ -312,8 +332,6 @@ if (!isAdminByRole && !isAdminByEmail) {
     //   );
     // }
 
-    
-
     const { data, error } = await admin
       .from("orders")
       .select(
@@ -329,10 +347,11 @@ if (!isAdminByRole && !isAdminByEmail) {
         subtotal_lkr,
         payment_status,
         order_status,
-        payment_method,
-        confirmation_email_sent_at,
-        created_at,
-        order_items (
+     payment_method,
+confirmation_email_sent_at,
+tracking_token,
+created_at,
+order_items (
           product_name,
           size_label,
           sugar_level,
@@ -382,12 +401,14 @@ if (!isAdminByRole && !isAdminByEmail) {
       },
     });
 
+    const siteUrl = process.env.SITE_URL || new URL(request.url).origin;
+
     await transporter.sendMail({
       from: `Baura Bakers <${gmailUser}>`,
       to: order.customer_email,
       replyTo: gmailUser,
       subject: `Payment received — Order ${order.order_no} confirmed`,
-      html: buildInvoiceHtml(order),
+      html: buildInvoiceHtml(order, siteUrl),
     });
 
     await admin
@@ -415,5 +436,16 @@ export async function GET() {
   return Response.json({
     ok: true,
     route: "send-order-confirmation",
+    env: {
+      SUPABASE_URL: Boolean(process.env.SUPABASE_URL),
+      VITE_SUPABASE_URL: Boolean(process.env.VITE_SUPABASE_URL),
+      SUPABASE_ANON_KEY: Boolean(process.env.SUPABASE_ANON_KEY),
+      VITE_SUPABASE_ANON_KEY: Boolean(process.env.VITE_SUPABASE_ANON_KEY),
+      SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+      GMAIL_USER: Boolean(process.env.GMAIL_USER),
+      GMAIL_APP_PASSWORD: Boolean(process.env.GMAIL_APP_PASSWORD),
+      ADMIN_EMAILS: Boolean(process.env.ADMIN_EMAILS),
+      SITE_URL: Boolean(process.env.SITE_URL),
+    },
   });
 }

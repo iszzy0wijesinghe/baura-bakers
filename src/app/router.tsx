@@ -24,12 +24,15 @@ import ErrorStatusPage from "../pages/system/ErrorStatusPage";
 import MaintenancePage from "../pages/system/MaintenancePage";
 import AdminProducts from "../pages/AdminProducts";
 import AdminPromotions from "../pages/AdminPromotions";
+import OrderTracking from "../pages/OrderTracking";
 
 export const router = createBrowserRouter([
   // isolated system pages
   { path: "/coming-soon", element: <ComingSoonPage /> },
   { path: "/site-maintenance", element: <MaintenancePage /> },
   { path: "/critical-break", element: <CriticalBreakPage /> },
+
+    { path: "/track/:orderNo", element: <OrderTracking /> },
 
   // isolated error pages
   { path: "/400", element: <ErrorStatusPage statusCode={400} /> },
@@ -58,6 +61,9 @@ export const router = createBrowserRouter([
       { path: "/account", element: <Account /> },
       { path: "/orders", element: <OrderHistory /> },
       { path: "/receipt/:orderNo", element: <Receipt /> },
+
+    
+
       { path: "/admin/dashboard", element: <AdminDashboard /> },
       { path: "/admin/orders", element: <AdminOrders /> },
       { path: "/admin/products", element: <AdminProducts /> },

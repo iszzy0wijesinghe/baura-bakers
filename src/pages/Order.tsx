@@ -1,3 +1,5 @@
+/** @format */
+
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../app/cart";
@@ -40,6 +42,10 @@ function makeOrderId() {
 
 function onlyDigitsPhone(v: string) {
   return v.replace(/[^\d+]/g, "");
+}
+
+function isEmailLike(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function formatLkr(n: number) {
@@ -110,7 +116,7 @@ export default function Order() {
         } = await supabase.auth.getUser();
 
         if (!user) {
-          navigate("/login");
+          setIsLoadingUser(false);
           return;
         }
 
@@ -177,10 +183,16 @@ export default function Order() {
   const senderValid = useMemo(() => {
     return (
       form.senderName.trim().length >= 2 &&
+      isEmailLike(form.senderEmail) &&
       onlyDigitsPhone(form.senderContactNumber).trim().length >= 9 &&
       form.senderAddress.trim().length >= 5
     );
-  }, [form.senderName, form.senderContactNumber, form.senderAddress]);
+  }, [
+    form.senderName,
+    form.senderEmail,
+    form.senderContactNumber,
+    form.senderAddress,
+  ]);
 
   const receiverValid = useMemo(() => {
     if (!needsReceiver) return true;
@@ -318,7 +330,9 @@ export default function Order() {
     setSubmitError("");
 
     if (step === 1 && !detailsValid) {
-      setSubmitError("Please complete sender and receiver details.");
+      setSubmitError(
+        "Please complete sender details, a valid email, and receiver details if needed.",
+      );
       return;
     }
 
@@ -397,7 +411,7 @@ export default function Order() {
 
   async function saveOrderOnce(paymentMethod: string) {
     if (savedOrderNo === orderId) {
-      return;
+      return null;
     }
 
     const savedOrder = await createGuestOrder({
@@ -435,6 +449,8 @@ export default function Order() {
 
     console.log("Order saved successfully:", savedOrder);
     setSavedOrderNo(orderId);
+
+    return savedOrder;
   }
 
   async function bankTransferViaWhatsApp() {
@@ -446,20 +462,33 @@ export default function Order() {
       setIsSubmitting(true);
       setSubmitError("");
 
-      await saveOrderOnce("BANK_TRANSFER_WHATSAPP");
+      const savedOrder = await saveOrderOnce("BANK_TRANSFER_WHATSAPP");
+
+      const trackingUrl = savedOrder?.trackingToken
+        ? `${window.location.origin}/track/${encodeURIComponent(
+            orderId,
+          )}?t=${encodeURIComponent(savedOrder.trackingToken)}`
+        : `${window.location.origin}/track/${encodeURIComponent(orderId)}`;
 
       localStorage.setItem(
         "baura_completed_bank_transfer_v1",
         JSON.stringify({
           orderNo: orderId,
+          trackingUrl,
           savedAt: new Date().toISOString(),
         }),
       );
 
       clear();
 
-      const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+      const finalWhatsappMessage = [
         whatsappMessage,
+        "",
+        `🔎 *Track Order:* ${trackingUrl}`,
+      ].join("\n");
+
+      const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+        finalWhatsappMessage,
       )}`;
 
       window.location.href = url;
@@ -496,6 +525,32 @@ export default function Order() {
       shortTitle: "Confirm",
     },
   ] as const;
+
+  if (!items.length && !savedOrderNo) {
+    return (
+      <Page>
+        <section className="mx-auto max-w-2xl rounded-[2rem] border border-black/10 bg-white/70 p-6 text-center shadow-sm backdrop-blur sm:p-10">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-brand-ink/45">
+            Checkout
+          </p>
+
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-brand-ink sm:text-4xl">
+            Your cart is empty
+          </h1>
+
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-brand-ink/65">
+            Add at least one Baura Bakers item before going to checkout.
+          </p>
+
+          <Link
+            to="/menu"
+            className="mt-6 inline-flex rounded-2xl bg-brand-ink px-6 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95">
+            Go to menu
+          </Link>
+        </section>
+      </Page>
+    );
+  }
 
   return (
     <Page>
@@ -540,8 +595,7 @@ export default function Order() {
                         : done
                           ? "border-brand-ink/20 bg-brand-bg/80 text-brand-ink"
                           : "border-black/10 bg-white/45 text-brand-ink/55",
-                    ].join(" ")}
-                  >
+                    ].join(" ")}>
                     <div className="flex items-center gap-2 sm:block">
                       <span
                         className={[
@@ -551,8 +605,7 @@ export default function Order() {
                             : done
                               ? "bg-brand-ink text-brand-bg"
                               : "bg-white/70 text-brand-ink/50",
-                        ].join(" ")}
-                      >
+                        ].join(" ")}>
                         {done ? "✓" : item.id}
                       </span>
 
@@ -624,14 +677,14 @@ export default function Order() {
                     </Field>
                   </div>
 
-                  <Field label="SENDER EMAIL OPTIONAL">
+                  <Field label="SENDER EMAIL">
                     <input
                       value={form.senderEmail}
                       onChange={(e) =>
                         updateForm("senderEmail", e.target.value)
                       }
                       className="input-order"
-                      placeholder="For receipt and order updates"
+                      placeholder="Required for receipt and order updates"
                       type="email"
                       autoComplete="email"
                     />
@@ -682,8 +735,7 @@ export default function Order() {
                         <button
                           type="button"
                           onClick={copySenderToReceiver}
-                          className="w-fit rounded-2xl border border-brand-ink/20 bg-white/60 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white/80"
-                        >
+                          className="w-fit rounded-2xl border border-brand-ink/20 bg-white/60 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white/80">
                           Same as sender
                         </button>
                       </div>
@@ -798,8 +850,7 @@ export default function Order() {
                             isLocating
                               ? "cursor-not-allowed bg-brand-ink/40 text-brand-bg"
                               : "bg-brand-ink text-brand-bg hover:bg-brand-ink/95",
-                          ].join(" ")}
-                        >
+                          ].join(" ")}>
                           {isLocating
                             ? "Getting location..."
                             : "Use my location"}
@@ -926,8 +977,7 @@ export default function Order() {
                         isSubmitting || !items.length
                           ? "cursor-not-allowed border-brand-ink/10 bg-black/5 text-brand-ink/40"
                           : "border-brand-ink/25 bg-white/55 text-brand-ink hover:bg-white/75",
-                      ].join(" ")}
-                    >
+                      ].join(" ")}>
                       {isSubmitting ? "Saving order..." : "Order via WhatsApp"}
                     </button>
                   </div>
@@ -935,8 +985,7 @@ export default function Order() {
                   <button
                     type="button"
                     onClick={() => navigate("/cart")}
-                    className="w-full rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100"
-                  >
+                    className="w-full rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">
                     Cancel and return to cart
                   </button>
                 </div>
@@ -953,8 +1002,7 @@ export default function Order() {
                   step === 1
                     ? "cursor-not-allowed border-black/10 text-brand-ink/30"
                     : "border-brand-ink/25 text-brand-ink hover:bg-black/5",
-                ].join(" ")}
-              >
+                ].join(" ")}>
                 Back
               </button>
 
@@ -968,15 +1016,13 @@ export default function Order() {
                     canGoNext
                       ? "bg-brand-ink hover:bg-brand-ink/95"
                       : "cursor-not-allowed bg-brand-ink/40",
-                  ].join(" ")}
-                >
+                  ].join(" ")}>
                   Continue
                 </button>
               ) : (
                 <Link
                   to="/cart"
-                  className="rounded-2xl border border-brand-ink/25 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-black/5"
-                >
+                  className="rounded-2xl border border-brand-ink/25 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-black/5">
                   Edit cart
                 </Link>
               )}
@@ -991,8 +1037,7 @@ export default function Order() {
 
               <Link
                 to="/cart"
-                className="rounded-xl border border-brand-ink/15 bg-white/45 px-3 py-2 text-xs font-semibold text-brand-ink/80 hover:bg-white/60"
-              >
+                className="rounded-xl border border-brand-ink/15 bg-white/45 px-3 py-2 text-xs font-semibold text-brand-ink/80 hover:bg-white/60">
                 Edit cart
               </Link>
             </div>
@@ -1002,8 +1047,7 @@ export default function Order() {
                 {items.map((it) => (
                   <div
                     key={`${it.productSlug}-${it.size.id}-${it.sugar}`}
-                    className="rounded-2xl border border-black/10 bg-white/60 p-3 sm:p-4"
-                  >
+                    className="rounded-2xl border border-black/10 bg-white/60 p-3 sm:p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-brand-ink">
@@ -1084,8 +1128,7 @@ function ToggleCard({
           : active
             ? "border-brand-ink bg-brand-ink text-brand-bg"
             : "border-black/10 bg-white/60 text-brand-ink hover:border-brand-ink/25 hover:bg-white/80",
-      ].join(" ")}
-    >
+      ].join(" ")}>
       <div className="flex items-start gap-3">
         <span
           className={[
@@ -1093,8 +1136,7 @@ function ToggleCard({
             active
               ? "border-brand-bg/45 bg-brand-bg text-brand-ink"
               : "border-brand-ink/20 bg-white/70 text-transparent",
-          ].join(" ")}
-        >
+          ].join(" ")}>
           ✓
         </span>
 
@@ -1104,8 +1146,7 @@ function ToggleCard({
             className={[
               "mt-1 block text-xs leading-5",
               active ? "text-brand-bg/75" : "text-brand-ink/55",
-            ].join(" ")}
-          >
+            ].join(" ")}>
             {description}
           </span>
         </span>

@@ -1,11 +1,25 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+/** @format */
+
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   define: {
-    "import.meta.env.VITE_GIT_SHA": JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? ""),
-    "import.meta.env.VITE_DEPLOY_ID": JSON.stringify(process.env.VERCEL_DEPLOYMENT_ID ?? ""),
+    "import.meta.env.VITE_GIT_SHA": JSON.stringify(
+      process.env.VERCEL_GIT_COMMIT_SHA ?? "",
+    ),
+    "import.meta.env.VITE_DEPLOY_ID": JSON.stringify(
+      process.env.VERCEL_DEPLOYMENT_ID ?? "",
+    ),
   },
-})
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+    },
+  },
+});
