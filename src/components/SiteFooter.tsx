@@ -10,6 +10,7 @@ export default function SiteFooter() {
       <div className="mx-auto w-full max-w-6xl px-4 py-10 text-brand-bg">
         <div className="flex flex-wrap items-baseline gap-2">
           <p className="text-base font-semibold tracking-tight">Baura Bakers</p>
+
           <span className="text-[11px] font-medium text-brand-bg/55">
             {APP_VERSION}
           </span>
@@ -21,6 +22,18 @@ export default function SiteFooter() {
 
         <p className="mt-4 text-xs text-brand-bg/60">
           © {new Date().getFullYear()} Baura Bakers. All rights reserved.
+        </p>
+
+        <p className="mt-1 text-[10px] leading-relaxed text-brand-bg/35">
+          Designed, developed & maintained by{" "}
+          <a
+            href="https://motiora.vercel.app/"
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-brand-bg/55 underline decoration-brand-bg/15 underline-offset-4 transition hover:text-brand-bg"
+          >
+            Motiora
+          </a>
         </p>
       </div>
     </footer>
