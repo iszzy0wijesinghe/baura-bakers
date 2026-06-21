@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
 import { supabase } from "../lib/supabase";
+import { claimDeviceOrdersForCurrentUser } from "../lib/orders";
 
 type OrderRow = {
   id: string;
@@ -335,7 +336,10 @@ export default function OrderHistory() {
     return;
   }
 
+  await claimDeviceOrdersForCurrentUser();
+  
   const { data, error } = await supabase
+  
     .from("orders")
     .select(
       "id, order_no, customer_name, contact_number, customer_address, delivery_address, delivery_location_url, subtotal_lkr, payment_status, order_status, payment_method, created_at",

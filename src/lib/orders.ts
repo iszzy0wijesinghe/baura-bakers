@@ -194,6 +194,27 @@ export async function getOrderTracking(orderNo: string, token?: string | null) {
   return (data || null) as PublicOrderTracking | null;
 }
 
+
+
+export async function checkCustomerEmailExists(email: string) {
+  const cleanEmail = email.trim().toLowerCase();
+
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    return false;
+  }
+
+  const { data, error } = await supabase.rpc("customer_email_exists", {
+    p_email: cleanEmail,
+  });
+
+  if (error) {
+    console.warn("Could not check customer email:", error.message);
+    return false;
+  }
+
+  return Boolean(data);
+}
+
 // import type { CartItem } from "../app/cart";
 // import { supabase } from "./supabase";
 

@@ -14,9 +14,19 @@ import {
   Truck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useParams,
+  useSearchParams,
+  useNavigate,
+} from "react-router-dom";
 import logoUrl from "../assets/logo1.webp";
-import { getOrderTracking, type PublicOrderTracking } from "../lib/orders";
+import {
+  getOrderTracking,
+  type PublicOrderTracking,
+  claimDeviceOrdersForCurrentUser,
+} from "../lib/orders";
+import { supabase } from "../lib/supabase";
 
 const flow = [
   {
@@ -252,6 +262,7 @@ function buildInvoiceHtml(order: PublicOrderTracking) {
 }
 
 export default function OrderTracking() {
+  const navigate = useNavigate();
   const { orderNo = "" } = useParams();
   const [params] = useSearchParams();
 
@@ -260,8 +271,38 @@ export default function OrderTracking() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [isCheckingCustomer, setIsCheckingCustomer] = useState(true);
 
   const token = params.get("t");
+
+  useEffect(() => {
+    let active = true;
+
+    async function redirectLoggedInCustomer() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!active) return;
+
+      if (user) {
+        await claimDeviceOrdersForCurrentUser();
+
+        if (!active) return;
+
+        navigate("/orders", { replace: true });
+        return;
+      }
+
+      setIsCheckingCustomer(false);
+    }
+
+    redirectLoggedInCustomer();
+
+    return () => {
+      active = false;
+    };
+  }, [navigate]);
 
   async function loadTracking(showLoading = false) {
     try {
@@ -298,6 +339,8 @@ export default function OrderTracking() {
   }
 
   useEffect(() => {
+    if (isCheckingCustomer) return;
+
     let active = true;
 
     async function loadInitial() {
@@ -317,7 +360,7 @@ export default function OrderTracking() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [orderNo, token]);
+  }, [orderNo, token, isCheckingCustomer]);
 
   const progressIndex = useMemo(() => {
     return order ? getProgressIndex(order.order_status) : -1;
@@ -350,7 +393,7 @@ export default function OrderTracking() {
     URL.revokeObjectURL(url);
   }
 
-  if (isLoading) {
+  if (isCheckingCustomer || isLoading) {
     return (
       <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(255,244,214,0.95),transparent_32%),linear-gradient(135deg,#fffaf1_0%,#f5eadc_48%,#efe0cb_100%)] px-4 py-6 text-brand-ink sm:px-6 sm:py-8">
         <div className="mx-auto flex min-h-[80vh] max-w-5xl items-center justify-center">

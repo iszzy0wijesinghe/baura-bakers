@@ -14,6 +14,7 @@ type OrderItem = {
 
 type OrderRow = {
   id: string;
+  user_id: string | null;
   order_no: string;
   customer_name: string;
   customer_email: string | null;
@@ -68,13 +69,30 @@ function escapeHtml(value: unknown) {
 function buildInvoiceHtml(order: OrderRow, siteUrl: string) {
   const logoUrl = process.env.BAURA_LOGO_URL || "";
 
+  const cleanSiteUrl = siteUrl.replace(/\/$/, "");
   const orderNo = encodeURIComponent(order.order_no);
+
   const token = order.tracking_token
     ? `?t=${encodeURIComponent(order.tracking_token)}`
     : "";
 
-  const trackUrl = `${siteUrl}/track/${orderNo}${token}`;
-  const receiptUrl = `${siteUrl}/receipt/${orderNo}${token}`;
+  const isRegisteredCustomer = Boolean(order.user_id);
+
+  const guestTrackingUrl = `${cleanSiteUrl}/track/${orderNo}${token}`;
+  const customerOrdersUrl = `${cleanSiteUrl}/orders`;
+  const customerInvoiceUrl = `${cleanSiteUrl}/receipt/${orderNo}`;
+
+  const primaryButtonUrl = isRegisteredCustomer
+    ? customerOrdersUrl
+    : guestTrackingUrl;
+
+  const primaryButtonLabel = isRegisteredCustomer
+    ? "Go to My Orders"
+    : "Track Order";
+
+  const helperText = isRegisteredCustomer
+    ? "You can view your confirmed order and invoice from your Baura Bakers account."
+    : "You can track this guest order using the secure tracking link below.";
 
   const rows = (order.order_items || [])
     .map(
@@ -146,16 +164,26 @@ function buildInvoiceHtml(order: OrderRow, siteUrl: string) {
             </div>
           </div>
 
+          <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#6a5847;">
+            ${helperText}
+          </p>
+
           <div style="margin-bottom:22px;">
-            <a href="${escapeHtml(trackUrl)}"
+            <a href="${escapeHtml(primaryButtonUrl)}"
               style="display:inline-block;background:#372619;color:#fffaf1;text-decoration:none;padding:13px 18px;border-radius:14px;font-weight:bold;font-size:14px;margin-right:8px;margin-bottom:8px;">
-              Track Order
+              ${escapeHtml(primaryButtonLabel)}
             </a>
 
-            <a href="${escapeHtml(receiptUrl)}"
-              style="display:inline-block;background:#fff;border:1px solid #d8c8b5;color:#372619;text-decoration:none;padding:13px 18px;border-radius:14px;font-weight:bold;font-size:14px;margin-bottom:8px;">
-              View Invoice
-            </a>
+            ${
+              isRegisteredCustomer
+                ? `
+                  <a href="${escapeHtml(customerInvoiceUrl)}"
+                    style="display:inline-block;background:#fff;border:1px solid #d8c8b5;color:#372619;text-decoration:none;padding:13px 18px;border-radius:14px;font-weight:bold;font-size:14px;margin-bottom:8px;">
+                    View Invoice
+                  </a>
+                `
+                : ""
+            }
           </div>
 
           <h2 style="font-size:18px;margin:0 0 12px;">
@@ -200,7 +228,7 @@ function buildInvoiceHtml(order: OrderRow, siteUrl: string) {
           </div>
 
           <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#7a6a5a;">
-            Thank you for ordering from Baura Bakers. You can track your order status anytime from your account.
+            Thank you for ordering from Baura Bakers.
           </p>
         </div>
       </div>
@@ -337,6 +365,7 @@ export async function POST(request: Request) {
       .select(
         `
         id,
+        user_id,
         order_no,
         customer_name,
         customer_email,
@@ -403,11 +432,30 @@ order_items (
 
     const siteUrl = process.env.SITE_URL || new URL(request.url).origin;
 
+    // await transporter.sendMail({
+    //   from: `Baura Bakers <${gmailUser}>`,
+    //   to: order.customer_email,
+    //   replyTo: gmailUser,
+    //   subject: `Payment received — Order ${order.order_no} confirmed`,
+    //   html: buildInvoiceHtml(order, siteUrl),
+    // });
     await transporter.sendMail({
       from: `Baura Bakers <${gmailUser}>`,
       to: order.customer_email,
       replyTo: gmailUser,
-      subject: `Payment received — Order ${order.order_no} confirmed`,
+      subject: `Order ${order.order_no} confirmed by Baura Bakers`,
+      text: `
+Hi ${order.customer_name},
+
+Your Baura Bakers order ${order.order_no} has been confirmed.
+
+Total: ${formatLkr(order.subtotal_lkr)}
+Delivery address: ${order.delivery_address}
+
+Thank you for ordering from Baura Bakers.
+
+Official email: ${gmailUser}
+  `.trim(),
       html: buildInvoiceHtml(order, siteUrl),
     });
 
