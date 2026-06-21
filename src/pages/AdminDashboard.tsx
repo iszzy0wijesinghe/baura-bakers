@@ -1,3 +1,5 @@
+/** @format */
+
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Page from "../components/Page";
@@ -104,8 +106,7 @@ export default function AdminDashboard() {
           <button
             type="button"
             onClick={handleLogout}
-            className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100"
-          >
+            className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">
             Logout
           </button>
         </header>
@@ -124,7 +125,10 @@ export default function AdminDashboard() {
           <>
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard label="Total orders" value={stats.totalOrders} />
-              <StatCard label="Pending payments" value={stats.pendingPayments} />
+              <StatCard
+                label="Pending payments"
+                value={stats.pendingPayments}
+              />
               <StatCard label="Paid orders" value={stats.paidOrders} />
               <StatCard label="Completed" value={stats.completedOrders} />
             </section>
@@ -149,6 +153,13 @@ export default function AdminDashboard() {
                 eyebrow="PROMOTION MANAGEMENT"
                 title="Offers & coupons"
                 description="Manage coupon codes, QR offers, happy-hour offers, and category/product-wise campaigns."
+              />
+
+              <AdminLinkCard
+                to="/admin/delivery"
+                eyebrow="DELIVERY MANAGEMENT"
+                title="Delivery schedule"
+                description="Manage available delivery dates, morning/afternoon slots, and delivery settings."
               />
             </section>
           </>
@@ -184,8 +195,7 @@ function AdminLinkCard({
   return (
     <Link
       to={to}
-      className="rounded-3xl border border-black/10 bg-white/60 p-6 shadow-sm transition hover:-translate-y-0.5 hover:bg-white/75"
-    >
+      className="rounded-3xl border border-black/10 bg-white/60 p-6 shadow-sm transition hover:-translate-y-0.5 hover:bg-white/75">
       <p className="text-xs font-semibold tracking-widest text-brand-ink/55">
         {eyebrow}
       </p>

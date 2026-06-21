@@ -25,6 +25,7 @@ import MaintenancePage from "../pages/system/MaintenancePage";
 import AdminProducts from "../pages/AdminProducts";
 import AdminPromotions from "../pages/AdminPromotions";
 import OrderTracking from "../pages/OrderTracking";
+import AdminDeliveryManagement from "../pages/AdminDeliveryManagement";
 
 export const router = createBrowserRouter([
   // isolated system pages
@@ -68,6 +69,7 @@ export const router = createBrowserRouter([
       { path: "/admin/orders", element: <AdminOrders /> },
       { path: "/admin/products", element: <AdminProducts /> },
       { path: "/admin/promotions", element: <AdminPromotions /> },
+      { path: "/admin/delivery", element: <AdminDeliveryManagement /> },
     ],
   },
 
