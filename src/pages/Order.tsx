@@ -18,8 +18,12 @@ const OFFICIAL_EMAIL = "baura.bakers@gmail.com";
 const BAURA_LAT = 6.832636909688839;
 const BAURA_LNG = 79.99981842449598;
 const ROAD_DISTANCE_BUFFER = 1.2;
+const DELIVERY_PREVIEW_DAYS = 14;
+const CUSTOMER_WORKING_DAYS_LIMIT = 4;
 
 type StepNo = 1 | 2 | 3 | 4;
+
+type DeliveryMode = "SCHEDULED" | "EVERYDAY" | "SPECIAL";
 
 type DeliverySlot = {
   id: string;
@@ -30,30 +34,6 @@ type DeliverySlot = {
   max_orders: number;
   is_available: boolean;
 };
-
-type DeliveryVehicleRule = {
-  id: string;
-  vehicle_type: string;
-  min_quantity: number;
-  max_quantity: number | null;
-  is_active: boolean;
-};
-
-type DeliveryDistancePrice = {
-  id: string;
-  distance_km: number;
-  vehicle_type: string;
-  normal_price_lkr: number;
-  peak_price_lkr: number;
-  is_active: boolean;
-};
-
-type DeliverySetting = {
-  setting_key: string;
-  setting_value: string;
-};
-
-type DeliveryMode = "SCHEDULED" | "EVERYDAY" | "SPECIAL";
 
 type DailyDeliverySlot = {
   id: string;
@@ -86,6 +66,28 @@ type NoDeliveryBlock = {
   end_time: string;
   reason: string;
   full_day: boolean;
+};
+
+type DeliveryVehicleRule = {
+  id: string;
+  vehicle_type: string;
+  min_quantity: number;
+  max_quantity: number | null;
+  is_active: boolean;
+};
+
+type DeliveryDistancePrice = {
+  id: string;
+  distance_km: number;
+  vehicle_type: string;
+  normal_price_lkr: number;
+  peak_price_lkr: number;
+  is_active: boolean;
+};
+
+type DeliverySetting = {
+  setting_key: string;
+  setting_value: string;
 };
 
 type FormState = {
@@ -213,10 +215,18 @@ function parseJsonList<T = unknown>(value?: string): T[] {
   }
 }
 
+function toLocalIsoDate(date = new Date()) {
+  const timezoneOffsetMs = date.getTimezoneOffset() * 60 * 1000;
+
+  return new Date(date.getTime() - timezoneOffsetMs)
+    .toISOString()
+    .slice(0, 10);
+}
+
 function addDaysAsIsoDate(daysToAdd: number) {
   const date = new Date();
   date.setDate(date.getDate() + daysToAdd);
-  return date.toISOString().slice(0, 10);
+  return toLocalIsoDate(date);
 }
 
 function timeToMinutes(time: string) {
@@ -307,9 +317,36 @@ function isSlotBlocked(slot: DeliverySlot, blocks: NoDeliveryBlock[]) {
   });
 }
 
+function isPastDeliverySlot(slot: DeliverySlot) {
+  const today = toLocalIsoDate();
+
+  if (slot.slot_date < today) return true;
+  if (slot.slot_date > today) return false;
+
+  const slotStart = new Date(
+    `${slot.slot_date}T${slot.start_time.slice(0, 5)}:00`,
+  );
+
+  return slotStart.getTime() <= Date.now();
+}
+
+function limitToFirstWorkingDays(slots: DeliverySlot[], maxDays = 4) {
+  const workingDates: string[] = [];
+
+  for (const slot of slots) {
+    if (!workingDates.includes(slot.slot_date)) {
+      workingDates.push(slot.slot_date);
+    }
+
+    if (workingDates.length >= maxDays) break;
+  }
+
+  return slots.filter((slot) => workingDates.includes(slot.slot_date));
+}
+
 function buildSlotsFromDeliverySettings(settings: Record<string, string>) {
   const mode = (settings.delivery_mode || "SCHEDULED") as DeliveryMode;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toLocalIsoDate();
 
   if (mode === "EVERYDAY") {
     const dailySlots = parseJsonList<DailyDeliverySlot>(
@@ -318,7 +355,7 @@ function buildSlotsFromDeliverySettings(settings: Record<string, string>) {
 
     const generatedSlots: DeliverySlot[] = [];
 
-    for (let i = 0; i < 14; i += 1) {
+    for (let i = 0; i < DELIVERY_PREVIEW_DAYS; i += 1) {
       const date = addDaysAsIsoDate(i);
 
       for (const slot of dailySlots) {
@@ -355,6 +392,32 @@ function buildSlotsFromDeliverySettings(settings: Record<string, string>) {
   return [];
 }
 
+function formatCalendarDate(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00`);
+
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatCalendarDayNumber(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00`);
+
+  return date.toLocaleDateString("en-US", {
+    day: "2-digit",
+  });
+}
+
+function formatCalendarMonth(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00`);
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+  });
+}
+
 export default function Order() {
   const navigate = useNavigate();
   const { items, clear } = useCart();
@@ -374,6 +437,7 @@ export default function Order() {
 
   const [deliverySlots, setDeliverySlots] = useState<DeliverySlot[]>([]);
   const [selectedDeliverySlotId, setSelectedDeliverySlotId] = useState("");
+  const [selectedDeliveryDate, setSelectedDeliveryDate] = useState("");
   const [isLoadingSlots, setIsLoadingSlots] = useState(true);
 
   const [orderNotice, setOrderNotice] = useState<{
@@ -433,6 +497,30 @@ export default function Order() {
       deliverySlots.find((slot) => slot.id === selectedDeliverySlotId) || null
     );
   }, [deliverySlots, selectedDeliverySlotId]);
+
+  const deliveryCalendarDays = useMemo(() => {
+    const grouped = new Map<string, DeliverySlot[]>();
+
+    for (const slot of deliverySlots) {
+      const current = grouped.get(slot.slot_date) || [];
+      current.push(slot);
+      grouped.set(slot.slot_date, current);
+    }
+
+    return Array.from(grouped.entries()).map(([date, dateSlots]) => ({
+      date,
+      slots: dateSlots.sort((a, b) =>
+        a.start_time.localeCompare(b.start_time),
+      ),
+    }));
+  }, [deliverySlots]);
+
+  const selectedDateSlots = useMemo(() => {
+    return (
+      deliveryCalendarDays.find((day) => day.date === selectedDeliveryDate)
+        ?.slots || []
+    );
+  }, [deliveryCalendarDays, selectedDeliveryDate]);
 
   useEffect(() => {
     if (!hasMountedStepScroll.current) {
@@ -520,7 +608,7 @@ export default function Order() {
     async function loadDeliverySlots() {
       setIsLoadingSlots(true);
 
-      const today = new Date().toISOString().slice(0, 10);
+      const today = toLocalIsoDate();
 
       const [slotsRes, settingsRes] = await Promise.all([
         supabase
@@ -562,13 +650,21 @@ export default function Order() {
 
       const noDeliveryBlocks = getNoDeliveryBlocks(settingMap);
 
-      const finalSlots =
+      const sourceSlots =
         deliveryMode === "SCHEDULED" ? manualSlots : settingGeneratedSlots;
 
-      const availableSlots = finalSlots
+      const availableSlots = sourceSlots
         .filter((slot) => slot.is_available)
         .filter((slot) => slot.slot_date >= today)
-        .filter((slot) => !isSlotBlocked(slot, noDeliveryBlocks));
+        .filter((slot) => !isPastDeliverySlot(slot))
+        .filter((slot) => !isSlotBlocked(slot, noDeliveryBlocks))
+        .sort((a, b) => {
+          if (a.slot_date !== b.slot_date) {
+            return a.slot_date.localeCompare(b.slot_date);
+          }
+
+          return a.start_time.localeCompare(b.start_time);
+        });
 
       const uniqueSlots = Array.from(
         new Map(
@@ -577,18 +673,32 @@ export default function Order() {
             slot,
           ]),
         ).values(),
-      ).sort((a, b) => {
-        if (a.slot_date !== b.slot_date) {
-          return a.slot_date.localeCompare(b.slot_date);
+      );
+
+      const firstFourWorkingDaysSlots = limitToFirstWorkingDays(
+        uniqueSlots,
+        CUSTOMER_WORKING_DAYS_LIMIT,
+      );
+
+      setDeliverySlots(firstFourWorkingDaysSlots);
+
+      setSelectedDeliverySlotId((current) => {
+        if (firstFourWorkingDaysSlots.some((slot) => slot.id === current)) {
+          return current;
         }
 
-        return a.start_time.localeCompare(b.start_time);
+        return "";
       });
 
-      setDeliverySlots(uniqueSlots);
-      setSelectedDeliverySlotId((current) => {
-        if (uniqueSlots.some((slot) => slot.id === current)) return current;
-        return "";
+      setSelectedDeliveryDate((current) => {
+        if (
+          current &&
+          firstFourWorkingDaysSlots.some((slot) => slot.slot_date === current)
+        ) {
+          return current;
+        }
+
+        return firstFourWorkingDaysSlots[0]?.slot_date || "";
       });
 
       setIsLoadingSlots(false);
@@ -596,6 +706,7 @@ export default function Order() {
 
     loadDeliverySlots();
   }, []);
+
   useEffect(() => {
     let active = true;
     const email = form.senderEmail.trim().toLowerCase();
@@ -763,7 +874,7 @@ export default function Order() {
   }, [form, needsReceiver]);
 
   const deliveryLocationCoords = useMemo(() => {
-    if (effectiveDelivery.lat && effectiveDelivery.lng) {
+    if (effectiveDelivery.lat !== null && effectiveDelivery.lng !== null) {
       return {
         lat: effectiveDelivery.lat,
         lng: effectiveDelivery.lng,
@@ -889,7 +1000,7 @@ export default function Order() {
     return pricesForVehicle[0] || null;
   }, [distancePrices, selectedVehicleType, pricingDistanceKm]);
 
-  const deliveryPricingMode = "REGULAR";
+  const deliveryPricingMode = "NORMAL";
 
   const deliveryFeeLkr = useMemo(() => {
     if (!selectedDistancePrice) return 0;
@@ -901,9 +1012,7 @@ export default function Order() {
     );
 
     const roundToLkr = Number(deliverySettings.round_to_lkr || 50);
-
     const safeRoundToLkr = roundToLkr > 0 ? roundToLkr : 50;
-
     const withMargin = basePrice + (basePrice * safetyMarginPercent) / 100;
 
     return Math.ceil(withMargin / safeRoundToLkr) * safeRoundToLkr;
@@ -913,9 +1022,9 @@ export default function Order() {
 
   const deliveryCostValid = Boolean(
     roadDistanceKm &&
-    pricingDistanceKm &&
-    selectedDistancePrice &&
-    deliveryFeeLkr > 0,
+      pricingDistanceKm &&
+      selectedDistancePrice &&
+      deliveryFeeLkr > 0,
   );
 
   const scheduleValid = Boolean(selectedDeliverySlot) && deliveryCostValid;
@@ -1143,9 +1252,9 @@ export default function Order() {
   }
 
   function updateLocationUrl(value: string) {
-    if (form.deliveryTarget === "RECEIVER") {
-      const coords = extractLatLngFromGoogleMapsUrl(value);
+    const coords = extractLatLngFromGoogleMapsUrl(value);
 
+    if (form.deliveryTarget === "RECEIVER") {
       setForm((prev) => ({
         ...prev,
         receiverLocationUrl: value,
@@ -1155,8 +1264,6 @@ export default function Order() {
 
       return;
     }
-
-    const coords = extractLatLngFromGoogleMapsUrl(value);
 
     setForm((prev) => ({
       ...prev,
@@ -1334,25 +1441,21 @@ export default function Order() {
     {
       id: 1,
       label: "Details",
-      title: "Your details",
       helper: "Sender and receiver",
     },
     {
       id: 2,
       label: "Address",
-      title: "Delivery address",
       helper: "Map location",
     },
     {
       id: 3,
       label: "Schedule",
-      title: "Delivery time",
       helper: "Date and fee",
     },
     {
       id: 4,
       label: "Confirm",
-      title: "Confirm order",
       helper: "WhatsApp order",
     },
   ] as const;
@@ -1848,79 +1951,173 @@ export default function Order() {
                   />
 
                   <div className="rounded-3xl border border-black/10 bg-white/55 p-4 sm:p-5">
-                    <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                      AVAILABLE DELIVERY SESSIONS
-                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                          AVAILABLE DELIVERY DAYS
+                        </p>
 
-                    <p className="mt-1 text-xs leading-relaxed text-brand-ink/60">
-                      Delivery may happen within the selected session depending
-                      on courier availability, traffic, and weather.
-                    </p>
+                        <p className="mt-1 text-xs leading-relaxed text-brand-ink/60">
+                          Select a delivery day first, then choose an available
+                          time slot. Past slots are hidden automatically.
+                        </p>
+                      </div>
+
+                      <span className="w-fit rounded-2xl border border-brand-ink/10 bg-brand-bg/70 px-3 py-2 text-xs font-semibold text-brand-ink/70">
+                        Next 4 working days
+                      </span>
+                    </div>
 
                     {isLoadingSlots ? (
                       <InfoBox tone="neutral" className="mt-4">
                         Loading available delivery sessions...
                       </InfoBox>
-                    ) : deliverySlots.length ? (
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        {deliverySlots.map((slot) => {
-                          const active = selectedDeliverySlotId === slot.id;
+                    ) : deliveryCalendarDays.length ? (
+                      <>
+                        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          {deliveryCalendarDays.map((day) => {
+                            const active = selectedDeliveryDate === day.date;
+                            const selectedSlotInDay = day.slots.some(
+                              (slot) => slot.id === selectedDeliverySlotId,
+                            );
 
-                          return (
-                            <button
-                              key={slot.id}
-                              type="button"
-                              onClick={() => setSelectedDeliverySlotId(slot.id)}
-                              className={[
-                                "rounded-2xl border p-4 text-left transition",
-                                active
-                                  ? "border-brand-ink bg-brand-ink text-brand-bg"
-                                  : "border-black/10 bg-white/65 text-brand-ink hover:border-brand-ink/25 hover:bg-white",
-                              ].join(" ")}
-                            >
-                              <div className="flex items-start gap-3">
+                            return (
+                              <button
+                                key={day.date}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDeliveryDate(day.date);
+                                  setSelectedDeliverySlotId("");
+                                }}
+                                className={[
+                                  "rounded-2xl border p-3 text-left transition",
+                                  active
+                                    ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
+                                    : selectedSlotInDay
+                                      ? "border-brand-ink/25 bg-brand-bg text-brand-ink"
+                                      : "border-black/10 bg-white/70 text-brand-ink hover:border-brand-ink/25 hover:bg-white",
+                                ].join(" ")}
+                              >
                                 <span
                                   className={[
-                                    "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border text-[11px] font-bold",
+                                    "block text-[10px] font-semibold uppercase tracking-widest",
                                     active
-                                      ? "border-brand-bg/45 bg-brand-bg text-brand-ink"
-                                      : "border-brand-ink/20 bg-white/70 text-transparent",
+                                      ? "text-brand-bg/65"
+                                      : "text-brand-ink/45",
                                   ].join(" ")}
                                 >
-                                  ✓
+                                  {formatCalendarMonth(day.date)}
                                 </span>
 
-                                <span>
-                                  <span className="block text-sm font-semibold">
-                                    {slot.slot_date}
-                                  </span>
+                                <span className="mt-1 block text-2xl font-bold leading-none">
+                                  {formatCalendarDayNumber(day.date)}
+                                </span>
 
-                                  <span className="mt-0.5 block text-sm font-semibold">
-                                    {slot.slot_label}
-                                  </span>
+                                <span
+                                  className={[
+                                    "mt-2 block text-xs font-semibold",
+                                    active
+                                      ? "text-brand-bg/80"
+                                      : "text-brand-ink/65",
+                                  ].join(" ")}
+                                >
+                                  {formatCalendarDate(day.date)}
+                                </span>
 
-                                  <span
+                                <span
+                                  className={[
+                                    "mt-1 block text-[11px]",
+                                    active
+                                      ? "text-brand-bg/60"
+                                      : "text-brand-ink/45",
+                                  ].join(" ")}
+                                >
+                                  {day.slots.length} slot
+                                  {day.slots.length === 1 ? "" : "s"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="mt-5 rounded-3xl border border-black/10 bg-brand-bg/55 p-4">
+                          <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                            TIME SLOTS
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold text-brand-ink">
+                            {selectedDeliveryDate
+                              ? formatCalendarDate(selectedDeliveryDate)
+                              : "Select a day"}
+                          </p>
+
+                          {selectedDateSlots.length ? (
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              {selectedDateSlots.map((slot) => {
+                                const active =
+                                  selectedDeliverySlotId === slot.id;
+
+                                return (
+                                  <button
+                                    key={slot.id}
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedDeliverySlotId(slot.id)
+                                    }
                                     className={[
-                                      "mt-1 block text-xs leading-5",
+                                      "rounded-2xl border p-4 text-left transition",
                                       active
-                                        ? "text-brand-bg/75"
-                                        : "text-brand-ink/60",
+                                        ? "border-brand-ink bg-brand-ink text-brand-bg"
+                                        : "border-black/10 bg-white/75 text-brand-ink hover:border-brand-ink/25 hover:bg-white",
                                     ].join(" ")}
                                   >
-                                    {slot.start_time.slice(0, 5)} –{" "}
-                                    {slot.end_time.slice(0, 5)} · Max{" "}
-                                    {slot.max_orders} orders
-                                  </span>
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                                    <div className="flex items-start gap-3">
+                                      <span
+                                        className={[
+                                          "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border text-[11px] font-bold",
+                                          active
+                                            ? "border-brand-bg/45 bg-brand-bg text-brand-ink"
+                                            : "border-brand-ink/20 bg-white/70 text-transparent",
+                                        ].join(" ")}
+                                      >
+                                        ✓
+                                      </span>
+
+                                      <span>
+                                        <span className="block text-sm font-semibold">
+                                          {slot.slot_label}
+                                        </span>
+
+                                        <span
+                                          className={[
+                                            "mt-1 block text-xs leading-5",
+                                            active
+                                              ? "text-brand-bg/75"
+                                              : "text-brand-ink/60",
+                                          ].join(" ")}
+                                        >
+                                          {slot.start_time.slice(0, 5)} –{" "}
+                                          {slot.end_time.slice(0, 5)} · Max{" "}
+                                          {slot.max_orders} orders
+                                        </span>
+                                      </span>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <InfoBox tone="warning" className="mt-4">
+                              No time slots are available for this day.
+                            </InfoBox>
+                          )}
+                        </div>
+                      </>
                     ) : (
                       <InfoBox tone="warning" className="mt-4">
-                        No delivery sessions are available right now. Please
-                        contact Baura Bakers before placing this order.
+                        No delivery sessions are available for the next 4
+                        working days. Please contact Baura Bakers before placing
+                        this order.
                       </InfoBox>
                     )}
                   </div>
