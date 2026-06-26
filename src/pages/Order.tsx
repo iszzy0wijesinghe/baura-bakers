@@ -1,6 +1,6 @@
 /** @format */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../app/cart";
 import Page from "../components/Page";
@@ -12,11 +12,12 @@ import {
 import { supabase } from "../lib/supabase";
 
 const WHATSAPP_NUMBER = "94769878770";
-const DELIVERY_METHOD = "Uber Parcel / PickMe Flash arrangement";
+const DELIVERY_METHOD = "Regular Baura delivery arrangement";
 const OFFICIAL_EMAIL = "baura.bakers@gmail.com";
+
 const BAURA_LAT = 6.832636909688839;
 const BAURA_LNG = 79.99981842449598;
-const ROAD_DISTANCE_BUFFER = 1.35;
+const ROAD_DISTANCE_BUFFER = 1.2;
 
 type StepNo = 1 | 2 | 3 | 4;
 
@@ -50,6 +51,41 @@ type DeliveryDistancePrice = {
 type DeliverySetting = {
   setting_key: string;
   setting_value: string;
+};
+
+type DeliveryMode = "SCHEDULED" | "EVERYDAY" | "SPECIAL";
+
+type DailyDeliverySlot = {
+  id: string;
+  slot_label: string;
+  start_time: string;
+  end_time: string;
+  max_orders: number;
+  is_available: boolean;
+};
+
+type SpecialDeliverySlot = {
+  id: string;
+  slot_date: string;
+  slot_label: string;
+  start_time: string;
+  end_time: string;
+  max_orders: number;
+  is_available: boolean;
+};
+
+type OldSpecialDeliveryDate = {
+  date: string;
+  label: string;
+};
+
+type NoDeliveryBlock = {
+  id: string;
+  block_date: string;
+  start_time: string;
+  end_time: string;
+  reason: string;
+  full_day: boolean;
 };
 
 type FormState = {
@@ -165,9 +201,158 @@ function extractLatLngFromGoogleMapsUrl(url: string) {
 }
 
 function roundUpDistanceKm(distanceKm: number) {
-  if (distanceKm <= 10) return Math.ceil(distanceKm);
-  if (distanceKm <= 20) return 20;
-  return 30;
+  return Math.max(1, Math.ceil(distanceKm));
+}
+
+function parseJsonList<T = unknown>(value?: string): T[] {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function addDaysAsIsoDate(daysToAdd: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysToAdd);
+  return date.toISOString().slice(0, 10);
+}
+
+function timeToMinutes(time: string) {
+  const clean = time || "00:00";
+  const [hours, minutes] = clean.slice(0, 5).split(":").map(Number);
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return 0;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function slotsOverlap(
+  slotStart: string,
+  slotEnd: string,
+  blockStart: string,
+  blockEnd: string,
+) {
+  const slotStartMinutes = timeToMinutes(slotStart);
+  const slotEndMinutes = timeToMinutes(slotEnd);
+  const blockStartMinutes = timeToMinutes(blockStart);
+  const blockEndMinutes = timeToMinutes(blockEnd);
+
+  return (
+    slotStartMinutes < blockEndMinutes && slotEndMinutes > blockStartMinutes
+  );
+}
+
+function normalizeSpecialDeliverySlots(value?: string): SpecialDeliverySlot[] {
+  const rows = parseJsonList<
+    Partial<SpecialDeliverySlot> & OldSpecialDeliveryDate
+  >(value);
+
+  return rows
+    .map((row, index) => {
+      const slotDate = row.slot_date || row.date || "";
+      const slotLabel = row.slot_label || row.label || "Special Delivery";
+
+      if (!slotDate) return null;
+
+      return {
+        id: row.id || `old-special-${slotDate}-${index}`,
+        slot_date: slotDate,
+        slot_label: slotLabel,
+        start_time: row.start_time || "09:00",
+        end_time: row.end_time || "12:00",
+        max_orders: Number(row.max_orders || 10),
+        is_available: row.is_available ?? true,
+      };
+    })
+    .filter(Boolean) as SpecialDeliverySlot[];
+}
+
+function getNoDeliveryBlocks(settings: Record<string, string>) {
+  const newBlocks = parseJsonList<NoDeliveryBlock>(
+    settings.no_delivery_blocks_json,
+  );
+
+  const oldFullDayDates = parseJsonList<string>(
+    settings.no_delivery_dates_json,
+  );
+
+  const migratedOldBlocks: NoDeliveryBlock[] = oldFullDayDates.map((date) => ({
+    id: `old-${date}`,
+    block_date: date,
+    start_time: "",
+    end_time: "",
+    reason: "No delivery",
+    full_day: true,
+  }));
+
+  return [...newBlocks, ...migratedOldBlocks];
+}
+
+function isSlotBlocked(slot: DeliverySlot, blocks: NoDeliveryBlock[]) {
+  return blocks.some((block) => {
+    if (block.block_date !== slot.slot_date) return false;
+
+    if (block.full_day) return true;
+
+    return slotsOverlap(
+      slot.start_time,
+      slot.end_time,
+      block.start_time,
+      block.end_time,
+    );
+  });
+}
+
+function buildSlotsFromDeliverySettings(settings: Record<string, string>) {
+  const mode = (settings.delivery_mode || "SCHEDULED") as DeliveryMode;
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (mode === "EVERYDAY") {
+    const dailySlots = parseJsonList<DailyDeliverySlot>(
+      settings.daily_delivery_slots_json,
+    ).filter((slot) => slot.is_available);
+
+    const generatedSlots: DeliverySlot[] = [];
+
+    for (let i = 0; i < 14; i += 1) {
+      const date = addDaysAsIsoDate(i);
+
+      for (const slot of dailySlots) {
+        generatedSlots.push({
+          id: `daily-${date}-${slot.id}`,
+          slot_date: date,
+          slot_label: slot.slot_label,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          max_orders: slot.max_orders,
+          is_available: slot.is_available,
+        });
+      }
+    }
+
+    return generatedSlots;
+  }
+
+  if (mode === "SPECIAL") {
+    return normalizeSpecialDeliverySlots(settings.special_delivery_dates_json)
+      .filter((slot) => slot.is_available)
+      .filter((slot) => slot.slot_date >= today)
+      .map((slot) => ({
+        id: `special-${slot.slot_date}-${slot.id}`,
+        slot_date: slot.slot_date,
+        slot_label: slot.slot_label,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        max_orders: slot.max_orders,
+        is_available: slot.is_available,
+      }));
+  }
+
+  return [];
 }
 
 export default function Order() {
@@ -175,6 +360,9 @@ export default function Order() {
   const { items, clear } = useCart();
 
   const [step, setStep] = useState<StepNo>(1);
+  const stepTopRef = useRef<HTMLDivElement | null>(null);
+  const hasMountedStepScroll = useRef(false);
+
   const [orderId] = useState(() => makeOrderId());
 
   const [isLoadingUser, setIsLoadingUser] = useState(true);
@@ -211,6 +399,12 @@ export default function Order() {
   const [isLoadingDeliveryPricing, setIsLoadingDeliveryPricing] =
     useState(true);
 
+  const [apiRoadDistanceKm, setApiRoadDistanceKm] = useState<number | null>(
+    null,
+  );
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+  const [distanceNotice, setDistanceNotice] = useState("");
+
   const [form, setForm] = useState<FormState>({
     senderName: "",
     senderEmail: "",
@@ -239,6 +433,20 @@ export default function Order() {
       deliverySlots.find((slot) => slot.id === selectedDeliverySlotId) || null
     );
   }, [deliverySlots, selectedDeliverySlotId]);
+
+  useEffect(() => {
+    if (!hasMountedStepScroll.current) {
+      hasMountedStepScroll.current = true;
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      stepTopRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [step]);
 
   useEffect(() => {
     async function loadLoggedInUserDetails() {
@@ -314,28 +522,80 @@ export default function Order() {
 
       const today = new Date().toISOString().slice(0, 10);
 
-      const { data, error } = await supabase
-        .from("delivery_slots")
-        .select("*")
-        .eq("is_available", true)
-        .gte("slot_date", today)
-        .order("slot_date", { ascending: true })
-        .order("start_time", { ascending: true });
+      const [slotsRes, settingsRes] = await Promise.all([
+        supabase
+          .from("delivery_slots")
+          .select("*")
+          .eq("is_available", true)
+          .gte("slot_date", today)
+          .order("slot_date", { ascending: true })
+          .order("start_time", { ascending: true }),
 
-      if (error) {
-        console.warn("Could not load delivery slots:", error.message);
-        setDeliverySlots([]);
-        setIsLoadingSlots(false);
-        return;
+        supabase.from("delivery_settings").select("setting_key, setting_value"),
+      ]);
+
+      if (slotsRes.error) {
+        console.warn("Could not load delivery slots:", slotsRes.error.message);
       }
 
-      setDeliverySlots((data || []) as DeliverySlot[]);
+      if (settingsRes.error) {
+        console.warn(
+          "Could not load delivery settings:",
+          settingsRes.error.message,
+        );
+      }
+
+      const settingMap: Record<string, string> = {};
+
+      for (const row of (settingsRes.data || []) as DeliverySetting[]) {
+        settingMap[row.setting_key] = row.setting_value;
+      }
+
+      const deliveryMode = (settingMap.delivery_mode ||
+        "SCHEDULED") as DeliveryMode;
+
+      const manualSlots = ((slotsRes.data || []) as DeliverySlot[]).filter(
+        (slot) => slot.is_available,
+      );
+
+      const settingGeneratedSlots = buildSlotsFromDeliverySettings(settingMap);
+
+      const noDeliveryBlocks = getNoDeliveryBlocks(settingMap);
+
+      const finalSlots =
+        deliveryMode === "SCHEDULED" ? manualSlots : settingGeneratedSlots;
+
+      const availableSlots = finalSlots
+        .filter((slot) => slot.is_available)
+        .filter((slot) => slot.slot_date >= today)
+        .filter((slot) => !isSlotBlocked(slot, noDeliveryBlocks));
+
+      const uniqueSlots = Array.from(
+        new Map(
+          availableSlots.map((slot) => [
+            `${slot.slot_date}-${slot.slot_label}-${slot.start_time}-${slot.end_time}`,
+            slot,
+          ]),
+        ).values(),
+      ).sort((a, b) => {
+        if (a.slot_date !== b.slot_date) {
+          return a.slot_date.localeCompare(b.slot_date);
+        }
+
+        return a.start_time.localeCompare(b.start_time);
+      });
+
+      setDeliverySlots(uniqueSlots);
+      setSelectedDeliverySlotId((current) => {
+        if (uniqueSlots.some((slot) => slot.id === current)) return current;
+        return "";
+      });
+
       setIsLoadingSlots(false);
     }
 
     loadDeliverySlots();
   }, []);
-
   useEffect(() => {
     let active = true;
     const email = form.senderEmail.trim().toLowerCase();
@@ -396,6 +656,7 @@ export default function Order() {
           .from("delivery_distance_prices")
           .select("*")
           .eq("is_active", true)
+          .eq("price_table_key", "PICKME_FLASH")
           .order("distance_km", { ascending: true }),
 
         supabase.from("delivery_settings").select("setting_key, setting_value"),
@@ -539,7 +800,7 @@ export default function Order() {
     return matchedRule?.vehicle_type || "BIKE";
   }, [vehicleRules, totalQuantity]);
 
-  const roadDistanceKm = useMemo(() => {
+  const estimatedRoadDistanceKm = useMemo(() => {
     if (!deliveryLocationCoords) return null;
 
     const straightDistance = calculateDistanceKm(
@@ -552,6 +813,61 @@ export default function Order() {
     return Number((straightDistance * ROAD_DISTANCE_BUFFER).toFixed(2));
   }, [deliveryLocationCoords]);
 
+  useEffect(() => {
+    let ignore = false;
+
+    async function calculateRoadDistance() {
+      if (!deliveryLocationCoords) {
+        setApiRoadDistanceKm(null);
+        setDistanceNotice("");
+        return;
+      }
+
+      setIsCalculatingDistance(true);
+      setDistanceNotice("");
+
+      try {
+        const response = await fetch("/api/delivery-distance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lat: deliveryLocationCoords.lat,
+            lng: deliveryLocationCoords.lng,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !Number.isFinite(Number(data.distanceKm))) {
+          throw new Error("Could not calculate road distance.");
+        }
+
+        if (!ignore) {
+          setApiRoadDistanceKm(Number(data.distanceKm));
+        }
+      } catch {
+        if (!ignore) {
+          setApiRoadDistanceKm(null);
+          setDistanceNotice(
+            "Using an estimated road distance. Please confirm final delivery fee on WhatsApp if the location is unusual.",
+          );
+        }
+      } finally {
+        if (!ignore) {
+          setIsCalculatingDistance(false);
+        }
+      }
+    }
+
+    calculateRoadDistance();
+
+    return () => {
+      ignore = true;
+    };
+  }, [deliveryLocationCoords]);
+
+  const roadDistanceKm = apiRoadDistanceKm ?? estimatedRoadDistanceKm;
+
   const pricingDistanceKm = useMemo(() => {
     if (!roadDistanceKm) return null;
 
@@ -561,30 +877,24 @@ export default function Order() {
   const selectedDistancePrice = useMemo(() => {
     if (!pricingDistanceKm) return null;
 
-    return (
-      distancePrices.find(
+    const pricesForVehicle = distancePrices
+      .filter(
         (price) =>
           price.vehicle_type === selectedVehicleType &&
-          price.distance_km === pricingDistanceKm,
-      ) || null
-    );
+          price.normal_price_lkr > 0 &&
+          price.distance_km >= pricingDistanceKm,
+      )
+      .sort((a, b) => a.distance_km - b.distance_km);
+
+    return pricesForVehicle[0] || null;
   }, [distancePrices, selectedVehicleType, pricingDistanceKm]);
 
-  const deliveryPricingMode = useMemo(() => {
-    if (!selectedDeliverySlot) return "NORMAL";
-
-    const startHour = Number(selectedDeliverySlot.start_time.slice(0, 2));
-
-    return startHour >= 16 ? "PEAK" : "NORMAL";
-  }, [selectedDeliverySlot]);
+  const deliveryPricingMode = "REGULAR";
 
   const deliveryFeeLkr = useMemo(() => {
     if (!selectedDistancePrice) return 0;
 
-    const basePrice =
-      deliveryPricingMode === "PEAK"
-        ? selectedDistancePrice.peak_price_lkr
-        : selectedDistancePrice.normal_price_lkr;
+    const basePrice = selectedDistancePrice.normal_price_lkr;
 
     const safetyMarginPercent = Number(
       deliverySettings.safety_margin_percent || 0,
@@ -592,10 +902,12 @@ export default function Order() {
 
     const roundToLkr = Number(deliverySettings.round_to_lkr || 50);
 
+    const safeRoundToLkr = roundToLkr > 0 ? roundToLkr : 50;
+
     const withMargin = basePrice + (basePrice * safetyMarginPercent) / 100;
 
-    return Math.ceil(withMargin / roundToLkr) * roundToLkr;
-  }, [selectedDistancePrice, deliveryPricingMode, deliverySettings]);
+    return Math.ceil(withMargin / safeRoundToLkr) * safeRoundToLkr;
+  }, [selectedDistancePrice, deliverySettings]);
 
   const finalTotalLkr = totalLkr + deliveryFeeLkr;
 
@@ -621,6 +933,12 @@ export default function Order() {
   const whatsappMessage = useMemo(() => {
     const senderPhone = onlyDigitsPhone(form.senderContactNumber);
     const receiverPhone = onlyDigitsPhone(form.receiverContactNumber);
+
+    const locationUrl =
+      effectiveDelivery.locationUrl ||
+      (deliveryLocationCoords
+        ? `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}`
+        : "");
 
     return [
       "🧁 *Baura Bakers — WhatsApp Order*",
@@ -649,15 +967,14 @@ export default function Order() {
           ].join("\n")
         : "",
       "🚚 *Delivery Arrangement*",
+      `Delivery Method: ${DELIVERY_METHOD}`,
       `Deliver To: ${
         form.deliveryTarget === "RECEIVER"
           ? "Receiver address"
           : "My doorstep / sender address"
       }`,
       `Delivery Address: ${effectiveDelivery.address || "-"}`,
-      effectiveDelivery.locationUrl
-        ? `Exact Location: ${effectiveDelivery.locationUrl}`
-        : "",
+      locationUrl ? `Exact Location: ${locationUrl}` : "",
       selectedDeliverySlot
         ? `Delivery Schedule: ${formatSlot(selectedDeliverySlot)}`
         : "",
@@ -666,7 +983,8 @@ export default function Order() {
       "🛍️ *Order Items*",
       cartLines.length ? cartLines.join("\n") : "(No cart items found)",
       "",
-      roadDistanceKm ? `📍 *Distance from Baura:* ${roadDistanceKm}km` : "",
+      roadDistanceKm ? `📍 *Road Distance:* ${roadDistanceKm}km` : "",
+      pricingDistanceKm ? `📌 *Pricing Distance:* ${pricingDistanceKm}km` : "",
       `🚚 *Delivery Fee:* ${formatLkr(deliveryFeeLkr)}`,
       `💰 *Final Total:* ${formatLkr(finalTotalLkr)}`,
       "",
@@ -684,8 +1002,9 @@ export default function Order() {
     deliveryFeeLkr,
     finalTotalLkr,
     cartLines,
-    totalLkr,
     roadDistanceKm,
+    pricingDistanceKm,
+    deliveryLocationCoords,
   ]);
 
   const canGoNext =
@@ -737,8 +1056,20 @@ export default function Order() {
     }
 
     if (step === 3 && !scheduleValid) {
+      if (!selectedDeliverySlot) {
+        setSubmitError("Please select a delivery date and time session.");
+        return;
+      }
+
+      if (!deliveryCostValid) {
+        setSubmitError(
+          "Delivery fee is not ready. Please check the map location and delivery pricing.",
+        );
+        return;
+      }
+
       setSubmitError(
-        "Please select a delivery date and time session and make sure delivery fee is calculated.",
+        "Please select a delivery session and make sure delivery fee is calculated.",
       );
       return;
     }
@@ -811,6 +1142,30 @@ export default function Order() {
     );
   }
 
+  function updateLocationUrl(value: string) {
+    if (form.deliveryTarget === "RECEIVER") {
+      const coords = extractLatLngFromGoogleMapsUrl(value);
+
+      setForm((prev) => ({
+        ...prev,
+        receiverLocationUrl: value,
+        receiverLat: coords?.lat ?? null,
+        receiverLng: coords?.lng ?? null,
+      }));
+
+      return;
+    }
+
+    const coords = extractLatLngFromGoogleMapsUrl(value);
+
+    setForm((prev) => ({
+      ...prev,
+      senderLocationUrl: value,
+      senderLat: coords?.lat ?? null,
+      senderLng: coords?.lng ?? null,
+    }));
+  }
+
   async function saveOrderOnce(paymentMethod: string) {
     if (savedOrderNo === orderId) {
       return null;
@@ -819,6 +1174,10 @@ export default function Order() {
     if (!selectedDeliverySlot) {
       throw new Error("Please select a delivery date and time session.");
     }
+
+    const fallbackLocationUrl = deliveryLocationCoords
+      ? `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}`
+      : "";
 
     const savedOrder = await createGuestOrder({
       orderNo: orderId,
@@ -843,9 +1202,9 @@ export default function Order() {
 
       deliveryTarget: form.deliveryTarget,
       deliveryAddress: effectiveDelivery.address,
-      deliveryLocationUrl: effectiveDelivery.locationUrl,
-      deliveryLat: effectiveDelivery.lat,
-      deliveryLng: effectiveDelivery.lng,
+      deliveryLocationUrl: effectiveDelivery.locationUrl || fallbackLocationUrl,
+      deliveryLat: deliveryLocationCoords?.lat ?? null,
+      deliveryLng: deliveryLocationCoords?.lng ?? null,
 
       deliveryDate: selectedDeliverySlot.slot_date,
       deliverySlotLabel: selectedDeliverySlot.slot_label,
@@ -962,30 +1321,39 @@ export default function Order() {
     }
   }
 
+  const currentLocationUrl =
+    form.deliveryTarget === "RECEIVER"
+      ? form.receiverLocationUrl
+      : form.senderLocationUrl;
+
+  const currentMapUrl = deliveryLocationCoords
+    ? `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}&z=16&output=embed`
+    : "";
+
   const stepMeta = [
     {
       id: 1,
-      label: "Step 1",
-      title: "Sender & receiver",
-      shortTitle: "Details",
+      label: "Details",
+      title: "Your details",
+      helper: "Sender and receiver",
     },
     {
       id: 2,
-      label: "Step 2",
+      label: "Address",
       title: "Delivery address",
-      shortTitle: "Address",
+      helper: "Map location",
     },
     {
       id: 3,
-      label: "Step 3",
-      title: "Delivery schedule",
-      shortTitle: "Schedule",
+      label: "Schedule",
+      title: "Delivery time",
+      helper: "Date and fee",
     },
     {
       id: 4,
-      label: "Step 4",
+      label: "Confirm",
       title: "Confirm order",
-      shortTitle: "Confirm",
+      helper: "WhatsApp order",
     },
   ] as const;
 
@@ -1017,13 +1385,15 @@ export default function Order() {
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <a
               href={orderNotice.trackingUrl}
-              className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95">
+              className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95"
+            >
               Track order
             </a>
 
             <Link
               to="/register"
-              className="rounded-2xl border border-brand-ink/20 bg-white/70 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white">
+              className="rounded-2xl border border-brand-ink/20 bg-white/70 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white"
+            >
               Register to save order history
             </Link>
           </div>
@@ -1036,13 +1406,15 @@ export default function Order() {
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link
               to="/login"
-              className="rounded-2xl border border-brand-ink/15 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink">
+              className="rounded-2xl border border-brand-ink/15 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink"
+            >
               Login
             </Link>
 
             <Link
               to="/menu"
-              className="rounded-2xl border border-brand-ink/15 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink">
+              className="rounded-2xl border border-brand-ink/15 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink"
+            >
               Back to menu
             </Link>
           </div>
@@ -1069,7 +1441,8 @@ export default function Order() {
 
           <Link
             to="/menu"
-            className="mt-6 inline-flex rounded-2xl bg-brand-ink px-6 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95">
+            className="mt-6 inline-flex rounded-2xl bg-brand-ink px-6 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95"
+          >
             Go to menu
           </Link>
         </section>
@@ -1079,25 +1452,37 @@ export default function Order() {
 
   return (
     <Page>
-      <div className="space-y-5 sm:space-y-8">
-        <header className="space-y-1.5 sm:space-y-2">
-          <p className="text-[10px] font-semibold tracking-[0.26em] text-brand-ink/55 sm:text-xs sm:tracking-[0.28em]">
-            CHECKOUT
-          </p>
+      <div ref={stepTopRef} className="space-y-5 scroll-mt-24 sm:space-y-8">
+        <header className="rounded-[2rem] border border-black/10 bg-white/55 p-5 shadow-sm backdrop-blur sm:p-7">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-[10px] font-semibold tracking-[0.26em] text-brand-ink/55 sm:text-xs sm:tracking-[0.28em]">
+                CHECKOUT
+              </p>
 
-          <h1 className="text-2xl font-semibold tracking-tight text-brand-ink sm:text-4xl">
-            Complete your order
-          </h1>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-brand-ink sm:text-4xl">
+                Complete your order
+              </h1>
 
-          <p className="hidden max-w-2xl text-sm leading-relaxed text-brand-ink/70 sm:block">
-            Add delivery details and select an available delivery session before
-            confirming your order.
-          </p>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/70">
+                Finish in 4 clear steps. Add customer details, pin the delivery
+                address, choose a delivery session, and send the order through
+                WhatsApp.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-black/10 bg-brand-bg/70 px-4 py-3 text-sm text-brand-ink">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-ink/45">
+                Order ID
+              </p>
+              <p className="mt-1 font-bold">{orderId}</p>
+            </div>
+          </div>
         </header>
 
-        <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr] lg:gap-6">
-          <section className="rounded-3xl border border-black/10 bg-white/55 p-4 shadow-sm backdrop-blur sm:p-8">
-            <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-4 shadow-sm backdrop-blur sm:p-6 lg:p-8">
+            <div className="grid gap-2 sm:grid-cols-4 sm:gap-3">
               {stepMeta.map((item) => {
                 const active = step === item.id;
                 const done = step > item.id;
@@ -1116,40 +1501,46 @@ export default function Order() {
                         detailsValid &&
                         deliveryAddressValid &&
                         scheduleValid
-                      )
+                      ) {
                         setStep(4);
+                      }
                     }}
                     className={[
-                      "rounded-2xl border px-2 py-2.5 text-left transition sm:px-4 sm:py-3",
+                      "rounded-2xl border px-3 py-3 text-left transition sm:px-4",
                       active
-                        ? "border-brand-ink/35 bg-brand-ink text-brand-bg"
+                        ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
                         : done
-                          ? "border-brand-ink/20 bg-brand-bg/80 text-brand-ink"
-                          : "border-black/10 bg-white/45 text-brand-ink/55",
-                    ].join(" ")}>
-                    <div className="flex items-center gap-2 sm:block">
+                          ? "border-brand-ink/20 bg-brand-bg text-brand-ink"
+                          : "border-black/10 bg-white/55 text-brand-ink/55 hover:bg-white/80",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-center gap-3">
                       <span
                         className={[
-                          "grid h-7 w-7 shrink-0 place-items-center rounded-xl text-[11px] font-bold sm:hidden",
+                          "grid h-8 w-8 shrink-0 place-items-center rounded-xl text-xs font-bold",
                           active
                             ? "bg-brand-bg/15 text-brand-bg"
                             : done
                               ? "bg-brand-ink text-brand-bg"
-                              : "bg-white/70 text-brand-ink/50",
-                        ].join(" ")}>
+                              : "bg-brand-bg text-brand-ink/45",
+                        ].join(" ")}
+                      >
                         {done ? "✓" : item.id}
                       </span>
 
-                      <div className="min-w-0">
-                        <p className="hidden text-[11px] font-semibold tracking-widest opacity-80 md:block">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">
                           {item.label}
-                        </p>
-
-                        <p className="truncate text-[10px] font-semibold sm:text-xs md:mt-1 md:text-sm">
-                          <span className="md:hidden">{item.shortTitle}</span>
-                          <span className="hidden md:inline">{item.title}</span>
-                        </p>
-                      </div>
+                        </span>
+                        <span
+                          className={[
+                            "mt-0.5 hidden text-xs sm:block",
+                            active ? "text-brand-bg/70" : "text-brand-ink/50",
+                          ].join(" ")}
+                        >
+                          {item.helper}
+                        </span>
+                      </span>
                     </div>
                   </button>
                 );
@@ -1162,27 +1553,23 @@ export default function Order() {
               </div>
             )}
 
-            <div className="mt-5 sm:mt-6">
+            <div className="mt-6">
               {step === 1 && (
-                <div className="space-y-4 sm:space-y-5">
-                  <div>
-                    <h2 className="text-lg font-semibold text-brand-ink sm:text-xl">
-                      Sender details
-                    </h2>
-
-                    <p className="mt-1 text-sm text-brand-ink/65">
-                      These details are saved as the order customer details.
-                    </p>
-                  </div>
+                <div className="space-y-5">
+                  <StepHeader
+                    eyebrow="Step 1"
+                    title="Sender and receiver details"
+                    description="Start with your contact details. Add receiver details only when this order is for another person or a gift."
+                  />
 
                   {isLoadingUser && (
-                    <div className="rounded-2xl border border-black/10 bg-white/60 px-4 py-3 text-sm text-brand-ink/65">
+                    <InfoBox tone="neutral">
                       Checking saved account details...
-                    </div>
+                    </InfoBox>
                   )}
 
-                  <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-                    <Field label="SENDER NAME">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Sender name">
                       <input
                         value={form.senderName}
                         onChange={(e) =>
@@ -1194,21 +1581,21 @@ export default function Order() {
                       />
                     </Field>
 
-                    <Field label="SENDER CONTACT NUMBER">
+                    <Field label="Sender contact number">
                       <input
                         value={form.senderContactNumber}
                         onChange={(e) =>
                           updateForm("senderContactNumber", e.target.value)
                         }
                         className="input-order"
-                        placeholder="07X XXXX XXX"
+                        placeholder="07X XXX XXXX"
                         inputMode="tel"
                         autoComplete="tel"
                       />
                     </Field>
                   </div>
 
-                  <Field label="SENDER EMAIL">
+                  <Field label="Sender email">
                     <input
                       value={form.senderEmail}
                       onChange={(e) =>
@@ -1241,28 +1628,30 @@ export default function Order() {
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Link
                           to="/login"
-                          className="rounded-2xl bg-blue-700 px-4 py-2 text-xs font-semibold text-white">
+                          className="rounded-2xl bg-blue-700 px-4 py-2 text-xs font-semibold text-white"
+                        >
                           Login and continue
                         </Link>
 
                         <button
                           type="button"
                           onClick={() => setDismissLoginPrompt(true)}
-                          className="rounded-2xl border border-blue-200 bg-white px-4 py-2 text-xs font-semibold text-blue-700">
+                          className="rounded-2xl border border-blue-200 bg-white px-4 py-2 text-xs font-semibold text-blue-700"
+                        >
                           Continue as guest
                         </button>
                       </div>
                     </div>
                   )}
 
-                  <Field label="SENDER ADDRESS">
+                  <Field label="Sender address">
                     <textarea
                       value={form.senderAddress}
                       onChange={(e) =>
                         updateForm("senderAddress", e.target.value)
                       }
                       className="input-order min-h-[95px]"
-                      placeholder="Your address"
+                      placeholder="Your full address"
                     />
                   </Field>
 
@@ -1279,7 +1668,7 @@ export default function Order() {
                     <ToggleCard
                       active={form.isGift}
                       title="This is a gift"
-                      description="Show both sender and receiver details."
+                      description="Receiver details will be required."
                       onClick={() => toggleGift(!form.isGift)}
                     />
                   </div>
@@ -1300,13 +1689,14 @@ export default function Order() {
                         <button
                           type="button"
                           onClick={copySenderToReceiver}
-                          className="w-fit rounded-2xl border border-brand-ink/20 bg-white/60 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white/80">
+                          className="w-fit rounded-2xl border border-brand-ink/20 bg-white/60 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white/80"
+                        >
                           Same as sender
                         </button>
                       </div>
 
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 sm:gap-4">
-                        <Field label="RECEIVER NAME">
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <Field label="Receiver name">
                           <input
                             value={form.receiverName}
                             onChange={(e) =>
@@ -1317,7 +1707,7 @@ export default function Order() {
                           />
                         </Field>
 
-                        <Field label="RECEIVER CONTACT NUMBER">
+                        <Field label="Receiver contact number">
                           <input
                             value={form.receiverContactNumber}
                             onChange={(e) =>
@@ -1327,14 +1717,14 @@ export default function Order() {
                               )
                             }
                             className="input-order"
-                            placeholder="07X XXXX XXX"
+                            placeholder="07X XXX XXXX"
                             inputMode="tel"
                           />
                         </Field>
                       </div>
 
-                      <div className="mt-3">
-                        <Field label="RECEIVER ADDRESS">
+                      <div className="mt-4">
+                        <Field label="Receiver address">
                           <textarea
                             value={form.receiverAddress}
                             onChange={(e) =>
@@ -1351,23 +1741,18 @@ export default function Order() {
               )}
 
               {step === 2 && (
-                <div className="space-y-4 sm:space-y-5">
-                  <div>
-                    <h2 className="text-lg font-semibold text-brand-ink sm:text-xl">
-                      Delivery address
-                    </h2>
-
-                    <p className="mt-1 text-sm text-brand-ink/65">
-                      Choose where the order should be delivered before
-                      selecting the delivery schedule.
-                    </p>
-                  </div>
+                <div className="space-y-5">
+                  <StepHeader
+                    eyebrow="Step 2"
+                    title="Delivery address and map pin"
+                    description="Choose the final delivery address and add an exact Google Maps location. This helps calculate the delivery fee correctly."
+                  />
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <ToggleCard
                       active={form.deliveryTarget === "SENDER"}
-                      title="Deliver to my doorstep"
-                      description="Delivery will be arranged to sender address."
+                      title="Deliver to sender"
+                      description="Use the sender address for delivery."
                       onClick={() => updateForm("deliveryTarget", "SENDER")}
                     />
 
@@ -1375,7 +1760,11 @@ export default function Order() {
                       active={form.deliveryTarget === "RECEIVER"}
                       disabled={!needsReceiver}
                       title="Deliver to receiver"
-                      description="Delivery will be arranged to receiver address."
+                      description={
+                        needsReceiver
+                          ? "Use the receiver address for delivery."
+                          : "Enable receiver details in step 1 first."
+                      }
                       onClick={() => {
                         if (needsReceiver) {
                           updateForm("deliveryTarget", "RECEIVER");
@@ -1385,23 +1774,14 @@ export default function Order() {
                   </div>
 
                   <div className="rounded-3xl border border-black/10 bg-white/55 p-4 sm:p-5">
-                    <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                      SELECTED DELIVERY ADDRESS
-                    </p>
-
-                    <p className="mt-2 text-sm leading-6 text-brand-ink/75">
-                      {effectiveDelivery.address || "No address added yet."}
-                    </p>
-
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div>
                         <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                          EXACT LOCATION REQUIRED
+                          SELECTED DELIVERY ADDRESS
                         </p>
 
-                        <p className="mt-1 text-xs text-brand-ink/65">
-                          Use current location or paste a Google Maps link to
-                          reduce delivery mistakes.
+                        <p className="mt-2 text-sm leading-6 text-brand-ink/75">
+                          {effectiveDelivery.address || "No address added yet."}
                         </p>
                       </div>
 
@@ -1410,45 +1790,45 @@ export default function Order() {
                         onClick={() => useCurrentLocation(form.deliveryTarget)}
                         disabled={isLocating}
                         className={[
-                          "w-full rounded-2xl px-4 py-2.5 text-xs font-semibold sm:w-auto sm:py-2",
+                          "rounded-2xl px-4 py-2.5 text-xs font-semibold",
                           isLocating
                             ? "cursor-not-allowed bg-brand-ink/40 text-brand-bg"
                             : "bg-brand-ink text-brand-bg hover:bg-brand-ink/95",
-                        ].join(" ")}>
-                        {isLocating ? "Getting location..." : "Use location"}
+                        ].join(" ")}
+                      >
+                        {isLocating ? "Getting location..." : "Use my location"}
                       </button>
                     </div>
 
-                    <input
-                      value={
-                        form.deliveryTarget === "RECEIVER"
-                          ? form.receiverLocationUrl
-                          : form.senderLocationUrl
-                      }
-                      onChange={(e) => {
-                        if (form.deliveryTarget === "RECEIVER") {
-                          updateForm("receiverLocationUrl", e.target.value);
-                        } else {
-                          updateForm("senderLocationUrl", e.target.value);
-                        }
-                      }}
-                      className="mt-3 w-full rounded-2xl border border-black/10 bg-white/70 px-3.5 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10 sm:mt-4 sm:px-4"
-                      placeholder="Paste Google Maps location link optional"
-                    />
+                    <div className="mt-5">
+                      <Field label="Google Maps location link">
+                        <input
+                          value={currentLocationUrl}
+                          onChange={(e) => updateLocationUrl(e.target.value)}
+                          className="input-order"
+                          placeholder="Paste Google Maps link or use current location"
+                        />
+                      </Field>
+                    </div>
 
-                    {effectiveDelivery.lat && effectiveDelivery.lng && (
+                    {deliveryLocationCoords ? (
                       <div className="mt-4 overflow-hidden rounded-2xl border border-black/10 bg-white">
                         <iframe
                           title="Delivery location map"
-                          className="h-48 w-full sm:h-56"
+                          className="h-52 w-full sm:h-64"
                           loading="lazy"
-                          src={`https://www.google.com/maps?q=${effectiveDelivery.lat},${effectiveDelivery.lng}&z=16&output=embed`}
+                          src={currentMapUrl}
                         />
                       </div>
+                    ) : (
+                      <InfoBox tone="warning" className="mt-4">
+                        Add a valid Google Maps link or use current location to
+                        calculate delivery.
+                      </InfoBox>
                     )}
                   </div>
 
-                  <Field label="DELIVERY NOTE OPTIONAL">
+                  <Field label="Delivery note optional">
                     <textarea
                       value={form.note}
                       onChange={(e) => updateForm("note", e.target.value)}
@@ -1460,17 +1840,12 @@ export default function Order() {
               )}
 
               {step === 3 && (
-                <div className="space-y-4 sm:space-y-5">
-                  <div>
-                    <h2 className="text-lg font-semibold text-brand-ink sm:text-xl">
-                      Delivery schedule
-                    </h2>
-
-                    <p className="mt-1 text-sm text-brand-ink/65">
-                      Select an available delivery date and session. We do not
-                      promise exact minute delivery.
-                    </p>
-                  </div>
+                <div className="space-y-5">
+                  <StepHeader
+                    eyebrow="Step 3"
+                    title="Select delivery session"
+                    description="Choose an available delivery session. Delivery fee is calculated from Baura Bakers to your pinned location."
+                  />
 
                   <div className="rounded-3xl border border-black/10 bg-white/55 p-4 sm:p-5">
                     <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
@@ -1483,11 +1858,11 @@ export default function Order() {
                     </p>
 
                     {isLoadingSlots ? (
-                      <div className="mt-4 rounded-2xl border border-black/10 bg-white/60 px-4 py-3 text-sm text-brand-ink/65">
+                      <InfoBox tone="neutral" className="mt-4">
                         Loading available delivery sessions...
-                      </div>
+                      </InfoBox>
                     ) : deliverySlots.length ? (
-                      <div className="mt-4 grid gap-3">
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
                         {deliverySlots.map((slot) => {
                           const active = selectedDeliverySlotId === slot.id;
 
@@ -1501,21 +1876,27 @@ export default function Order() {
                                 active
                                   ? "border-brand-ink bg-brand-ink text-brand-bg"
                                   : "border-black/10 bg-white/65 text-brand-ink hover:border-brand-ink/25 hover:bg-white",
-                              ].join(" ")}>
+                              ].join(" ")}
+                            >
                               <div className="flex items-start gap-3">
                                 <span
                                   className={[
-                                    "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[11px] font-bold",
+                                    "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border text-[11px] font-bold",
                                     active
                                       ? "border-brand-bg/45 bg-brand-bg text-brand-ink"
                                       : "border-brand-ink/20 bg-white/70 text-transparent",
-                                  ].join(" ")}>
+                                  ].join(" ")}
+                                >
                                   ✓
                                 </span>
 
                                 <span>
                                   <span className="block text-sm font-semibold">
-                                    {slot.slot_date} — {slot.slot_label}
+                                    {slot.slot_date}
+                                  </span>
+
+                                  <span className="mt-0.5 block text-sm font-semibold">
+                                    {slot.slot_label}
                                   </span>
 
                                   <span
@@ -1524,7 +1905,8 @@ export default function Order() {
                                       active
                                         ? "text-brand-bg/75"
                                         : "text-brand-ink/60",
-                                    ].join(" ")}>
+                                    ].join(" ")}
+                                  >
                                     {slot.start_time.slice(0, 5)} –{" "}
                                     {slot.end_time.slice(0, 5)} · Max{" "}
                                     {slot.max_orders} orders
@@ -1536,34 +1918,53 @@ export default function Order() {
                         })}
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                      <InfoBox tone="warning" className="mt-4">
                         No delivery sessions are available right now. Please
                         contact Baura Bakers before placing this order.
-                      </div>
+                      </InfoBox>
                     )}
                   </div>
 
                   {selectedDeliverySlot && (
-                    <div className="rounded-3xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-                      <p className="font-semibold">Delivery session selected</p>
-                      <p className="mt-1">{formatSlot(selectedDeliverySlot)}</p>
-                    </div>
+                    <InfoBox tone="success">
+                      <span className="font-semibold">
+                        Delivery session selected:
+                      </span>{" "}
+                      {formatSlot(selectedDeliverySlot)}
+                    </InfoBox>
                   )}
 
                   <div className="rounded-3xl border border-black/10 bg-white/55 p-4 sm:p-5">
-                    <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
-                      DELIVERY DISTANCE & COST
-                    </p>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
+                          REGULAR DELIVERY FEE
+                        </p>
 
-                    <p className="mt-1 text-xs leading-relaxed text-brand-ink/60">
-                      Delivery distance is calculated from Baura Bakers to your
-                      pinned delivery location.
-                    </p>
+                        <p className="mt-1 text-xs leading-relaxed text-brand-ink/60">
+                          We use one regular delivery table. Distance is rounded
+                          up to the next kilometre.
+                        </p>
+                      </div>
+
+                      {isCalculatingDistance && (
+                        <span className="w-fit rounded-2xl border border-black/10 bg-brand-bg/70 px-3 py-2 text-xs font-semibold text-brand-ink/65">
+                          Calculating...
+                        </span>
+                      )}
+                    </div>
 
                     <div className="mt-4 grid gap-3 text-sm text-brand-ink/75 sm:grid-cols-3">
                       <SummaryLine
-                        label="Distance from Baura"
+                        label="Road distance"
                         value={roadDistanceKm ? `${roadDistanceKm}km` : "-"}
+                      />
+
+                      <SummaryLine
+                        label="Pricing row"
+                        value={
+                          pricingDistanceKm ? `${pricingDistanceKm}km` : "-"
+                        }
                       />
 
                       <SummaryLine
@@ -1572,34 +1973,49 @@ export default function Order() {
                           deliveryFeeLkr > 0 ? formatLkr(deliveryFeeLkr) : "-"
                         }
                       />
-
-                      <SummaryLine
-                        label="Final total"
-                        value={formatLkr(finalTotalLkr)}
-                      />
                     </div>
 
-                    {pricingDistanceKm && !selectedDistancePrice && (
-                      <div className="mt-4 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-                        Delivery price is not configured for this distance.
-                        Please contact Baura Bakers before placing this order.
+                    <div className="mt-3 rounded-2xl border border-black/10 bg-brand-bg/70 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-brand-ink">
+                          Final total
+                        </p>
+                        <p className="text-lg font-bold text-brand-ink">
+                          {formatLkr(finalTotalLkr)}
+                        </p>
                       </div>
+                    </div>
+
+                    {distanceNotice && (
+                      <InfoBox tone="warning" className="mt-4">
+                        {distanceNotice}
+                      </InfoBox>
+                    )}
+
+                    {isLoadingDeliveryPricing && (
+                      <InfoBox tone="neutral" className="mt-4">
+                        Loading delivery pricing...
+                      </InfoBox>
+                    )}
+
+                    {pricingDistanceKm && !selectedDistancePrice && (
+                      <InfoBox tone="warning" className="mt-4">
+                        Delivery price is not configured for this distance and
+                        vehicle type. Please contact Baura Bakers before placing
+                        this order.
+                      </InfoBox>
                     )}
                   </div>
                 </div>
               )}
 
               {step === 4 && (
-                <div className="space-y-4 sm:space-y-5">
-                  <div>
-                    <h2 className="text-lg font-semibold text-brand-ink sm:text-xl">
-                      Confirm order
-                    </h2>
-
-                    <p className="mt-1 text-sm text-brand-ink/65">
-                      Review and continue through WhatsApp.
-                    </p>
-                  </div>
+                <div className="space-y-5">
+                  <StepHeader
+                    eyebrow="Step 4"
+                    title="Confirm and send order"
+                    description="Review the order summary. When you continue, the order is saved and WhatsApp opens with all order details."
+                  />
 
                   <div className="rounded-3xl border border-black/10 bg-brand-bg/75 p-4 sm:p-5">
                     <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
@@ -1610,7 +2026,7 @@ export default function Order() {
                       {orderId}
                     </p>
 
-                    <div className="mt-4 grid gap-3 text-sm text-brand-ink/75">
+                    <div className="mt-4 grid gap-3 text-sm text-brand-ink/75 sm:grid-cols-2">
                       <SummaryLine label="Sender" value={form.senderName} />
 
                       {needsReceiver && (
@@ -1630,7 +2046,7 @@ export default function Order() {
                         value={
                           form.deliveryTarget === "RECEIVER"
                             ? "Receiver address"
-                            : "My doorstep / sender address"
+                            : "Sender address"
                         }
                       />
 
@@ -1645,46 +2061,52 @@ export default function Order() {
                       />
 
                       <SummaryLine
-                        label="Exact location"
-                        value={effectiveDelivery.locationUrl || "-"}
+                        label="Road distance"
+                        value={roadDistanceKm ? `${roadDistanceKm}km` : "-"}
                       />
 
                       <SummaryLine
                         label="Delivery fee"
                         value={formatLkr(deliveryFeeLkr)}
                       />
-
-                      <SummaryLine
-                        label="Final total"
-                        value={formatLkr(finalTotalLkr)}
-                      />
                     </div>
 
-                    <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 p-3.5 text-sm text-brand-ink/75 sm:p-4">
+                    <div className="mt-4 rounded-2xl border border-black/10 bg-white/60 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-base font-bold text-brand-ink">
+                          Final total
+                        </p>
+                        <p className="text-xl font-bold text-brand-ink">
+                          {formatLkr(finalTotalLkr)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <InfoBox tone="neutral" className="mt-4">
                       Online payment is currently disabled. Continue through
                       WhatsApp for order confirmation and bank transfer details.
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-1">
-                    <button
-                      type="button"
-                      onClick={bankTransferViaWhatsApp}
-                      disabled={isSubmitting || !items.length}
-                      className={[
-                        "rounded-2xl border px-5 py-3.5 text-sm font-semibold sm:py-4",
-                        isSubmitting || !items.length
-                          ? "cursor-not-allowed border-brand-ink/10 bg-black/5 text-brand-ink/40"
-                          : "border-brand-ink/25 bg-white/55 text-brand-ink hover:bg-white/75",
-                      ].join(" ")}>
-                      {isSubmitting ? "Saving order..." : "Order via WhatsApp"}
-                    </button>
+                    </InfoBox>
                   </div>
 
                   <button
                     type="button"
+                    onClick={bankTransferViaWhatsApp}
+                    disabled={isSubmitting || !items.length}
+                    className={[
+                      "w-full rounded-2xl border px-5 py-4 text-sm font-semibold",
+                      isSubmitting || !items.length
+                        ? "cursor-not-allowed border-brand-ink/10 bg-black/5 text-brand-ink/40"
+                        : "border-brand-ink/25 bg-brand-ink text-brand-bg hover:bg-brand-ink/95",
+                    ].join(" ")}
+                  >
+                    {isSubmitting ? "Saving order..." : "Order via WhatsApp"}
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => navigate("/cart")}
-                    className="w-full rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">
+                    className="w-full rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100"
+                  >
                     Cancel and return to cart
                   </button>
                 </div>
@@ -1701,7 +2123,8 @@ export default function Order() {
                   step === 1
                     ? "cursor-not-allowed border-black/10 text-brand-ink/30"
                     : "border-brand-ink/25 text-brand-ink hover:bg-black/5",
-                ].join(" ")}>
+                ].join(" ")}
+              >
                 Back
               </button>
 
@@ -1715,20 +2138,22 @@ export default function Order() {
                     canGoNext
                       ? "bg-brand-ink hover:bg-brand-ink/95"
                       : "cursor-not-allowed bg-brand-ink/40",
-                  ].join(" ")}>
+                  ].join(" ")}
+                >
                   Continue
                 </button>
               ) : (
                 <Link
                   to="/cart"
-                  className="rounded-2xl border border-brand-ink/25 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-black/5">
+                  className="rounded-2xl border border-brand-ink/25 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-black/5"
+                >
                   Edit cart
                 </Link>
               )}
             </div>
           </section>
 
-          <aside className="rounded-3xl border border-black/10 bg-white/55 p-4 shadow-sm backdrop-blur sm:p-8">
+          <aside className="h-fit rounded-[2rem] border border-black/10 bg-white/60 p-4 shadow-sm backdrop-blur sm:p-6 lg:sticky lg:top-24">
             <div className="flex items-center justify-between gap-3">
               <p className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
                 ORDER SUMMARY
@@ -1736,17 +2161,19 @@ export default function Order() {
 
               <Link
                 to="/cart"
-                className="rounded-xl border border-brand-ink/15 bg-white/45 px-3 py-2 text-xs font-semibold text-brand-ink/80 hover:bg-white/60">
+                className="rounded-xl border border-brand-ink/15 bg-white/45 px-3 py-2 text-xs font-semibold text-brand-ink/80 hover:bg-white/60"
+              >
                 Edit cart
               </Link>
             </div>
 
             {items.length ? (
-              <div className="mt-4 space-y-2.5 sm:space-y-3">
+              <div className="mt-4 max-h-[340px] space-y-2.5 overflow-y-auto pr-1 sm:space-y-3">
                 {items.map((it) => (
                   <div
                     key={`${it.productSlug}-${it.size.id}-${it.sugar}`}
-                    className="rounded-2xl border border-black/10 bg-white/60 p-3 sm:p-4">
+                    className="rounded-2xl border border-black/10 bg-white/60 p-3 sm:p-4"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-brand-ink">
@@ -1767,28 +2194,20 @@ export default function Order() {
                 ))}
               </div>
             ) : (
-              <div className="mt-4 rounded-2xl border border-black/10 bg-white/60 p-4 text-sm text-brand-ink/70">
+              <InfoBox tone="neutral" className="mt-4">
                 Your cart is empty. Please add products before checkout.
-              </div>
+              </InfoBox>
             )}
 
             <div className="mt-4 space-y-2 rounded-2xl border border-black/10 bg-brand-bg/75 px-4 py-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-brand-ink">Subtotal</p>
-                <p className="text-sm font-semibold text-brand-ink">
-                  {formatLkr(totalLkr)}
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-brand-ink">Delivery</p>
-                <p className="text-sm font-semibold text-brand-ink">
-                  {formatLkr(deliveryFeeLkr)}
-                </p>
-              </div>
+              <PriceRow label="Subtotal" value={formatLkr(totalLkr)} />
+              <PriceRow
+                label="Delivery"
+                value={deliveryFeeLkr > 0 ? formatLkr(deliveryFeeLkr) : "-"}
+              />
 
               <div className="border-t border-black/10 pt-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <p className="text-base font-bold text-brand-ink">
                     Final total
                   </p>
@@ -1808,6 +2227,20 @@ export default function Order() {
               </div>
             )}
 
+            {roadDistanceKm && (
+              <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 p-3.5 text-xs leading-relaxed text-brand-ink/65 sm:mt-5 sm:p-4">
+                <p className="font-semibold text-brand-ink">
+                  Delivery distance
+                </p>
+                <p className="mt-1">
+                  {roadDistanceKm}km road distance ·{" "}
+                  {pricingDistanceKm
+                    ? `${pricingDistanceKm}km pricing row`
+                    : ""}
+                </p>
+              </div>
+            )}
+
             <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 p-3.5 text-xs leading-relaxed text-brand-ink/65 sm:mt-5 sm:p-4">
               Your cart will clear only after your order is saved successfully.
             </div>
@@ -1818,10 +2251,36 @@ export default function Order() {
   );
 }
 
+function StepHeader({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-brand-ink/45">
+        {eyebrow}
+      </p>
+
+      <h2 className="mt-2 text-xl font-semibold tracking-tight text-brand-ink sm:text-2xl">
+        {title}
+      </h2>
+
+      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/65">
+        {description}
+      </p>
+    </div>
+  );
+}
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-[10px] font-semibold tracking-widest text-brand-ink/60 sm:text-xs">
+      <label className="text-[10px] font-semibold uppercase tracking-widest text-brand-ink/60 sm:text-xs">
         {label}
       </label>
 
@@ -1855,7 +2314,8 @@ function ToggleCard({
           : active
             ? "border-brand-ink bg-brand-ink text-brand-bg"
             : "border-black/10 bg-white/60 text-brand-ink hover:border-brand-ink/25 hover:bg-white/80",
-      ].join(" ")}>
+      ].join(" ")}
+    >
       <div className="flex items-start gap-3">
         <span
           className={[
@@ -1863,7 +2323,8 @@ function ToggleCard({
             active
               ? "border-brand-bg/45 bg-brand-bg text-brand-ink"
               : "border-brand-ink/20 bg-white/70 text-transparent",
-          ].join(" ")}>
+          ].join(" ")}
+        >
           ✓
         </span>
 
@@ -1874,7 +2335,8 @@ function ToggleCard({
             className={[
               "mt-1 block text-xs leading-5",
               active ? "text-brand-bg/75" : "text-brand-ink/55",
-            ].join(" ")}>
+            ].join(" ")}
+          >
             {description}
           </span>
         </span>
@@ -1890,9 +2352,47 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
         {label}
       </p>
 
-      <p className="mt-1 text-sm font-semibold text-brand-ink">
+      <p className="mt-1 break-words text-sm font-semibold text-brand-ink">
         {value || "-"}
       </p>
+    </div>
+  );
+}
+
+function PriceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-sm font-semibold text-brand-ink">{label}</p>
+      <p className="text-sm font-semibold text-brand-ink">{value}</p>
+    </div>
+  );
+}
+
+function InfoBox({
+  children,
+  tone,
+  className = "",
+}: {
+  children: ReactNode;
+  tone: "neutral" | "success" | "warning";
+  className?: string;
+}) {
+  const toneClass =
+    tone === "success"
+      ? "border-green-200 bg-green-50 text-green-800"
+      : tone === "warning"
+        ? "border-yellow-200 bg-yellow-50 text-yellow-800"
+        : "border-black/10 bg-white/60 text-brand-ink/65";
+
+  return (
+    <div
+      className={[
+        "rounded-2xl border px-4 py-3 text-sm leading-relaxed",
+        toneClass,
+        className,
+      ].join(" ")}
+    >
+      {children}
     </div>
   );
 }

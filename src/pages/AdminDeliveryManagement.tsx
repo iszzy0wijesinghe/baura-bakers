@@ -5,7 +5,10 @@ import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
 import { supabase } from "../lib/supabase";
 
-type TabKey = "patterns" | "scheduled" | "pricing" | "vehicles" | "settings";
+type TabKey = "availability" | "pricing" | "vehicles" | "settings";
+
+type DeliveryMode = "SCHEDULED" | "EVERYDAY" | "SPECIAL";
+type RecurrenceMode = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
 
 type DeliverySlot = {
   id: string;
@@ -15,6 +18,34 @@ type DeliverySlot = {
   end_time: string;
   max_orders: number;
   is_available: boolean;
+};
+
+type DailyDeliverySlot = {
+  id: string;
+  slot_label: string;
+  start_time: string;
+  end_time: string;
+  max_orders: number;
+  is_available: boolean;
+};
+
+type SpecialDeliverySlot = {
+  id: string;
+  slot_date: string;
+  slot_label: string;
+  start_time: string;
+  end_time: string;
+  max_orders: number;
+  is_available: boolean;
+};
+
+type NoDeliveryBlock = {
+  id: string;
+  block_date: string;
+  start_time: string;
+  end_time: string;
+  reason: string;
+  full_day: boolean;
 };
 
 type DeliveryVehicleRule = {
@@ -37,40 +68,23 @@ type DeliveryDistancePrice = {
   is_active: boolean;
 };
 
-type DeliveryPeakHour = {
-  id: string;
-  delivery_app: "PICKME_FLASH" | "UBER_PARCEL";
-  label: string;
-  start_time: string;
-  end_time: string;
-  is_active: boolean;
-};
-
 type DeliverySetting = {
   setting_key: string;
   setting_value: string;
 };
 
+type OldSpecialDeliveryDate = {
+  date: string;
+  label: string;
+};
+
+const REGULAR_PRICE_TABLE_KEY: PriceTableKey = "PICKME_FLASH";
+
 const tabs: { key: TabKey; label: string }[] = [
-  { key: "patterns", label: "Delivery patterns" },
-  { key: "scheduled", label: "Scheduled dates" },
-  { key: "pricing", label: "Distance pricing" },
+  { key: "availability", label: "Availability & schedule" },
+  { key: "pricing", label: "Regular pricing" },
   { key: "vehicles", label: "Vehicle rules" },
   { key: "settings", label: "Settings" },
-];
-
-const priceTables: {
-  key: PriceTableKey;
-  label: string;
-}[] = [
-  {
-    key: "PICKME_FLASH",
-    label: "PickMe Flash",
-  },
-  {
-    key: "UBER_PARCEL",
-    label: "Uber Parcel",
-  },
 ];
 
 function vehicleIcon(type: string) {
@@ -81,7 +95,15 @@ function vehicleIcon(type: string) {
   return "🚚";
 }
 
-function parseList(value?: string) {
+function vehicleName(type: string) {
+  if (type === "BIKE") return "Bike";
+  if (type === "THREE_WHEEL") return "Three wheel";
+  if (type === "CAR") return "Car";
+  if (type === "VAN") return "Van";
+  return type;
+}
+
+function parseList<T = unknown>(value?: string): T[] {
   try {
     const parsed = JSON.parse(value || "[]");
     return Array.isArray(parsed) ? parsed : [];
@@ -94,25 +116,134 @@ function formatLkr(value: number) {
   return `LKR ${Number(value || 0).toLocaleString()}`;
 }
 
+function makeId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function addDays(date: Date, amount: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+
+function addMonths(date: Date, amount: number) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + amount);
+  return next;
+}
+
+function toIsoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function generateRecurringDates({
+  startDate,
+  endDate,
+  recurrence,
+}: {
+  startDate: string;
+  endDate: string;
+  recurrence: RecurrenceMode;
+}) {
+  if (!startDate) return [];
+
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = endDate
+    ? new Date(`${endDate}T00:00:00`)
+    : new Date(`${startDate}T00:00:00`);
+
+  if (end < start) return [startDate];
+
+  const dates: string[] = [];
+  let cursor = start;
+
+  while (cursor <= end && dates.length < 366) {
+    dates.push(toIsoDate(cursor));
+
+    if (recurrence === "DAILY") {
+      cursor = addDays(cursor, 1);
+    } else if (recurrence === "WEEKLY") {
+      cursor = addDays(cursor, 7);
+    } else if (recurrence === "MONTHLY") {
+      cursor = addMonths(cursor, 1);
+    } else {
+      break;
+    }
+  }
+
+  return dates;
+}
+
+function resetPriceForm() {
+  return {
+    id: "",
+    price_table_key: REGULAR_PRICE_TABLE_KEY,
+    distance_km: 1,
+    vehicle_type: "BIKE",
+    normal_price_lkr: 0,
+    peak_price_lkr: 0,
+    is_active: true,
+  };
+}
+
+function resetVehicleForm() {
+  return {
+    id: "",
+    vehicle_type: "BIKE",
+    min_quantity: 1,
+    max_quantity: "",
+    is_active: true,
+  };
+}
+
+function normalizeSpecialSlots(value?: string): SpecialDeliverySlot[] {
+  const rows = parseList<Partial<SpecialDeliverySlot> & OldSpecialDeliveryDate>(
+    value,
+  );
+
+  return rows
+    .map((row, index) => {
+      const slotDate = row.slot_date || row.date || "";
+      const slotLabel = row.slot_label || row.label || "Special Delivery";
+
+      if (!slotDate) return null;
+
+      return {
+        id: row.id || `old-special-${slotDate}-${index}`,
+        slot_date: slotDate,
+        slot_label: slotLabel,
+        start_time: row.start_time || "09:00",
+        end_time: row.end_time || "12:00",
+        max_orders: Number(row.max_orders || 10),
+        is_available: row.is_available ?? true,
+      };
+    })
+    .filter(Boolean) as SpecialDeliverySlot[];
+}
+
+function normalizeNoDeliveryBlocks(settings: Record<string, string>) {
+  const newBlocks = parseList<NoDeliveryBlock>(
+    settings.no_delivery_blocks_json,
+  );
+
+  const oldFullDayDates = parseList<string>(settings.no_delivery_dates_json);
+
+  const migratedOldBlocks: NoDeliveryBlock[] = oldFullDayDates.map((date) => ({
+    id: `old-${date}`,
+    block_date: date,
+    start_time: "",
+    end_time: "",
+    reason: "No delivery",
+    full_day: true,
+  }));
+
+  return [...newBlocks, ...migratedOldBlocks];
+}
+
 export default function AdminDeliveryManagement() {
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<TabKey>("patterns");
-
-  const [activePriceTable, setActivePriceTable] =
-    useState<PriceTableKey>("PICKME_FLASH");
-
-  const [peakHours, setPeakHours] = useState<DeliveryPeakHour[]>([]);
-  const [showPeakModal, setShowPeakModal] = useState(false);
-
-  const [peakHourForm, setPeakHourForm] = useState({
-    id: "",
-    delivery_app: "PICKME_FLASH" as "PICKME_FLASH" | "UBER_PARCEL",
-    label: "Peak Session",
-    start_time: "16:00",
-    end_time: "19:00",
-    is_active: true,
-  });
+  const [activeTab, setActiveTab] = useState<TabKey>("availability");
 
   const [slots, setSlots] = useState<DeliverySlot[]>([]);
   const [vehicleRules, setVehicleRules] = useState<DeliveryVehicleRule[]>([]);
@@ -125,11 +256,20 @@ export default function AdminDeliveryManagement() {
   const [successText, setSuccessText] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const [showPriceModal, setShowPriceModal] = useState(false);
+  const [priceForm, setPriceForm] = useState(resetPriceForm());
 
-  const [slotForm, setSlotForm] = useState({
-    id: "",
+  const [vehicleForm, setVehicleForm] = useState(resetVehicleForm());
+
+  const [patternForm, setPatternForm] = useState({
+    delivery_mode: "SCHEDULED" as DeliveryMode,
+    business_open_time: "09:00",
+    business_close_time: "18:00",
+  });
+
+  const [manualScheduleForm, setManualScheduleForm] = useState({
     slot_date: "",
+    end_date: "",
+    recurrence: "NONE" as RecurrenceMode,
     slot_label: "Morning Delivery",
     start_time: "09:00",
     end_time: "12:00",
@@ -137,42 +277,80 @@ export default function AdminDeliveryManagement() {
     is_available: true,
   });
 
-  const [priceForm, setPriceForm] = useState({
+  const [dailySlotForm, setDailySlotForm] = useState({
     id: "",
-    price_table_key: "PICKME_FLASH" as PriceTableKey,
-    distance_km: 1,
-    vehicle_type: "BIKE",
-    normal_price_lkr: 0,
-    peak_price_lkr: 0,
-    is_active: true,
+    slot_label: "Morning Delivery",
+    start_time: "09:00",
+    end_time: "12:00",
+    max_orders: 10,
+    is_available: true,
   });
 
-  const [vehicleForm, setVehicleForm] = useState({
+  const [specialSlotForm, setSpecialSlotForm] = useState({
     id: "",
-    vehicle_type: "BIKE",
-    min_quantity: 1,
-    max_quantity: "",
-    is_active: true,
+    slot_date: "",
+    slot_label: "Special Delivery",
+    start_time: "09:00",
+    end_time: "12:00",
+    max_orders: 10,
+    is_available: true,
   });
 
-  const [patternForm, setPatternForm] = useState({
-    delivery_mode: "EVERYDAY",
-    business_open_time: "09:00",
-    business_close_time: "18:00",
-    no_delivery_date: "",
-    special_delivery_date: "",
-    special_delivery_label: "",
+  const [noDeliveryBlockForm, setNoDeliveryBlockForm] = useState({
+    id: "",
+    block_date: "",
+    start_time: "",
+    end_time: "",
+    reason: "",
+    full_day: true,
   });
 
-  const noDeliveryDates = useMemo(
-    () => parseList(settings.no_delivery_dates_json),
-    [settings.no_delivery_dates_json],
+  const dailyDeliverySlots = useMemo(
+    () => parseList<DailyDeliverySlot>(settings.daily_delivery_slots_json),
+    [settings.daily_delivery_slots_json],
   );
 
-  const specialDeliveryDates = useMemo(
-    () => parseList(settings.special_delivery_dates_json),
+  const specialDeliverySlots = useMemo(
+    () => normalizeSpecialSlots(settings.special_delivery_dates_json),
     [settings.special_delivery_dates_json],
   );
+
+  const noDeliveryBlocks = useMemo(
+    () => normalizeNoDeliveryBlocks(settings),
+    [settings],
+  );
+
+  const visibleDistancePrices = useMemo(() => {
+    return distancePrices
+      .filter((price) => price.price_table_key === REGULAR_PRICE_TABLE_KEY)
+      .sort((a, b) => {
+        if (a.vehicle_type !== b.vehicle_type) {
+          return a.vehicle_type.localeCompare(b.vehicle_type);
+        }
+
+        return a.distance_km - b.distance_km;
+      });
+  }, [distancePrices]);
+
+  const activePriceRows = visibleDistancePrices.filter(
+    (price) => price.is_active,
+  ).length;
+
+  const minDistanceKm =
+    visibleDistancePrices.length > 0
+      ? Math.min(...visibleDistancePrices.map((price) => price.distance_km))
+      : 0;
+
+  const maxDistanceKm =
+    visibleDistancePrices.length > 0
+      ? Math.max(...visibleDistancePrices.map((price) => price.distance_km))
+      : 0;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const upcomingManualSlots = slots.filter(
+    (slot) => slot.is_available && slot.slot_date >= todayIso,
+  ).length;
 
   async function verifyAdmin() {
     const {
@@ -204,47 +382,39 @@ export default function AdminDeliveryManagement() {
     const isAdmin = await verifyAdmin();
     if (!isAdmin) return;
 
-    const [slotsRes, rulesRes, pricesRes, settingsRes, peakHoursRes] =
-      await Promise.all([
-        supabase
-          .from("delivery_slots")
-          .select("*")
-          .order("slot_date", { ascending: true })
-          .order("start_time", { ascending: true }),
+    const [slotsRes, rulesRes, pricesRes, settingsRes] = await Promise.all([
+      supabase
+        .from("delivery_slots")
+        .select("*")
+        .order("slot_date", { ascending: true })
+        .order("start_time", { ascending: true }),
 
-        supabase
-          .from("delivery_vehicle_rules")
-          .select("*")
-          .order("min_quantity", { ascending: true }),
+      supabase
+        .from("delivery_vehicle_rules")
+        .select("*")
+        .order("min_quantity", { ascending: true }),
 
-        supabase
-          .from("delivery_distance_prices")
-          .select("*")
-          .order("vehicle_type", { ascending: true })
-          .order("distance_km", { ascending: true }),
+      supabase
+        .from("delivery_distance_prices")
+        .select("*")
+        .eq("price_table_key", REGULAR_PRICE_TABLE_KEY)
+        .order("vehicle_type", { ascending: true })
+        .order("distance_km", { ascending: true }),
 
-        supabase.from("delivery_settings").select("setting_key, setting_value"),
-
-        supabase
-          .from("delivery_peak_hours")
-          .select("*")
-          .order("delivery_app", { ascending: true })
-          .order("start_time", { ascending: true }),
-      ]);
+      supabase.from("delivery_settings").select("setting_key, setting_value"),
+    ]);
 
     if (
       slotsRes.error ||
       rulesRes.error ||
       pricesRes.error ||
-      settingsRes.error ||
-      peakHoursRes.error
+      settingsRes.error
     ) {
       setErrorText(
         slotsRes.error?.message ||
           rulesRes.error?.message ||
           pricesRes.error?.message ||
           settingsRes.error?.message ||
-          peakHoursRes.error?.message ||
           "Could not load delivery data.",
       );
       return;
@@ -254,17 +424,17 @@ export default function AdminDeliveryManagement() {
     setVehicleRules((rulesRes.data || []) as DeliveryVehicleRule[]);
     setDistancePrices((pricesRes.data || []) as DeliveryDistancePrice[]);
 
-    setPeakHours((peakHoursRes.data || []) as DeliveryPeakHour[]);
-
     const map: Record<string, string> = {};
+
     for (const row of (settingsRes.data || []) as DeliverySetting[]) {
       map[row.setting_key] = row.setting_value;
     }
 
     setSettings(map);
+
     setPatternForm((prev) => ({
       ...prev,
-      delivery_mode: map.delivery_mode || "EVERYDAY",
+      delivery_mode: (map.delivery_mode || "SCHEDULED") as DeliveryMode,
       business_open_time: map.business_open_time || "09:00",
       business_close_time: map.business_close_time || "18:00",
     }));
@@ -312,73 +482,28 @@ export default function AdminDeliveryManagement() {
     setSaving(false);
   }
 
-  async function addNoDeliveryDate() {
-    if (!patternForm.no_delivery_date) return;
+  async function saveManualSchedule() {
+    if (!manualScheduleForm.slot_date) {
+      setErrorText("Please select a start date.");
+      return;
+    }
 
-    const next = Array.from(
-      new Set([...noDeliveryDates, patternForm.no_delivery_date]),
-    );
+    if (
+      manualScheduleForm.recurrence !== "NONE" &&
+      !manualScheduleForm.end_date
+    ) {
+      setErrorText("Please select an end date for recurring delivery sessions.");
+      return;
+    }
 
-    await saveSettingRows([
-      {
-        setting_key: "no_delivery_dates_json",
-        setting_value: JSON.stringify(next),
-      },
-    ]);
+    const dates = generateRecurringDates({
+      startDate: manualScheduleForm.slot_date,
+      endDate: manualScheduleForm.end_date,
+      recurrence: manualScheduleForm.recurrence,
+    });
 
-    setPatternForm((prev) => ({ ...prev, no_delivery_date: "" }));
-  }
-
-  async function removeNoDeliveryDate(date: string) {
-    const next = noDeliveryDates.filter((x) => x !== date);
-
-    await saveSettingRows([
-      {
-        setting_key: "no_delivery_dates_json",
-        setting_value: JSON.stringify(next),
-      },
-    ]);
-  }
-
-  async function addSpecialDeliveryDate() {
-    if (!patternForm.special_delivery_date) return;
-
-    const next = [
-      ...specialDeliveryDates,
-      {
-        date: patternForm.special_delivery_date,
-        label: patternForm.special_delivery_label || "Special Delivery",
-      },
-    ];
-
-    await saveSettingRows([
-      {
-        setting_key: "special_delivery_dates_json",
-        setting_value: JSON.stringify(next),
-      },
-    ]);
-
-    setPatternForm((prev) => ({
-      ...prev,
-      special_delivery_date: "",
-      special_delivery_label: "",
-    }));
-  }
-
-  async function removeSpecialDeliveryDate(date: string) {
-    const next = specialDeliveryDates.filter((x) => x.date !== date);
-
-    await saveSettingRows([
-      {
-        setting_key: "special_delivery_dates_json",
-        setting_value: JSON.stringify(next),
-      },
-    ]);
-  }
-
-  async function saveSlot() {
-    if (!slotForm.slot_date) {
-      setErrorText("Please select a delivery date.");
+    if (!dates.length) {
+      setErrorText("No valid delivery dates found.");
       return;
     }
 
@@ -386,32 +511,28 @@ export default function AdminDeliveryManagement() {
     setErrorText("");
     setSuccessText("");
 
-    const payload = {
-      slot_date: slotForm.slot_date,
-      slot_label: slotForm.slot_label,
-      start_time: slotForm.start_time,
-      end_time: slotForm.end_time,
-      max_orders: Number(slotForm.max_orders || 0),
-      is_available: slotForm.is_available,
-    };
+    const payload = dates.map((date) => ({
+      slot_date: date,
+      slot_label: manualScheduleForm.slot_label,
+      start_time: manualScheduleForm.start_time,
+      end_time: manualScheduleForm.end_time,
+      max_orders: Number(manualScheduleForm.max_orders || 0),
+      is_available: manualScheduleForm.is_available,
+    }));
 
-    const result = slotForm.id
-      ? await supabase
-          .from("delivery_slots")
-          .update(payload)
-          .eq("id", slotForm.id)
-      : await supabase.from("delivery_slots").insert(payload);
+    const { error } = await supabase.from("delivery_slots").insert(payload);
 
     setSaving(false);
 
-    if (result.error) {
-      setErrorText(result.error.message);
+    if (error) {
+      setErrorText(error.message);
       return;
     }
 
-    setSlotForm({
-      id: "",
+    setManualScheduleForm({
       slot_date: "",
+      end_date: "",
+      recurrence: "NONE",
       slot_label: "Morning Delivery",
       start_time: "09:00",
       end_time: "12:00",
@@ -420,8 +541,11 @@ export default function AdminDeliveryManagement() {
     });
 
     setSuccessText(
-      slotForm.id ? "Delivery slot updated." : "Delivery slot created.",
+      dates.length === 1
+        ? "Delivery session created."
+        : `${dates.length} delivery sessions created.`,
     );
+
     loadDeliveryData();
   }
 
@@ -438,20 +562,218 @@ export default function AdminDeliveryManagement() {
       return;
     }
 
+    setSuccessText("Delivery slot deleted.");
     loadDeliveryData();
   }
 
+  async function saveDailySlot() {
+    if (!dailySlotForm.slot_label.trim()) {
+      setErrorText("Please add a daily slot label.");
+      return;
+    }
+
+    if (!dailySlotForm.start_time || !dailySlotForm.end_time) {
+      setErrorText("Please add start and end time.");
+      return;
+    }
+
+    const nextSlot: DailyDeliverySlot = {
+      id: dailySlotForm.id || makeId("daily"),
+      slot_label: dailySlotForm.slot_label,
+      start_time: dailySlotForm.start_time,
+      end_time: dailySlotForm.end_time,
+      max_orders: Number(dailySlotForm.max_orders || 0),
+      is_available: dailySlotForm.is_available,
+    };
+
+    const next = dailySlotForm.id
+      ? dailyDeliverySlots.map((slot) =>
+          slot.id === dailySlotForm.id ? nextSlot : slot,
+        )
+      : [...dailyDeliverySlots, nextSlot];
+
+    const saved = await saveSettingRows([
+      {
+        setting_key: "daily_delivery_slots_json",
+        setting_value: JSON.stringify(next),
+      },
+    ]);
+
+    if (!saved) return;
+
+    setDailySlotForm({
+      id: "",
+      slot_label: "Morning Delivery",
+      start_time: "09:00",
+      end_time: "12:00",
+      max_orders: 10,
+      is_available: true,
+    });
+  }
+
+  async function deleteDailySlot(id: string) {
+    const next = dailyDeliverySlots.filter((slot) => slot.id !== id);
+
+    await saveSettingRows([
+      {
+        setting_key: "daily_delivery_slots_json",
+        setting_value: JSON.stringify(next),
+      },
+    ]);
+  }
+
+  async function saveSpecialSlot() {
+    if (!specialSlotForm.slot_date) {
+      setErrorText("Please select a special delivery date.");
+      return;
+    }
+
+    if (!specialSlotForm.slot_label.trim()) {
+      setErrorText("Please add a special delivery label.");
+      return;
+    }
+
+    const nextSlot: SpecialDeliverySlot = {
+      id: specialSlotForm.id || makeId("special"),
+      slot_date: specialSlotForm.slot_date,
+      slot_label: specialSlotForm.slot_label,
+      start_time: specialSlotForm.start_time,
+      end_time: specialSlotForm.end_time,
+      max_orders: Number(specialSlotForm.max_orders || 0),
+      is_available: specialSlotForm.is_available,
+    };
+
+    const next = specialSlotForm.id
+      ? specialDeliverySlots.map((slot) =>
+          slot.id === specialSlotForm.id ? nextSlot : slot,
+        )
+      : [...specialDeliverySlots, nextSlot];
+
+    const saved = await saveSettingRows([
+      {
+        setting_key: "special_delivery_dates_json",
+        setting_value: JSON.stringify(next),
+      },
+    ]);
+
+    if (!saved) return;
+
+    setSpecialSlotForm({
+      id: "",
+      slot_date: "",
+      slot_label: "Special Delivery",
+      start_time: "09:00",
+      end_time: "12:00",
+      max_orders: 10,
+      is_available: true,
+    });
+  }
+
+  async function deleteSpecialSlot(id: string) {
+    const next = specialDeliverySlots.filter((slot) => slot.id !== id);
+
+    await saveSettingRows([
+      {
+        setting_key: "special_delivery_dates_json",
+        setting_value: JSON.stringify(next),
+      },
+    ]);
+  }
+
+  async function saveNoDeliveryBlock() {
+    if (!noDeliveryBlockForm.block_date) {
+      setErrorText("Please select a no-delivery date.");
+      return;
+    }
+
+    if (
+      !noDeliveryBlockForm.full_day &&
+      (!noDeliveryBlockForm.start_time || !noDeliveryBlockForm.end_time)
+    ) {
+      setErrorText("Please add start and end time, or mark it as full day.");
+      return;
+    }
+
+    const nextBlock: NoDeliveryBlock = {
+      id: noDeliveryBlockForm.id || makeId("block"),
+      block_date: noDeliveryBlockForm.block_date,
+      start_time: noDeliveryBlockForm.full_day
+        ? ""
+        : noDeliveryBlockForm.start_time,
+      end_time: noDeliveryBlockForm.full_day
+        ? ""
+        : noDeliveryBlockForm.end_time,
+      reason: noDeliveryBlockForm.reason || "No delivery",
+      full_day: noDeliveryBlockForm.full_day,
+    };
+
+    const newOnlyBlocks = parseList<NoDeliveryBlock>(
+      settings.no_delivery_blocks_json,
+    );
+
+    const next = noDeliveryBlockForm.id
+      ? newOnlyBlocks.map((block) =>
+          block.id === noDeliveryBlockForm.id ? nextBlock : block,
+        )
+      : [...newOnlyBlocks, nextBlock];
+
+    const saved = await saveSettingRows([
+      {
+        setting_key: "no_delivery_blocks_json",
+        setting_value: JSON.stringify(next),
+      },
+    ]);
+
+    if (!saved) return;
+
+    setNoDeliveryBlockForm({
+      id: "",
+      block_date: "",
+      start_time: "",
+      end_time: "",
+      reason: "",
+      full_day: true,
+    });
+  }
+
+  async function deleteNoDeliveryBlock(id: string) {
+    const newOnlyBlocks = parseList<NoDeliveryBlock>(
+      settings.no_delivery_blocks_json,
+    );
+
+    const next = newOnlyBlocks.filter((block) => block.id !== id);
+
+    await saveSettingRows([
+      {
+        setting_key: "no_delivery_blocks_json",
+        setting_value: JSON.stringify(next),
+      },
+    ]);
+  }
+
   async function savePrice() {
+    if (!priceForm.distance_km || Number(priceForm.distance_km) < 1) {
+      setErrorText("Distance must be at least 1km.");
+      return;
+    }
+
+    if (!priceForm.normal_price_lkr || Number(priceForm.normal_price_lkr) <= 0) {
+      setErrorText("Please enter a valid regular delivery fee.");
+      return;
+    }
+
     setSaving(true);
     setErrorText("");
     setSuccessText("");
 
+    const regularPrice = Number(priceForm.normal_price_lkr || 0);
+
     const payload = {
-      price_table_key: activePriceTable,
+      price_table_key: REGULAR_PRICE_TABLE_KEY,
       distance_km: Number(priceForm.distance_km || 0),
       vehicle_type: priceForm.vehicle_type,
-      normal_price_lkr: Number(priceForm.normal_price_lkr || 0),
-      peak_price_lkr: Number(priceForm.peak_price_lkr || 0),
+      normal_price_lkr: regularPrice,
+      peak_price_lkr: regularPrice,
       is_active: priceForm.is_active,
     };
 
@@ -469,15 +791,7 @@ export default function AdminDeliveryManagement() {
       return;
     }
 
-    setPriceForm({
-      id: "",
-      price_table_key: activePriceTable,
-      distance_km: 1,
-      vehicle_type: "BIKE",
-      normal_price_lkr: 0,
-      peak_price_lkr: 0,
-      is_active: true,
-    });
+    setPriceForm(resetPriceForm());
 
     setSuccessText(priceForm.id ? "Price row updated." : "Price row created.");
     loadDeliveryData();
@@ -496,10 +810,16 @@ export default function AdminDeliveryManagement() {
       return;
     }
 
+    setSuccessText("Price row deleted.");
     loadDeliveryData();
   }
 
   async function saveVehicleRule() {
+    if (!vehicleForm.min_quantity || Number(vehicleForm.min_quantity) < 1) {
+      setErrorText("Minimum quantity must be at least 1.");
+      return;
+    }
+
     setSaving(true);
     setErrorText("");
     setSuccessText("");
@@ -527,13 +847,7 @@ export default function AdminDeliveryManagement() {
       return;
     }
 
-    setVehicleForm({
-      id: "",
-      vehicle_type: "BIKE",
-      min_quantity: 1,
-      max_quantity: "",
-      is_active: true,
-    });
+    setVehicleForm(resetVehicleForm());
 
     setSuccessText(
       vehicleForm.id ? "Vehicle rule updated." : "Vehicle rule created.",
@@ -554,6 +868,7 @@ export default function AdminDeliveryManagement() {
       return;
     }
 
+    setSuccessText("Vehicle rule deleted.");
     loadDeliveryData();
   }
 
@@ -576,79 +891,6 @@ export default function AdminDeliveryManagement() {
     setSaving(false);
   }
 
-  const visibleDistancePrices = distancePrices.filter(
-    (price) => price.price_table_key === activePriceTable,
-  );
-
-  const firstKmPrice =
-    visibleDistancePrices.find((price) => price.distance_km === 1)
-      ?.normal_price_lkr || 0;
-
-  const secondKmPrice =
-    visibleDistancePrices.find((price) => price.distance_km === 2)
-      ?.normal_price_lkr || 0;
-
-  const additionalKmPrice =
-    firstKmPrice && secondKmPrice ? secondKmPrice - firstKmPrice : 0;
-
-  async function savePeakHour() {
-    setSaving(true);
-    setErrorText("");
-    setSuccessText("");
-
-    const payload = {
-      delivery_app: peakHourForm.delivery_app,
-      label: peakHourForm.label,
-      start_time: peakHourForm.start_time,
-      end_time: peakHourForm.end_time,
-      is_active: peakHourForm.is_active,
-    };
-
-    const result = peakHourForm.id
-      ? await supabase
-          .from("delivery_peak_hours")
-          .update(payload)
-          .eq("id", peakHourForm.id)
-      : await supabase.from("delivery_peak_hours").insert(payload);
-
-    setSaving(false);
-
-    if (result.error) {
-      setErrorText(result.error.message);
-      return;
-    }
-
-    setPeakHourForm({
-      id: "",
-      delivery_app: "PICKME_FLASH",
-      label: "Peak Session",
-      start_time: "16:00",
-      end_time: "19:00",
-      is_active: true,
-    });
-
-    setSuccessText(
-      peakHourForm.id ? "Peak hour updated." : "Peak hour created.",
-    );
-    loadDeliveryData();
-  }
-
-  async function deletePeakHour(id: string) {
-    if (!window.confirm("Delete this peak hour session?")) return;
-
-    const { error } = await supabase
-      .from("delivery_peak_hours")
-      .delete()
-      .eq("id", id);
-
-    if (error) {
-      setErrorText(error.message);
-      return;
-    }
-
-    loadDeliveryData();
-  }
-
   return (
     <Page>
       <div className="space-y-5">
@@ -664,15 +906,16 @@ export default function AdminDeliveryManagement() {
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/65">
-                Manage daily delivery, scheduled dates, holiday delivery,
-                distance pricing, peak pricing, vehicle rules, and global
-                delivery settings.
+                Manage delivery mode, customer-visible sessions, blocked dates,
+                regular distance pricing, vehicle rules, and global delivery
+                settings.
               </p>
             </div>
 
             <Link
               to="/admin/dashboard"
-              className="w-fit rounded-2xl border border-brand-ink/20 bg-white/70 px-5 py-3 text-sm font-semibold text-brand-ink">
+              className="w-fit rounded-2xl border border-brand-ink/20 bg-white/70 px-5 py-3 text-sm font-semibold text-brand-ink"
+            >
               Dashboard
             </Link>
           </div>
@@ -688,7 +931,8 @@ export default function AdminDeliveryManagement() {
                   activeTab === tab.key
                     ? "bg-brand-ink text-brand-bg shadow-sm"
                     : "bg-white/60 text-brand-ink/65 hover:bg-white",
-                ].join(" ")}>
+                ].join(" ")}
+              >
                 {tab.label}
               </button>
             ))}
@@ -707,35 +951,48 @@ export default function AdminDeliveryManagement() {
           </div>
         )}
 
-        {activeTab === "patterns" && (
-          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-5 shadow-sm">
-            <h2 className="text-xl font-semibold text-brand-ink">
-              Delivery patterns
-            </h2>
+        {activeTab === "availability" && (
+          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-brand-ink">
+                  Delivery availability & schedule
+                </h2>
+
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/65">
+                  Choose how customers can select delivery sessions. The order
+                  page will show sessions from the selected delivery mode only.
+                </p>
+              </div>
+
+              <span className="w-fit rounded-2xl border border-brand-ink/10 bg-brand-bg/70 px-4 py-2 text-xs font-semibold text-brand-ink/70">
+                Current mode: {patternForm.delivery_mode}
+              </span>
+            </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
               <PatternCard
-                active={patternForm.delivery_mode === "EVERYDAY"}
-                title="Every day delivery"
-                description="Use normal business days with 3 delivery sessions."
-                onClick={() =>
-                  setPatternForm((p) => ({ ...p, delivery_mode: "EVERYDAY" }))
-                }
-              />
-
-              <PatternCard
                 active={patternForm.delivery_mode === "SCHEDULED"}
-                title="Scheduled delivery dates"
-                description="Only admin-created delivery dates and slots are shown."
+                title="Manual delivery sessions"
+                description="Create slots for exact dates. Supports daily, weekly, and monthly repeating creation."
                 onClick={() =>
                   setPatternForm((p) => ({ ...p, delivery_mode: "SCHEDULED" }))
                 }
               />
 
               <PatternCard
+                active={patternForm.delivery_mode === "EVERYDAY"}
+                title="Daily delivery allowed"
+                description="Create daily time slots once. They continue every day automatically."
+                onClick={() =>
+                  setPatternForm((p) => ({ ...p, delivery_mode: "EVERYDAY" }))
+                }
+              />
+
+              <PatternCard
                 active={patternForm.delivery_mode === "SPECIAL"}
-                title="Special delivery mode"
-                description="Use special holiday/event delivery dates."
+                title="Special date delivery"
+                description="Create delivery slots only for selected special dates."
                 onClick={() =>
                   setPatternForm((p) => ({ ...p, delivery_mode: "SPECIAL" }))
                 }
@@ -776,418 +1033,882 @@ export default function AdminDeliveryManagement() {
                   type="button"
                   disabled={saving}
                   onClick={savePatternSettings}
-                  className="w-full rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg">
-                  Save pattern
+                  className="w-full rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/40"
+                >
+                  {saving ? "Saving..." : "Save mode"}
                 </button>
               </div>
             </div>
 
-            <div className="mt-6 grid gap-5 lg:grid-cols-2">
-              <div className="rounded-3xl border border-black/10 bg-white/60 p-4">
+            {patternForm.delivery_mode === "SCHEDULED" && (
+              <div className="mt-6 rounded-3xl border border-black/10 bg-brand-bg/55 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="font-semibold text-brand-ink">
+                      Manual scheduled delivery sessions
+                    </h3>
+
+                    <p className="mt-1 text-sm text-brand-ink/60">
+                      Create delivery sessions for exact dates. Use repeat to
+                      generate many sessions at once.
+                    </p>
+                  </div>
+
+                  <span className="w-fit rounded-2xl border border-black/10 bg-white/70 px-4 py-2 text-xs font-semibold text-brand-ink/70">
+                    {upcomingManualSlots} upcoming manual slots
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-8">
+                  <Field label="Start date">
+                    <input
+                      type="date"
+                      value={manualScheduleForm.slot_date}
+                      onChange={(e) =>
+                        setManualScheduleForm((p) => ({
+                          ...p,
+                          slot_date: e.target.value,
+                        }))
+                      }
+                      className="input-order"
+                    />
+                  </Field>
+
+                  <Field label="End date">
+                    <input
+                      type="date"
+                      value={manualScheduleForm.end_date}
+                      onChange={(e) =>
+                        setManualScheduleForm((p) => ({
+                          ...p,
+                          end_date: e.target.value,
+                        }))
+                      }
+                      className="input-order"
+                    />
+                  </Field>
+
+                  <Field label="Repeat">
+                    <select
+                      className="input-order"
+                      value={manualScheduleForm.recurrence}
+                      onChange={(e) =>
+                        setManualScheduleForm((p) => ({
+                          ...p,
+                          recurrence: e.target.value as RecurrenceMode,
+                        }))
+                      }
+                    >
+                      <option value="NONE">No repeat</option>
+                      <option value="DAILY">Daily</option>
+                      <option value="WEEKLY">Weekly</option>
+                      <option value="MONTHLY">Monthly</option>
+                    </select>
+                  </Field>
+
+                  <Field label="Slot label">
+                    <input
+                      value={manualScheduleForm.slot_label}
+                      onChange={(e) =>
+                        setManualScheduleForm((p) => ({
+                          ...p,
+                          slot_label: e.target.value,
+                        }))
+                      }
+                      className="input-order"
+                    />
+                  </Field>
+
+                  <Field label="Start time">
+                    <input
+                      type="time"
+                      value={manualScheduleForm.start_time}
+                      onChange={(e) =>
+                        setManualScheduleForm((p) => ({
+                          ...p,
+                          start_time: e.target.value,
+                        }))
+                      }
+                      className="input-order"
+                    />
+                  </Field>
+
+                  <Field label="End time">
+                    <input
+                      type="time"
+                      value={manualScheduleForm.end_time}
+                      onChange={(e) =>
+                        setManualScheduleForm((p) => ({
+                          ...p,
+                          end_time: e.target.value,
+                        }))
+                      }
+                      className="input-order"
+                    />
+                  </Field>
+
+                  <Field label="Max orders">
+                    <input
+                      type="number"
+                      min={1}
+                      value={manualScheduleForm.max_orders}
+                      onChange={(e) =>
+                        setManualScheduleForm((p) => ({
+                          ...p,
+                          max_orders: Number(e.target.value),
+                        }))
+                      }
+                      className="input-order"
+                    />
+                  </Field>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={saveManualSchedule}
+                      disabled={saving}
+                      className="w-full rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/40"
+                    >
+                      {saving ? "Creating..." : "Create"}
+                    </button>
+                  </div>
+                </div>
+
+                <label className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-brand-ink/70">
+                  <input
+                    type="checkbox"
+                    checked={manualScheduleForm.is_available}
+                    onChange={(e) =>
+                      setManualScheduleForm((p) => ({
+                        ...p,
+                        is_available: e.target.checked,
+                      }))
+                    }
+                  />
+                  Available for customers
+                </label>
+
+                <div className="mt-5 overflow-x-auto rounded-3xl border border-black/10 bg-white/70">
+                  <table className="w-full min-w-[760px] text-left text-sm">
+                    <thead className="bg-brand-bg/70 text-xs uppercase tracking-widest text-brand-ink/55">
+                      <tr>
+                        <th className="px-4 py-3">Date</th>
+                        <th className="px-4 py-3">Session</th>
+                        <th className="px-4 py-3">Time</th>
+                        <th className="px-4 py-3">Max</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {slots.length ? (
+                        slots.map((slot) => (
+                          <tr
+                            key={slot.id}
+                            className="border-t border-black/10"
+                          >
+                            <td className="px-4 py-3 font-semibold text-brand-ink">
+                              {slot.slot_date}
+                            </td>
+
+                            <td className="px-4 py-3">{slot.slot_label}</td>
+
+                            <td className="px-4 py-3">
+                              {slot.start_time.slice(0, 5)} –{" "}
+                              {slot.end_time.slice(0, 5)}
+                            </td>
+
+                            <td className="px-4 py-3">{slot.max_orders}</td>
+
+                            <td className="px-4 py-3">
+                              <span
+                                className={[
+                                  "rounded-full px-3 py-1 text-xs font-semibold",
+                                  slot.is_available
+                                    ? "bg-green-50 text-green-700"
+                                    : "bg-red-50 text-red-700",
+                                ].join(" ")}
+                              >
+                                {slot.is_available ? "Available" : "Closed"}
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                                  onClick={() => deleteSlot(slot.id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="px-4 py-8 text-center text-sm text-brand-ink/55"
+                          >
+                            No manual delivery sessions created yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {patternForm.delivery_mode === "EVERYDAY" && (
+              <div className="mt-6 rounded-3xl border border-black/10 bg-brand-bg/55 p-4">
                 <h3 className="font-semibold text-brand-ink">
-                  No delivery dates / holidays
+                  Daily repeating delivery slots
                 </h3>
 
-                <div className="mt-4 flex gap-2">
-                  <input
-                    type="date"
-                    className="input-order"
-                    value={patternForm.no_delivery_date}
-                    onChange={(e) =>
-                      setPatternForm((p) => ({
-                        ...p,
-                        no_delivery_date: e.target.value,
-                      }))
-                    }
-                  />
+                <p className="mt-1 text-sm text-brand-ink/60">
+                  These slots repeat every day automatically. No need to create
+                  delivery dates one by one.
+                </p>
 
-                  <button
-                    type="button"
-                    onClick={addNoDeliveryDate}
-                    className="rounded-2xl bg-brand-ink px-4 text-sm font-semibold text-brand-bg">
-                    Add
-                  </button>
+                <div className="mt-4 grid gap-3 md:grid-cols-6">
+                  <Field label="Slot label">
+                    <input
+                      className="input-order"
+                      value={dailySlotForm.slot_label}
+                      onChange={(e) =>
+                        setDailySlotForm((p) => ({
+                          ...p,
+                          slot_label: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="Start time">
+                    <input
+                      type="time"
+                      className="input-order"
+                      value={dailySlotForm.start_time}
+                      onChange={(e) =>
+                        setDailySlotForm((p) => ({
+                          ...p,
+                          start_time: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="End time">
+                    <input
+                      type="time"
+                      className="input-order"
+                      value={dailySlotForm.end_time}
+                      onChange={(e) =>
+                        setDailySlotForm((p) => ({
+                          ...p,
+                          end_time: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="Max orders">
+                    <input
+                      type="number"
+                      min={1}
+                      className="input-order"
+                      value={dailySlotForm.max_orders}
+                      onChange={(e) =>
+                        setDailySlotForm((p) => ({
+                          ...p,
+                          max_orders: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="Status">
+                    <select
+                      className="input-order"
+                      value={dailySlotForm.is_available ? "true" : "false"}
+                      onChange={(e) =>
+                        setDailySlotForm((p) => ({
+                          ...p,
+                          is_available: e.target.value === "true",
+                        }))
+                      }
+                    >
+                      <option value="true">Available</option>
+                      <option value="false">Closed</option>
+                    </select>
+                  </Field>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={saveDailySlot}
+                      disabled={saving}
+                      className="w-full rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/40"
+                    >
+                      {dailySlotForm.id ? "Update" : "Add"}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="mt-4 grid gap-2">
-                  {noDeliveryDates.map((date) => (
-                    <RowShell key={date}>
-                      <span className="font-semibold text-brand-ink">
-                        {date}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeNoDeliveryDate(date)}
-                        className="text-xs font-semibold text-red-600">
-                        Delete
-                      </button>
-                    </RowShell>
-                  ))}
-                </div>
-              </div>
+                <div className="mt-5 grid gap-3">
+                  {dailyDeliverySlots.length ? (
+                    dailyDeliverySlots.map((slot) => (
+                      <RowShell key={slot.id}>
+                        <div>
+                          <p className="font-semibold text-brand-ink">
+                            {slot.slot_label}
+                          </p>
 
-              <div className="rounded-3xl border border-black/10 bg-white/60 p-4">
-                <h3 className="font-semibold text-brand-ink">
-                  Special delivery dates
-                </h3>
+                          <p className="text-sm text-brand-ink/60">
+                            {slot.start_time} – {slot.end_time} · Max{" "}
+                            {slot.max_orders} ·{" "}
+                            {slot.is_available ? "Available" : "Closed"}
+                          </p>
+                        </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                  <input
-                    type="date"
-                    className="input-order"
-                    value={patternForm.special_delivery_date}
-                    onChange={(e) =>
-                      setPatternForm((p) => ({
-                        ...p,
-                        special_delivery_date: e.target.value,
-                      }))
-                    }
-                  />
-
-                  <input
-                    className="input-order"
-                    placeholder="Label"
-                    value={patternForm.special_delivery_label}
-                    onChange={(e) =>
-                      setPatternForm((p) => ({
-                        ...p,
-                        special_delivery_label: e.target.value,
-                      }))
-                    }
-                  />
-
-                  <button
-                    type="button"
-                    onClick={addSpecialDeliveryDate}
-                    className="rounded-2xl bg-brand-ink px-4 text-sm font-semibold text-brand-bg">
-                    Add
-                  </button>
-                </div>
-
-                <div className="mt-4 grid gap-2">
-                  {specialDeliveryDates.map((item) => (
-                    <RowShell key={item.date}>
-                      <span>
-                        <span className="font-semibold text-brand-ink">
-                          {item.date}
-                        </span>
-                        <span className="ml-2 text-sm text-brand-ink/55">
-                          {item.label}
-                        </span>
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => removeSpecialDeliveryDate(item.date)}
-                        className="text-xs font-semibold text-red-600">
-                        Delete
-                      </button>
-                    </RowShell>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {activeTab === "scheduled" && (
-          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-5 shadow-sm">
-            <h2 className="text-xl font-semibold text-brand-ink">
-              Scheduled delivery slots
-            </h2>
-
-            <div className="mt-5 rounded-3xl border border-black/10 bg-brand-bg/55 p-4">
-              <div className="grid gap-3 md:grid-cols-6">
-                <input
-                  type="date"
-                  value={slotForm.slot_date}
-                  onChange={(e) =>
-                    setSlotForm((p) => ({ ...p, slot_date: e.target.value }))
-                  }
-                  className="input-order"
-                />
-
-                <select
-                  value={slotForm.slot_label}
-                  onChange={(e) =>
-                    setSlotForm((p) => ({ ...p, slot_label: e.target.value }))
-                  }
-                  className="input-order">
-                  <option>Morning Delivery</option>
-                  <option>Afternoon Delivery</option>
-                  <option>Evening Delivery</option>
-                  <option>Special Delivery</option>
-                </select>
-
-                <input
-                  type="time"
-                  value={slotForm.start_time}
-                  onChange={(e) =>
-                    setSlotForm((p) => ({ ...p, start_time: e.target.value }))
-                  }
-                  className="input-order"
-                />
-
-                <input
-                  type="time"
-                  value={slotForm.end_time}
-                  onChange={(e) =>
-                    setSlotForm((p) => ({ ...p, end_time: e.target.value }))
-                  }
-                  className="input-order"
-                />
-
-                <input
-                  type="number"
-                  min={1}
-                  value={slotForm.max_orders}
-                  onChange={(e) =>
-                    setSlotForm((p) => ({
-                      ...p,
-                      max_orders: Number(e.target.value),
-                    }))
-                  }
-                  className="input-order"
-                />
-
-                <button
-                  type="button"
-                  onClick={saveSlot}
-                  disabled={saving}
-                  className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg">
-                  {slotForm.id ? "Update" : "Create"}
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-5 overflow-x-auto rounded-3xl border border-black/10 bg-white/70">
-              <table className="min-w-[760px] w-full text-left text-sm">
-                <thead className="bg-brand-bg/70 text-xs uppercase tracking-widest text-brand-ink/55">
-                  <tr>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Session</th>
-                    <th className="px-4 py-3">Time</th>
-                    <th className="px-4 py-3">Max</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {slots.map((slot) => (
-                    <tr key={slot.id} className="border-t border-black/10">
-                      <td className="px-4 py-3 font-semibold text-brand-ink">
-                        {slot.slot_date}
-                      </td>
-                      <td className="px-4 py-3">{slot.slot_label}</td>
-                      <td className="px-4 py-3">
-                        {slot.start_time.slice(0, 5)} –{" "}
-                        {slot.end_time.slice(0, 5)}
-                      </td>
-                      <td className="px-4 py-3">{slot.max_orders}</td>
-                      <td className="px-4 py-3">
-                        {slot.is_available ? "Available" : "Closed"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex gap-2">
                           <button
+                            type="button"
                             className="rounded-xl border px-3 py-1.5 text-xs font-semibold"
-                            onClick={() => setSlotForm(slot)}>
+                            onClick={() => setDailySlotForm(slot)}
+                          >
                             Edit
                           </button>
+
                           <button
+                            type="button"
                             className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
-                            onClick={() => deleteSlot(slot.id)}>
+                            onClick={() => deleteDailySlot(slot.id)}
+                          >
                             Delete
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </RowShell>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+                      No daily delivery slots added yet. Customers will not see
+                      delivery sessions until you add at least one daily slot.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {patternForm.delivery_mode === "SPECIAL" && (
+              <div className="mt-6 rounded-3xl border border-black/10 bg-brand-bg/55 p-4">
+                <h3 className="font-semibold text-brand-ink">
+                  Special date delivery slots
+                </h3>
+
+                <p className="mt-1 text-sm text-brand-ink/60">
+                  Add exact dates and time slots for special delivery days.
+                </p>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-7">
+                  <Field label="Date">
+                    <input
+                      type="date"
+                      className="input-order"
+                      value={specialSlotForm.slot_date}
+                      onChange={(e) =>
+                        setSpecialSlotForm((p) => ({
+                          ...p,
+                          slot_date: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="Label">
+                    <input
+                      className="input-order"
+                      value={specialSlotForm.slot_label}
+                      onChange={(e) =>
+                        setSpecialSlotForm((p) => ({
+                          ...p,
+                          slot_label: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="Start time">
+                    <input
+                      type="time"
+                      className="input-order"
+                      value={specialSlotForm.start_time}
+                      onChange={(e) =>
+                        setSpecialSlotForm((p) => ({
+                          ...p,
+                          start_time: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="End time">
+                    <input
+                      type="time"
+                      className="input-order"
+                      value={specialSlotForm.end_time}
+                      onChange={(e) =>
+                        setSpecialSlotForm((p) => ({
+                          ...p,
+                          end_time: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="Max">
+                    <input
+                      type="number"
+                      min={1}
+                      className="input-order"
+                      value={specialSlotForm.max_orders}
+                      onChange={(e) =>
+                        setSpecialSlotForm((p) => ({
+                          ...p,
+                          max_orders: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+
+                  <Field label="Status">
+                    <select
+                      className="input-order"
+                      value={specialSlotForm.is_available ? "true" : "false"}
+                      onChange={(e) =>
+                        setSpecialSlotForm((p) => ({
+                          ...p,
+                          is_available: e.target.value === "true",
+                        }))
+                      }
+                    >
+                      <option value="true">Available</option>
+                      <option value="false">Closed</option>
+                    </select>
+                  </Field>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={saveSpecialSlot}
+                      disabled={saving}
+                      className="w-full rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/40"
+                    >
+                      {specialSlotForm.id ? "Update" : "Add"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3">
+                  {specialDeliverySlots.length ? (
+                    specialDeliverySlots.map((slot) => (
+                      <RowShell key={slot.id}>
+                        <div>
+                          <p className="font-semibold text-brand-ink">
+                            {slot.slot_date} — {slot.slot_label}
+                          </p>
+
+                          <p className="text-sm text-brand-ink/60">
+                            {slot.start_time} – {slot.end_time} · Max{" "}
+                            {slot.max_orders} ·{" "}
+                            {slot.is_available ? "Available" : "Closed"}
+                          </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="rounded-xl border px-3 py-1.5 text-xs font-semibold"
+                            onClick={() => setSpecialSlotForm(slot)}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                            onClick={() => deleteSpecialSlot(slot.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </RowShell>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+                      No special delivery slots added yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 rounded-3xl border border-black/10 bg-white/60 p-4">
+              <h3 className="font-semibold text-brand-ink">
+                No delivery dates and times
+              </h3>
+
+              <p className="mt-1 text-sm text-brand-ink/60">
+                Block a full day or only a specific time range. These blocks
+                apply to manual, daily, and special delivery modes.
+              </p>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-7">
+                <Field label="Date">
+                  <input
+                    type="date"
+                    className="input-order"
+                    value={noDeliveryBlockForm.block_date}
+                    onChange={(e) =>
+                      setNoDeliveryBlockForm((p) => ({
+                        ...p,
+                        block_date: e.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+
+                <Field label="Block type">
+                  <select
+                    className="input-order"
+                    value={noDeliveryBlockForm.full_day ? "true" : "false"}
+                    onChange={(e) =>
+                      setNoDeliveryBlockForm((p) => ({
+                        ...p,
+                        full_day: e.target.value === "true",
+                      }))
+                    }
+                  >
+                    <option value="true">Full day</option>
+                    <option value="false">Time range</option>
+                  </select>
+                </Field>
+
+                <Field label="Start time">
+                  <input
+                    type="time"
+                    className="input-order"
+                    disabled={noDeliveryBlockForm.full_day}
+                    value={noDeliveryBlockForm.start_time}
+                    onChange={(e) =>
+                      setNoDeliveryBlockForm((p) => ({
+                        ...p,
+                        start_time: e.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+
+                <Field label="End time">
+                  <input
+                    type="time"
+                    className="input-order"
+                    disabled={noDeliveryBlockForm.full_day}
+                    value={noDeliveryBlockForm.end_time}
+                    onChange={(e) =>
+                      setNoDeliveryBlockForm((p) => ({
+                        ...p,
+                        end_time: e.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+
+                <Field label="Reason">
+                  <input
+                    className="input-order"
+                    placeholder="Holiday, break..."
+                    value={noDeliveryBlockForm.reason}
+                    onChange={(e) =>
+                      setNoDeliveryBlockForm((p) => ({
+                        ...p,
+                        reason: e.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+
+                <div className="flex items-end md:col-span-2">
+                  <button
+                    type="button"
+                    onClick={saveNoDeliveryBlock}
+                    disabled={saving}
+                    className="w-full rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/40"
+                  >
+                    {noDeliveryBlockForm.id ? "Update block" : "Add block"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3">
+                {noDeliveryBlocks.length ? (
+                  noDeliveryBlocks.map((block) => (
+                    <RowShell key={block.id}>
+                      <div>
+                        <p className="font-semibold text-brand-ink">
+                          {block.block_date} — {block.reason || "No delivery"}
+                        </p>
+
+                        <p className="text-sm text-brand-ink/60">
+                          {block.full_day
+                            ? "Full day blocked"
+                            : `${block.start_time} – ${block.end_time}`}
+                        </p>
+                      </div>
+
+                      {!block.id.startsWith("old-") && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="rounded-xl border px-3 py-1.5 text-xs font-semibold"
+                            onClick={() => setNoDeliveryBlockForm(block)}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                            onClick={() => deleteNoDeliveryBlock(block.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </RowShell>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-black/10 bg-brand-bg/50 p-4 text-sm text-brand-ink/55">
+                    No delivery blocks added.
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         )}
 
         {activeTab === "pricing" && (
-          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-5 shadow-sm">
-            <h2 className="text-xl font-semibold text-brand-ink">
-              Distance pricing table
-            </h2>
+          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-brand-ink">
+                  Regular delivery pricing
+                </h2>
 
-            <div className="mt-5 flex gap-2 overflow-x-auto rounded-2xl border border-black/10 bg-brand-bg/60 p-2">
-              {priceTables.map((table) => (
-                <button
-                  key={table.key}
-                  type="button"
-                  onClick={() => setActivePriceTable(table.key)}
-                  className={[
-                    "shrink-0 rounded-xl px-4 py-2.5 text-xs font-semibold transition",
-                    activePriceTable === table.key
-                      ? "bg-brand-ink text-brand-bg"
-                      : "bg-white/70 text-brand-ink/65 hover:bg-white",
-                  ].join(" ")}>
-                  {table.label}
-                </button>
-              ))}
-
-              <button
-                type="button"
-                onClick={() => setShowPeakModal(true)}
-                className="shrink-0 rounded-xl border border-brand-ink/20 bg-white px-4 py-2.5 text-xs font-semibold text-brand-ink">
-                Peak hours
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-                <p className="text-xs font-semibold tracking-widest text-brand-ink/50">
-                  FIRST 1KM PRICE
-                </p>
-                <p className="mt-2 text-xl font-semibold text-brand-ink">
-                  {formatLkr(firstKmPrice)}
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/65">
+                  Use one simple pricing table for customers. Add a price for
+                  each vehicle and distance. Example: if the road distance is
+                  4.2km, the order page uses the 5km pricing row.
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-                <p className="text-xs font-semibold tracking-widest text-brand-ink/50">
-                  ADDITIONAL 1KM PRICE
-                </p>
-                <p className="mt-2 text-xl font-semibold text-brand-ink">
-                  {formatLkr(additionalKmPrice)}
-                </p>
-              </div>
+              <span className="w-fit rounded-2xl border border-brand-ink/10 bg-brand-bg/70 px-4 py-2 text-xs font-semibold text-brand-ink/70">
+                One regular table only
+              </span>
             </div>
 
-            <p className="mt-1 text-sm text-brand-ink/60">
-              Add per-distance prices. Peak pricing is stored separately in the
-              same row.
-            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <StatCard
+                label="Active price rows"
+                value={String(activePriceRows)}
+              />
+
+              <StatCard
+                label="Distance coverage"
+                value={
+                  visibleDistancePrices.length
+                    ? `${minDistanceKm}km – ${maxDistanceKm}km`
+                    : "-"
+                }
+              />
+
+              <StatCard label="Pricing mode" value="Regular delivery" />
+            </div>
 
             <div className="mt-5 grid gap-3 rounded-3xl border border-black/10 bg-brand-bg/55 p-4 md:grid-cols-6">
-              <input
-                type="number"
-                min={1}
-                className="input-order"
-                value={priceForm.distance_km}
-                onChange={(e) =>
-                  setPriceForm((p) => ({
-                    ...p,
-                    distance_km: Number(e.target.value),
-                  }))
-                }
-                placeholder="Distance km"
-              />
+              <Field label="Distance km">
+                <input
+                  type="number"
+                  min={1}
+                  className="input-order"
+                  value={priceForm.distance_km}
+                  onChange={(e) =>
+                    setPriceForm((p) => ({
+                      ...p,
+                      distance_km: Number(e.target.value),
+                    }))
+                  }
+                  placeholder="Distance km"
+                />
+              </Field>
 
-              <select
-                className="input-order"
-                value={priceForm.vehicle_type}
-                onChange={(e) =>
-                  setPriceForm((p) => ({ ...p, vehicle_type: e.target.value }))
-                }>
-                <option>BIKE</option>
-                <option>THREE_WHEEL</option>
-                <option>CAR</option>
-                <option>VAN</option>
-              </select>
+              <Field label="Vehicle">
+                <select
+                  className="input-order"
+                  value={priceForm.vehicle_type}
+                  onChange={(e) =>
+                    setPriceForm((p) => ({
+                      ...p,
+                      vehicle_type: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="BIKE">Bike</option>
+                  <option value="THREE_WHEEL">Three wheel</option>
+                  <option value="CAR">Car</option>
+                  <option value="VAN">Van</option>
+                </select>
+              </Field>
 
-              <input
-                type="number"
-                className="input-order"
-                value={priceForm.normal_price_lkr}
-                onChange={(e) =>
-                  setPriceForm((p) => ({
-                    ...p,
-                    normal_price_lkr: Number(e.target.value),
-                  }))
-                }
-                placeholder="Normal price"
-              />
+              <Field label="Regular fee">
+                <input
+                  type="number"
+                  className="input-order"
+                  value={priceForm.normal_price_lkr}
+                  onChange={(e) =>
+                    setPriceForm((p) => ({
+                      ...p,
+                      normal_price_lkr: Number(e.target.value),
+                      peak_price_lkr: Number(e.target.value),
+                    }))
+                  }
+                  placeholder="Regular fee"
+                />
+              </Field>
 
-              <input
-                type="number"
-                className="input-order"
-                value={priceForm.peak_price_lkr}
-                onChange={(e) =>
-                  setPriceForm((p) => ({
-                    ...p,
-                    peak_price_lkr: Number(e.target.value),
-                  }))
-                }
-                placeholder="Peak price"
-              />
+              <Field label="Status">
+                <select
+                  className="input-order"
+                  value={priceForm.is_active ? "true" : "false"}
+                  onChange={(e) =>
+                    setPriceForm((p) => ({
+                      ...p,
+                      is_active: e.target.value === "true",
+                    }))
+                  }
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </Field>
 
-              <select
-                className="input-order"
-                value={priceForm.is_active ? "true" : "false"}
-                onChange={(e) =>
-                  setPriceForm((p) => ({
-                    ...p,
-                    is_active: e.target.value === "true",
-                  }))
-                }>
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-              </select>
+              <div className="flex items-end md:col-span-2">
+                <div className="grid w-full grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={savePrice}
+                    className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/40"
+                  >
+                    {priceForm.id ? "Update" : "Create"}
+                  </button>
 
-              <button
-                type="button"
-                disabled={saving}
-                onClick={savePrice}
-                className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg">
-                {priceForm.id ? "Update" : "Create"}
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setPriceForm(resetPriceForm())}
+                    className="rounded-2xl border border-brand-ink/20 bg-white/70 px-5 py-3 text-sm font-semibold text-brand-ink"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="mt-5 overflow-x-auto rounded-3xl border border-black/10 bg-white/70">
-              <table className="min-w-[820px] w-full text-left text-sm">
+              <table className="w-full min-w-[760px] text-left text-sm">
                 <thead className="bg-brand-bg/70 text-xs uppercase tracking-widest text-brand-ink/55">
                   <tr>
                     <th className="px-4 py-3">Vehicle</th>
                     <th className="px-4 py-3">Distance</th>
-                    <th className="px-4 py-3">Normal</th>
-                    <th className="px-4 py-3">Peak</th>
+                    <th className="px-4 py-3">Regular fee</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {visibleDistancePrices.map((price) => (
-                    <tr key={price.id} className="border-t border-black/10">
-                      <td className="px-4 py-3 font-semibold text-brand-ink">
-                        {vehicleIcon(price.vehicle_type)} {price.vehicle_type}
-                      </td>
-                      <td className="px-4 py-3">{price.distance_km}km</td>
-                      <td className="px-4 py-3">
-                        {formatLkr(price.normal_price_lkr)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatLkr(price.peak_price_lkr)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {price.is_active ? "Active" : "Inactive"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            className="rounded-xl border px-3 py-1.5 text-xs font-semibold"
-                            onClick={() => {
-                              setPriceForm(price);
-                              setShowPriceModal(true);
-                            }}>
-                            Edit
-                          </button>
-                          <button
-                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
-                            onClick={() => deletePrice(price.id)}>
-                            Delete
-                          </button>
-                        </div>
+                  {visibleDistancePrices.length ? (
+                    visibleDistancePrices.map((price) => (
+                      <tr key={price.id} className="border-t border-black/10">
+                        <td className="px-4 py-3 font-semibold text-brand-ink">
+                          {vehicleIcon(price.vehicle_type)}{" "}
+                          {vehicleName(price.vehicle_type)}
+                        </td>
+
+                        <td className="px-4 py-3">{price.distance_km}km</td>
+
+                        <td className="px-4 py-3">
+                          {formatLkr(price.normal_price_lkr)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <span
+                            className={[
+                              "rounded-full px-3 py-1 text-xs font-semibold",
+                              price.is_active
+                                ? "bg-green-50 text-green-700"
+                                : "bg-red-50 text-red-700",
+                            ].join(" ")}
+                          >
+                            {price.is_active ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              className="rounded-xl border px-3 py-1.5 text-xs font-semibold"
+                              onClick={() =>
+                                setPriceForm({
+                                  id: price.id,
+                                  price_table_key: REGULAR_PRICE_TABLE_KEY,
+                                  distance_km: price.distance_km,
+                                  vehicle_type: price.vehicle_type,
+                                  normal_price_lkr: price.normal_price_lkr,
+                                  peak_price_lkr: price.normal_price_lkr,
+                                  is_active: price.is_active,
+                                })
+                              }
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                              onClick={() => deletePrice(price.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-4 py-8 text-center text-sm text-brand-ink/55"
+                      >
+                        No regular delivery prices created yet.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1195,122 +1916,175 @@ export default function AdminDeliveryManagement() {
         )}
 
         {activeTab === "vehicles" && (
-          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-5 shadow-sm">
-            <h2 className="text-xl font-semibold text-brand-ink">
-              Vehicle rules
-            </h2>
+          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-brand-ink">
+                  Vehicle rules
+                </h2>
 
-            <div className="mt-5 grid gap-3 rounded-3xl border border-black/10 bg-brand-bg/55 p-4 md:grid-cols-5">
-              <select
-                className="input-order"
-                value={vehicleForm.vehicle_type}
-                onChange={(e) =>
-                  setVehicleForm((p) => ({
-                    ...p,
-                    vehicle_type: e.target.value,
-                  }))
-                }>
-                <option>BIKE</option>
-                <option>THREE_WHEEL</option>
-                <option>CAR</option>
-                <option>VAN</option>
-              </select>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/65">
+                  Choose which vehicle type should be used based on the total
+                  item quantity in the cart.
+                </p>
+              </div>
 
-              <input
-                type="number"
-                className="input-order"
-                value={vehicleForm.min_quantity}
-                onChange={(e) =>
-                  setVehicleForm((p) => ({
-                    ...p,
-                    min_quantity: Number(e.target.value),
-                  }))
-                }
-                placeholder="Min qty"
-              />
+              <span className="w-fit rounded-2xl border border-brand-ink/10 bg-brand-bg/70 px-4 py-2 text-xs font-semibold text-brand-ink/70">
+                {vehicleRules.filter((rule) => rule.is_active).length} active
+                rules
+              </span>
+            </div>
 
-              <input
-                type="number"
-                className="input-order"
-                value={vehicleForm.max_quantity}
-                onChange={(e) =>
-                  setVehicleForm((p) => ({
-                    ...p,
-                    max_quantity: e.target.value,
-                  }))
-                }
-                placeholder="Max qty optional"
-              />
+            <div className="mt-5 grid gap-3 rounded-3xl border border-black/10 bg-brand-bg/55 p-4 md:grid-cols-6">
+              <Field label="Vehicle">
+                <select
+                  className="input-order"
+                  value={vehicleForm.vehicle_type}
+                  onChange={(e) =>
+                    setVehicleForm((p) => ({
+                      ...p,
+                      vehicle_type: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="BIKE">Bike</option>
+                  <option value="THREE_WHEEL">Three wheel</option>
+                  <option value="CAR">Car</option>
+                  <option value="VAN">Van</option>
+                </select>
+              </Field>
 
-              <select
-                className="input-order"
-                value={vehicleForm.is_active ? "true" : "false"}
-                onChange={(e) =>
-                  setVehicleForm((p) => ({
-                    ...p,
-                    is_active: e.target.value === "true",
-                  }))
-                }>
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-              </select>
+              <Field label="Min qty">
+                <input
+                  type="number"
+                  className="input-order"
+                  value={vehicleForm.min_quantity}
+                  onChange={(e) =>
+                    setVehicleForm((p) => ({
+                      ...p,
+                      min_quantity: Number(e.target.value),
+                    }))
+                  }
+                  placeholder="Min qty"
+                />
+              </Field>
 
-              <button
-                type="button"
-                disabled={saving}
-                onClick={saveVehicleRule}
-                className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg">
-                {vehicleForm.id ? "Update" : "Create"}
-              </button>
+              <Field label="Max qty optional">
+                <input
+                  type="number"
+                  className="input-order"
+                  value={vehicleForm.max_quantity}
+                  onChange={(e) =>
+                    setVehicleForm((p) => ({
+                      ...p,
+                      max_quantity: e.target.value,
+                    }))
+                  }
+                  placeholder="Max qty optional"
+                />
+              </Field>
+
+              <Field label="Status">
+                <select
+                  className="input-order"
+                  value={vehicleForm.is_active ? "true" : "false"}
+                  onChange={(e) =>
+                    setVehicleForm((p) => ({
+                      ...p,
+                      is_active: e.target.value === "true",
+                    }))
+                  }
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </Field>
+
+              <div className="flex items-end md:col-span-2">
+                <div className="grid w-full grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={saveVehicleRule}
+                    className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/40"
+                  >
+                    {vehicleForm.id ? "Update" : "Create"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setVehicleForm(resetVehicleForm())}
+                    className="rounded-2xl border border-brand-ink/20 bg-white/70 px-5 py-3 text-sm font-semibold text-brand-ink"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="mt-5 grid gap-3">
-              {vehicleRules.map((rule) => (
-                <RowShell key={rule.id}>
-                  <div>
-                    <p className="font-semibold text-brand-ink">
-                      {rule.vehicle_type}
-                    </p>
-                    <p className="text-sm text-brand-ink/60">
-                      Quantity {rule.min_quantity} –{" "}
-                      {rule.max_quantity ?? "above"} ·{" "}
-                      {rule.is_active ? "Active" : "Inactive"}
-                    </p>
-                  </div>
+              {vehicleRules.length ? (
+                vehicleRules.map((rule) => (
+                  <RowShell key={rule.id}>
+                    <div>
+                      <p className="font-semibold text-brand-ink">
+                        {vehicleIcon(rule.vehicle_type)}{" "}
+                        {vehicleName(rule.vehicle_type)}
+                      </p>
 
-                  <div className="flex gap-2">
-                    <button
-                      className="rounded-xl border px-3 py-1.5 text-xs font-semibold"
-                      onClick={() =>
-                        setVehicleForm({
-                          id: rule.id,
-                          vehicle_type: rule.vehicle_type,
-                          min_quantity: rule.min_quantity,
-                          max_quantity: rule.max_quantity
-                            ? String(rule.max_quantity)
-                            : "",
-                          is_active: rule.is_active,
-                        })
-                      }>
-                      Edit
-                    </button>
-                    <button
-                      className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
-                      onClick={() => deleteVehicleRule(rule.id)}>
-                      Delete
-                    </button>
-                  </div>
-                </RowShell>
-              ))}
+                      <p className="text-sm text-brand-ink/60">
+                        Quantity {rule.min_quantity} –{" "}
+                        {rule.max_quantity ?? "above"} ·{" "}
+                        {rule.is_active ? "Active" : "Inactive"}
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="rounded-xl border px-3 py-1.5 text-xs font-semibold"
+                        onClick={() =>
+                          setVehicleForm({
+                            id: rule.id,
+                            vehicle_type: rule.vehicle_type,
+                            min_quantity: rule.min_quantity,
+                            max_quantity: rule.max_quantity
+                              ? String(rule.max_quantity)
+                              : "",
+                            is_active: rule.is_active,
+                          })
+                        }
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                        onClick={() => deleteVehicleRule(rule.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </RowShell>
+                ))
+              ) : (
+                <EmptyState text="No vehicle rules created yet." />
+              )}
             </div>
           </section>
         )}
 
         {activeTab === "settings" && (
-          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-5 shadow-sm">
+          <section className="rounded-[2rem] border border-black/10 bg-white/60 p-5 shadow-sm sm:p-6">
             <h2 className="text-xl font-semibold text-brand-ink">
               Delivery settings
             </h2>
+
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/65">
+              These settings are applied after the regular delivery price is
+              selected from the distance table.
+            </p>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field label="Safety margin percentage">
@@ -1324,6 +2098,7 @@ export default function AdminDeliveryManagement() {
                       safety_margin_percent: e.target.value,
                     }))
                   }
+                  placeholder="Example: 10"
                 />
               </Field>
 
@@ -1338,264 +2113,25 @@ export default function AdminDeliveryManagement() {
                       round_to_lkr: e.target.value,
                     }))
                   }
+                  placeholder="Example: 50"
                 />
               </Field>
+            </div>
+
+            <div className="mt-5 rounded-3xl border border-black/10 bg-brand-bg/60 p-4 text-sm leading-relaxed text-brand-ink/65">
+              Example: if regular fee is LKR 480, safety margin is 10%, and
+              rounding is 50, the customer delivery fee becomes LKR 550.
             </div>
 
             <button
               type="button"
               disabled={saving}
               onClick={saveCommonSettings}
-              className="mt-5 rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg">
-              Save settings
+              className="mt-5 rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/40"
+            >
+              {saving ? "Saving..." : "Save settings"}
             </button>
           </section>
-        )}
-
-        {showPeakModal && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4">
-            <div className="w-full max-w-3xl rounded-[2rem] bg-white p-5 shadow-2xl">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-semibold text-brand-ink">
-                    Peak hours
-                  </h3>
-                  <p className="mt-1 text-sm text-brand-ink/60">
-                    Add, edit, and delete PickMe Flash / Uber Parcel peak
-                    sessions.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowPeakModal(false)}
-                  className="rounded-xl border px-3 py-2 text-xs font-semibold">
-                  Close
-                </button>
-              </div>
-
-              <div className="mt-5 grid gap-3 rounded-3xl border border-black/10 bg-brand-bg/60 p-4 md:grid-cols-6">
-                <select
-                  className="input-order"
-                  value={peakHourForm.delivery_app}
-                  onChange={(e) =>
-                    setPeakHourForm((p) => ({
-                      ...p,
-                      delivery_app: e.target.value as
-                        | "PICKME_FLASH"
-                        | "UBER_PARCEL",
-                    }))
-                  }>
-                  <option value="PICKME_FLASH">PickMe Flash</option>
-                  <option value="UBER_PARCEL">Uber Parcel</option>
-                </select>
-
-                <input
-                  className="input-order md:col-span-2"
-                  value={peakHourForm.label}
-                  onChange={(e) =>
-                    setPeakHourForm((p) => ({ ...p, label: e.target.value }))
-                  }
-                  placeholder="Peak label"
-                />
-
-                <input
-                  type="time"
-                  className="input-order"
-                  value={peakHourForm.start_time}
-                  onChange={(e) =>
-                    setPeakHourForm((p) => ({
-                      ...p,
-                      start_time: e.target.value,
-                    }))
-                  }
-                />
-
-                <input
-                  type="time"
-                  className="input-order"
-                  value={peakHourForm.end_time}
-                  onChange={(e) =>
-                    setPeakHourForm((p) => ({ ...p, end_time: e.target.value }))
-                  }
-                />
-
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={savePeakHour}
-                  className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg">
-                  {peakHourForm.id ? "Update" : "Create"}
-                </button>
-              </div>
-
-              <div className="mt-5 grid gap-3">
-                {peakHours.length ? (
-                  peakHours.map((hour) => (
-                    <div
-                      key={hour.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/10 bg-brand-bg/50 p-4 text-sm">
-                      <div>
-                        <p className="font-semibold text-brand-ink">
-                          {hour.delivery_app === "PICKME_FLASH"
-                            ? "PickMe Flash"
-                            : "Uber Parcel"}{" "}
-                          — {hour.label}
-                        </p>
-
-                        <p className="mt-1 text-brand-ink/60">
-                          {hour.start_time.slice(0, 5)} –{" "}
-                          {hour.end_time.slice(0, 5)} ·{" "}
-                          {hour.is_active ? "Active" : "Inactive"}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className="rounded-xl border px-3 py-1.5 text-xs font-semibold"
-                          onClick={() => setPeakHourForm(hour)}>
-                          Edit
-                        </button>
-
-                        <button
-                          type="button"
-                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
-                          onClick={() => deletePeakHour(hour.id)}>
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-black/10 bg-brand-bg/50 p-4 text-sm text-brand-ink/60">
-                    No peak hour sessions added yet.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showPriceModal && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 px-4">
-            <div className="w-full max-w-xl rounded-[2rem] bg-white p-5 shadow-2xl">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-semibold text-brand-ink">
-                    Edit distance price
-                  </h3>
-                  <p className="mt-1 text-sm text-brand-ink/60">
-                    Update distance, vehicle, price, and active status.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowPriceModal(false)}
-                  className="rounded-xl border px-3 py-2 text-xs font-semibold">
-                  Close
-                </button>
-              </div>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <Field label="Distance km">
-                  <input
-                    type="number"
-                    min={1}
-                    className="input-order"
-                    value={priceForm.distance_km}
-                    onChange={(e) =>
-                      setPriceForm((p) => ({
-                        ...p,
-                        distance_km: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </Field>
-
-                <Field label="Vehicle">
-                  <select
-                    className="input-order"
-                    value={priceForm.vehicle_type}
-                    onChange={(e) =>
-                      setPriceForm((p) => ({
-                        ...p,
-                        vehicle_type: e.target.value,
-                      }))
-                    }>
-                    <option>BIKE</option>
-                    <option>THREE_WHEEL</option>
-                    <option>CAR</option>
-                    <option>VAN</option>
-                  </select>
-                </Field>
-
-                <Field label="Normal price">
-                  <input
-                    type="number"
-                    className="input-order"
-                    value={priceForm.normal_price_lkr}
-                    onChange={(e) =>
-                      setPriceForm((p) => ({
-                        ...p,
-                        normal_price_lkr: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </Field>
-
-                <Field label="Peak price">
-                  <input
-                    type="number"
-                    className="input-order"
-                    value={priceForm.peak_price_lkr}
-                    onChange={(e) =>
-                      setPriceForm((p) => ({
-                        ...p,
-                        peak_price_lkr: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </Field>
-
-                <Field label="Status">
-                  <select
-                    className="input-order"
-                    value={priceForm.is_active ? "true" : "false"}
-                    onChange={(e) =>
-                      setPriceForm((p) => ({
-                        ...p,
-                        is_active: e.target.value === "true",
-                      }))
-                    }>
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
-                  </select>
-                </Field>
-              </div>
-
-              <div className="mt-5 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPriceModal(false)}
-                  className="rounded-2xl border border-brand-ink/20 px-5 py-3 text-sm font-semibold text-brand-ink">
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={async () => {
-                    await savePrice();
-                    setShowPriceModal(false);
-                  }}
-                  className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg">
-                  {saving ? "Saving..." : "Save changes"}
-                </button>
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </Page>
@@ -1639,13 +2175,16 @@ function PatternCard({
         active
           ? "border-brand-ink bg-brand-ink text-brand-bg"
           : "border-black/10 bg-white/70 text-brand-ink hover:bg-white",
-      ].join(" ")}>
+      ].join(" ")}
+    >
       <p className="text-base font-semibold">{title}</p>
+
       <p
         className={[
           "mt-2 text-sm leading-relaxed",
           active ? "text-brand-bg/70" : "text-brand-ink/60",
-        ].join(" ")}>
+        ].join(" ")}
+      >
         {description}
       </p>
     </button>
@@ -1656,6 +2195,26 @@ function RowShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 p-4 text-sm">
       {children}
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+      <p className="text-xs font-semibold tracking-widest text-brand-ink/50">
+        {label}
+      </p>
+
+      <p className="mt-2 text-xl font-semibold text-brand-ink">{value}</p>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="rounded-2xl border border-black/10 bg-brand-bg/50 p-4 text-sm text-brand-ink/55">
+      {text}
     </div>
   );
 }
