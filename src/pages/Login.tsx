@@ -3,8 +3,7 @@
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
-import { loginWithEmail, loginWithGoogle } from "../lib/auth";
-import { supabase } from "../lib/supabase";
+import { loginWithEmail } from "../lib/auth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,39 +21,16 @@ export default function Login() {
       setIsSubmitting(true);
       setErrorText("");
 
-      await loginWithEmail(email.trim(), password);
+      const { user } = await loginWithEmail(email, password);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data: profile } = await import("../lib/supabase").then((m) =>
-          m.supabase.from("profiles").select("role").eq("id", user.id).single(),
-        );
-
-        if (profile?.role === "admin") {
-          navigate("/admin/dashboard");
-        } else {
-          navigate("/account");
-        }
-      }
+      navigate(
+        user.role === "admin"
+          ? "/admin/dashboard"
+          : "/account",
+      );
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : "Could not login.");
     } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleGoogleLogin() {
-    try {
-      setIsSubmitting(true);
-      setErrorText("");
-      await loginWithGoogle();
-    } catch (error) {
-      setErrorText(
-        error instanceof Error ? error.message : "Google login failed.",
-      );
       setIsSubmitting(false);
     }
   }
@@ -92,6 +68,7 @@ export default function Login() {
               placeholder="you@example.com"
               type="email"
               autoComplete="email"
+              required
             />
           </div>
 
@@ -106,6 +83,7 @@ export default function Login() {
               placeholder="Your password"
               type="password"
               autoComplete="current-password"
+              required
             />
           </div>
 
@@ -117,24 +95,22 @@ export default function Login() {
               isSubmitting
                 ? "cursor-not-allowed bg-brand-ink/50"
                 : "bg-brand-ink hover:bg-brand-ink/95",
-            ].join(" ")}>
+            ].join(" ")}
+          >
             {isSubmitting ? "Logging in..." : "Login"}
           </button>
         </form>
 
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={isSubmitting}
-          className="mt-3 w-full rounded-2xl border border-brand-ink/20 bg-white/55 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white/75">
-          Continue with Google
-        </button>
+        <p className="mt-4 text-center text-xs leading-relaxed text-brand-ink/50">
+          Google login is temporarily paused during the Laravel migration.
+        </p>
 
         <p className="mt-6 text-center text-sm text-brand-ink/65">
           New to Baura Bakers?{" "}
           <Link
             to="/register"
-            className="font-semibold text-brand-ink underline">
+            className="font-semibold text-brand-ink underline"
+          >
             Create account
           </Link>
         </p>

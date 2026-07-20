@@ -1,23 +1,15 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
-import { supabase } from "../lib/supabase";
-import { claimDeviceOrdersForCurrentUser } from "../lib/orders";
+import {
+  claimAccountOrders,
+  getAllAccountOrders,
+  type AccountOrder,
+} from "../lib/accountApi";
+import { getBauraDeviceId } from "../lib/device";
+import { LaravelApiError } from "../lib/laravelApi";
 
-type OrderRow = {
-  id: string;
-  order_no: string;
-  customer_name: string;
-  contact_number: string;
-  customer_address: string;
-  delivery_address: string;
-  delivery_location_url: string | null;
-  subtotal_lkr: number;
-  payment_status: string;
-  order_status: string;
-  payment_method: string | null;
-  created_at: string;
-};
+type OrderRow = AccountOrder;
 
 type StepIconProps = {
   active: boolean;
@@ -319,121 +311,65 @@ export default function OrderHistory() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
-
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
 
   async function loadOrders(silent = false) {
-  if (!silent) {
-    setIsLoading(true);
+    if (!silent) {
+      setIsLoading(true);
+    }
+
+    try {
+      const data = await getAllAccountOrders();
+      setOrders(data);
+      setErrorText("");
+      setLastUpdatedAt(new Date().toISOString());
+    } catch (error) {
+      if (error instanceof LaravelApiError && error.status === 401) {
+        navigate("/login");
+        return;
+      }
+
+      setErrorText(
+        error instanceof Error ? error.message : "Could not load orders.",
+      );
+    } finally {
+      if (!silent) {
+        setIsLoading(false);
+      }
+    }
   }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    navigate("/login");
-    return;
-  }
-
-  await claimDeviceOrdersForCurrentUser();
-  
-  const { data, error } = await supabase
-  
-    .from("orders")
-    .select(
-      "id, order_no, customer_name, contact_number, customer_address, delivery_address, delivery_location_url, subtotal_lkr, payment_status, order_status, payment_method, created_at",
-    )
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    setErrorText(error.message);
-  } else {
-    setOrders((data || []) as OrderRow[]);
-    setLastUpdatedAt(new Date().toISOString());
-  }
-
-  if (!silent) {
-    setIsLoading(false);
-  }
-}
-
-  // useEffect(() => {
-  //   async function loadOrders() {
-  //     const {
-  //       data: { user },
-  //     } = await supabase.auth.getUser();
-
-  //     if (!user) {
-  //       navigate("/login");
-  //       return;
-  //     }
-
-  //     const { data, error } = await supabase
-  //       .from("orders")
-  //       .select(
-  //         "id, order_no, customer_name, contact_number, customer_address, delivery_address, delivery_location_url, subtotal_lkr, payment_status, order_status, payment_method, created_at",
-  //       )
-  //       .order("created_at", { ascending: false });
-
-  //     if (error) {
-  //       setErrorText(error.message);
-  //     } else {
-  //       setOrders((data || []) as OrderRow[]);
-  //     }
-
-  //     setIsLoading(false);
-  //   }
-
-  //   loadOrders();
-  // }, [navigate]);
 
   useEffect(() => {
-  let channel: ReturnType<typeof supabase.channel> | null = null;
-  let mounted = true;
+    let mounted = true;
 
-  async function setupRealtimeOrders() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    async function prepareOrders() {
+      try {
+        await claimAccountOrders(getBauraDeviceId());
+      } catch (error) {
+        if (error instanceof LaravelApiError && error.status === 401) {
+          navigate("/login");
+          return;
+        }
+      }
 
-    if (!user) {
-      navigate("/login");
-      return;
+      if (mounted) {
+        await loadOrders();
+      }
     }
 
-    await loadOrders();
+    void prepareOrders();
 
-    if (!mounted) return;
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadOrders(true);
+      }
+    }, 30_000);
 
-    channel = supabase
-      .channel(`customer-orders-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-          filter: `user_id=eq.${user.id}`,
-        },
-        async () => {
-          await loadOrders(true);
-        },
-      )
-      .subscribe();
-  }
-
-  setupRealtimeOrders();
-
-  return () => {
-    mounted = false;
-
-    if (channel) {
-      supabase.removeChannel(channel);
-    }
-  };
-}, [navigate]);
+    return () => {
+      mounted = false;
+      window.clearInterval(refreshTimer);
+    };
+  }, [navigate]);
 
   return (
     <Page>

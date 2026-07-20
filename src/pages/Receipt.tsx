@@ -4,33 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import logo from "../../images/logos/logo.webp";
 import Page from "../components/Page";
-import { supabase } from "../lib/supabase";
+import {
+  getAccountOrder,
+  type AccountOrder,
+  type AccountOrderItem,
+} from "../lib/accountApi";
+import { LaravelApiError } from "../lib/laravelApi";
 
-type OrderRow = {
-  id: string;
-  order_no: string;
-  customer_name: string;
-  customer_email: string | null;
-  contact_number: string;
-  customer_address: string;
-  delivery_address: string;
-  delivery_location_url: string | null;
-  subtotal_lkr: number;
-  payment_status: string;
-  order_status: string;
-  payment_method: string | null;
-  created_at: string;
-};
-
-type OrderItemRow = {
-  id: string;
-  product_name: string | null;
-  size_label: string | null;
-  sugar_level: string | null;
-  quantity: number;
-  unit_price_lkr: number;
-  line_total_lkr: number;
-};
+type OrderRow = AccountOrder;
+type OrderItemRow = AccountOrderItem;
 
 function formatLkr(value: number) {
   return `LKR ${Number(value || 0).toLocaleString()}`;
@@ -353,54 +335,32 @@ export default function Receipt() {
 
   useEffect(() => {
     async function loadReceipt() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        navigate("/login");
-        return;
-      }
-
       if (!orderNo) {
         setErrorText("Receipt order number is missing.");
         setIsLoading(false);
         return;
       }
 
-      const { data: orderData, error: orderError } = await supabase
-        .from("orders")
-        .select(
-          "id, order_no, customer_name, customer_email, contact_number, customer_address, delivery_address, delivery_location_url, subtotal_lkr, payment_status, order_status, payment_method, created_at",
-        )
-        .eq("order_no", orderNo)
-        .single();
+      try {
+        const orderData = await getAccountOrder(orderNo);
 
-      if (orderError || !orderData) {
-        setErrorText(orderError?.message || "Receipt not found.");
+        setOrder(orderData);
+        setItems(orderData.order_items || []);
+      } catch (error) {
+        if (error instanceof LaravelApiError && error.status === 401) {
+          navigate("/login");
+          return;
+        }
+
+        setErrorText(
+          error instanceof Error ? error.message : "Receipt not found.",
+        );
+      } finally {
         setIsLoading(false);
-        return;
       }
-
-      const { data: itemData, error: itemError } = await supabase
-        .from("order_items")
-        .select(
-          "id, product_name, size_label, sugar_level, quantity, unit_price_lkr, line_total_lkr",
-        )
-        .eq("order_id", orderData.id)
-        .order("id", { ascending: true });
-
-      if (itemError) {
-        setErrorText(itemError.message);
-      } else {
-        setOrder(orderData as OrderRow);
-        setItems((itemData || []) as OrderItemRow[]);
-      }
-
-      setIsLoading(false);
     }
 
-    loadReceipt();
+    void loadReceipt();
   }, [navigate, orderNo]);
 
   const generatedFileName = useMemo(() => {

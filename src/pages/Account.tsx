@@ -1,4 +1,3 @@
-import type { User } from "@supabase/supabase-js";
 import {
   CheckCircle2,
   ChevronRight,
@@ -16,39 +15,45 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
+import {
+  claimAccountOrders,
+  getAccountSummary,
+  updateAccountProfile,
+  type AccountStats,
+  type LaravelUser,
+} from "../lib/accountApi";
 import { logout } from "../lib/auth";
-import { supabase } from "../lib/supabase";
-import { claimDeviceOrdersForCurrentUser } from "../lib/orders";
+import { getBauraDeviceId } from "../lib/device";
+import { LaravelApiError } from "../lib/laravelApi";
 
 type ProfileRow = {
   id: string;
-  full_name: string | null;
+  full_name: string;
   phone: string | null;
-  role: string;
+  role: "customer" | "admin";
+  default_delivery_address: string | null;
 };
 
-type OrderStats = {
-  total: number;
-  pending: number;
-  paid: number;
-  completed: number;
-};
-
-type OrderStatsRow = {
-  payment_status: string;
-  order_status: string;
-};
+function toProfile(user: LaravelUser): ProfileRow {
+  return {
+    id: String(user.id),
+    full_name: user.name,
+    phone: user.phone,
+    role: user.role,
+    default_delivery_address: user.default_delivery_address,
+  };
+}
 
 export default function Account() {
   const navigate = useNavigate();
 
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<LaravelUser | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
 
-  const [stats, setStats] = useState<OrderStats>({
+  const [stats, setStats] = useState<AccountStats>({
     total: 0,
     pending: 0,
     paid: 0,
@@ -61,7 +66,7 @@ export default function Account() {
   const [successText, setSuccessText] = useState("");
 
   useEffect(() => {
-    loadAccount();
+    void loadAccount();
   }, []);
 
   async function loadAccount() {
@@ -69,54 +74,34 @@ export default function Account() {
     setErrorText("");
     setSuccessText("");
 
-    const {
-      data: { user: currentUser },
-    } = await supabase.auth.getUser();
+    try {
+      await claimAccountOrders(getBauraDeviceId());
+      const account = await getAccountSummary();
 
-    if (!currentUser) {
-      navigate("/login");
-      return;
-    }
+      if (account.user.role === "admin") {
+        navigate("/admin/dashboard");
+        return;
+      }
 
-    const { data: profileRow, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, full_name, phone, role")
-      .eq("id", currentUser.id)
-      .single();
+      const nextProfile = toProfile(account.user);
 
-    if (profileError) {
-      setErrorText(profileError.message);
+      setUser(account.user);
+      setProfile(nextProfile);
+      setFormName(nextProfile.full_name);
+      setFormPhone(nextProfile.phone || "");
+      setStats(account.stats);
+    } catch (error) {
+      if (error instanceof LaravelApiError && error.status === 401) {
+        navigate("/login");
+        return;
+      }
+
+      setErrorText(
+        error instanceof Error ? error.message : "Could not load account.",
+      );
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    if (profileRow?.role === "admin") {
-      navigate("/admin/dashboard");
-      return;
-    }
-
-    await claimDeviceOrdersForCurrentUser();
-
-    const { data: orderRows } = await supabase
-      .from("orders")
-      .select("payment_status, order_status")
-      .eq("user_id", currentUser.id);
-
-    const rows = (orderRows || []) as OrderStatsRow[];
-
-    setStats({
-      total: rows.length,
-      pending: rows.filter((x) => x.payment_status === "PENDING_PAYMENT")
-        .length,
-      paid: rows.filter((x) => x.payment_status === "PAID").length,
-      completed: rows.filter((x) => x.order_status === "COMPLETED").length,
-    });
-
-    setUser(currentUser);
-    setProfile(profileRow as ProfileRow);
-    setFormName(profileRow?.full_name || "");
-    setFormPhone(profileRow?.phone || "");
-    setIsLoading(false);
   }
 
   async function handleSaveProfile() {
@@ -136,30 +121,19 @@ export default function Account() {
       setErrorText("");
       setSuccessText("");
 
-      const { data: updatedProfile, error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: cleanName,
-          phone: cleanPhone || null,
-        })
-        .eq("id", user.id)
-        .select("id, full_name, phone, role")
-        .single();
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      await supabase.auth.updateUser({
-        data: {
-          full_name: cleanName,
-          phone: cleanPhone,
-        },
+      const updatedUser = await updateAccountProfile({
+        name: cleanName,
+        phone: cleanPhone || null,
+        default_delivery_address:
+          profile?.default_delivery_address || null,
       });
 
-      setProfile(updatedProfile as ProfileRow);
-      setFormName(updatedProfile?.full_name || "");
-      setFormPhone(updatedProfile?.phone || "");
+      const updatedProfile = toProfile(updatedUser);
+
+      setUser(updatedUser);
+      setProfile(updatedProfile);
+      setFormName(updatedProfile.full_name);
+      setFormPhone(updatedProfile.phone || "");
       setSuccessText("Profile updated successfully.");
     } catch (error) {
       setErrorText(

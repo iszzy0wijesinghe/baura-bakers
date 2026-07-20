@@ -1,54 +1,59 @@
+/** @format */
+
 import { useEffect, useState } from "react";
-import { supabase } from "./supabase";
+import type { LaravelUser } from "./accountApi";
+import {
+  AUTH_CHANGED_EVENT,
+  getCurrentUser,
+} from "./auth";
 
 type Profile = {
   id: string;
   full_name: string | null;
   phone: string | null;
-  role: "customer" | "admin" | string;
+  role: "customer" | "admin";
 };
 
 export function useAuthSession() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<LaravelUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   async function loadSession() {
     setIsLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const currentUser = await getCurrentUser();
 
-    setUser(user);
-
-    if (!user) {
-      setProfile(null);
+      setUser(currentUser);
+      setProfile(
+        currentUser
+          ? {
+              id: String(currentUser.id),
+              full_name: currentUser.name,
+              phone: currentUser.phone,
+              role: currentUser.role,
+            }
+          : null,
+      );
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, full_name, phone, role")
-      .eq("id", user.id)
-      .single();
-
-    setProfile(data as Profile | null);
-    setIsLoading(false);
   }
 
   useEffect(() => {
-    loadSession();
+    void loadSession();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      loadSession();
-    });
+    const refresh = () => {
+      void loadSession();
+    };
+
+    window.addEventListener(AUTH_CHANGED_EVENT, refresh);
+    window.addEventListener("focus", refresh);
 
     return () => {
-      subscription.unsubscribe();
+      window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
+      window.removeEventListener("focus", refresh);
     };
   }, []);
 

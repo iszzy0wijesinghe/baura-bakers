@@ -1,7 +1,9 @@
+/** @format */
+
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
-import { loginWithGoogle, registerWithEmail } from "../lib/auth";
+import { registerWithEmail } from "../lib/auth";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -12,44 +14,35 @@ export default function Register() {
   const [password, setPassword] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
   const [errorText, setErrorText] = useState("");
 
   async function handleRegister(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (!fullName.trim() || !email.trim() || password.length < 6) {
-      setErrorText("Please enter name, email and a password with at least 6 characters.");
+    if (!fullName.trim() || !email.trim() || password.length < 8) {
+      setErrorText(
+        "Please enter your name, email, and a password with at least 8 characters.",
+      );
       return;
     }
 
     try {
       setIsSubmitting(true);
       setErrorText("");
-      setMessage("");
 
-      await registerWithEmail(email.trim(), password, fullName.trim(), phone.trim());
+      await registerWithEmail(
+        email,
+        password,
+        fullName,
+        phone,
+      );
 
-      setMessage("Account created. If email confirmation is enabled, please check your email.");
-      setTimeout(() => navigate("/account"), 1000);
+      navigate("/account");
     } catch (error) {
       setErrorText(
         error instanceof Error ? error.message : "Could not create account.",
       );
     } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleGoogleLogin() {
-    try {
-      setIsSubmitting(true);
-      setErrorText("");
-      await loginWithGoogle();
-    } catch (error) {
-      setErrorText(
-        error instanceof Error ? error.message : "Google login failed.",
-      );
       setIsSubmitting(false);
     }
   }
@@ -75,12 +68,6 @@ export default function Register() {
           </div>
         )}
 
-        {message && (
-          <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-            {message}
-          </div>
-        )}
-
         <form onSubmit={handleRegister} className="mt-6 space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-widest text-brand-ink/60">
@@ -92,6 +79,7 @@ export default function Register() {
               className="w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
               placeholder="Your name"
               autoComplete="name"
+              required
             />
           </div>
 
@@ -120,6 +108,7 @@ export default function Register() {
               placeholder="you@example.com"
               type="email"
               autoComplete="email"
+              required
             />
           </div>
 
@@ -131,9 +120,11 @@ export default function Register() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-2xl border border-black/10 bg-white/65 px-4 py-3 text-sm outline-none placeholder:text-brand-ink/40 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10"
-              placeholder="Minimum 6 characters"
+              placeholder="Minimum 8 characters"
               type="password"
               autoComplete="new-password"
+              minLength={8}
+              required
             />
           </div>
 
@@ -151,14 +142,9 @@ export default function Register() {
           </button>
         </form>
 
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={isSubmitting}
-          className="mt-3 w-full rounded-2xl border border-brand-ink/20 bg-white/55 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white/75"
-        >
-          Continue with Google
-        </button>
+        <p className="mt-4 text-center text-xs leading-relaxed text-brand-ink/50">
+          Google registration is temporarily paused during the Laravel migration.
+        </p>
 
         <p className="mt-6 text-center text-sm text-brand-ink/65">
           Already have an account?{" "}
