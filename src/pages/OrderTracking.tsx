@@ -26,7 +26,7 @@ import {
   type PublicOrderTracking,
   claimDeviceOrdersForCurrentUser,
 } from "../lib/orders";
-import { supabase } from "../lib/supabase";
+import { getAuthenticatedUser } from "../lib/accountApi";
 
 const flow = [
   {
@@ -279,9 +279,7 @@ export default function OrderTracking() {
     let active = true;
 
     async function redirectLoggedInCustomer() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getAuthenticatedUser();
 
       if (!active) return;
 

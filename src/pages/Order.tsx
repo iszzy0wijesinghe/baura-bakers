@@ -9,7 +9,12 @@ import {
   createGuestOrder,
   type DeliveryTarget,
 } from "../lib/orders";
-import { supabase } from "../lib/supabase";
+import { getAuthenticatedUser } from "../lib/accountApi";
+import {
+  getCheckoutBootstrap,
+  getCheckoutQuote,
+  type CheckoutQuote,
+} from "../lib/checkoutApi";
 
 const WHATSAPP_NUMBER = "94769878770";
 const DELIVERY_METHOD = "Regular Baura delivery arrangement";
@@ -468,6 +473,7 @@ export default function Order() {
   );
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const [distanceNotice, setDistanceNotice] = useState("");
+  const [checkoutQuote, setCheckoutQuote] = useState<CheckoutQuote | null>(null);
 
   const [form, setForm] = useState<FormState>({
     senderName: "",
@@ -541,58 +547,19 @@ export default function Order() {
       try {
         setIsLoadingUser(true);
 
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const user = await getAuthenticatedUser();
 
         if (!user) {
-          setIsLoadingUser(false);
           return;
         }
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        const profileRecord = (profile || null) as Record<
-          string,
-          unknown
-        > | null;
-
-        const name =
-          readProfileValue(profileRecord, [
-            "full_name",
-            "name",
-            "display_name",
-            "customer_name",
-          ]) ||
-          user.user_metadata?.full_name ||
-          user.user_metadata?.name ||
-          user.email?.split("@")[0] ||
-          "";
-
-        const phone = readProfileValue(profileRecord, [
-          "contact_number",
-          "phone",
-          "mobile",
-          "telephone",
-        ]);
-
-        const address = readProfileValue(profileRecord, [
-          "address",
-          "customer_address",
-          "billing_address",
-          "delivery_address",
-        ]);
-
         setForm((prev) => ({
           ...prev,
-          senderName: prev.senderName || name,
+          senderName: prev.senderName || user.name || "",
           senderEmail: prev.senderEmail || user.email || "",
-          senderContactNumber: prev.senderContactNumber || phone,
-          senderAddress: prev.senderAddress || address,
+          senderContactNumber: prev.senderContactNumber || user.phone || "",
+          senderAddress:
+            prev.senderAddress || user.default_delivery_address || "",
         }));
       } catch {
         setSubmitError("Could not load your account details.");
@@ -601,110 +568,54 @@ export default function Order() {
       }
     }
 
-    loadLoggedInUserDetails();
+    void loadLoggedInUserDetails();
   }, []);
 
   useEffect(() => {
     async function loadDeliverySlots() {
-      setIsLoadingSlots(true);
+      try {
+        setIsLoadingSlots(true);
 
-      const today = toLocalIsoDate();
+        const checkout = await getCheckoutBootstrap();
+        const availableSlots = checkout.slots
+          .filter((slot) => slot.is_available)
+          .sort((a, b) => {
+            if (a.slot_date !== b.slot_date) {
+              return a.slot_date.localeCompare(b.slot_date);
+            }
 
-      const [slotsRes, settingsRes] = await Promise.all([
-        supabase
-          .from("delivery_slots")
-          .select("*")
-          .eq("is_available", true)
-          .gte("slot_date", today)
-          .order("slot_date", { ascending: true })
-          .order("start_time", { ascending: true }),
+            return a.start_time.localeCompare(b.start_time);
+          });
 
-        supabase.from("delivery_settings").select("setting_key, setting_value"),
-      ]);
+        setDeliverySlots(availableSlots);
 
-      if (slotsRes.error) {
-        console.warn("Could not load delivery slots:", slotsRes.error.message);
-      }
-
-      if (settingsRes.error) {
-        console.warn(
-          "Could not load delivery settings:",
-          settingsRes.error.message,
+        setSelectedDeliverySlotId((current) =>
+          availableSlots.some((slot) => slot.id === current) ? current : "",
         );
-      }
 
-      const settingMap: Record<string, string> = {};
-
-      for (const row of (settingsRes.data || []) as DeliverySetting[]) {
-        settingMap[row.setting_key] = row.setting_value;
-      }
-
-      const deliveryMode = (settingMap.delivery_mode ||
-        "SCHEDULED") as DeliveryMode;
-
-      const manualSlots = ((slotsRes.data || []) as DeliverySlot[]).filter(
-        (slot) => slot.is_available,
-      );
-
-      const settingGeneratedSlots = buildSlotsFromDeliverySettings(settingMap);
-
-      const noDeliveryBlocks = getNoDeliveryBlocks(settingMap);
-
-      const sourceSlots =
-        deliveryMode === "SCHEDULED" ? manualSlots : settingGeneratedSlots;
-
-      const availableSlots = sourceSlots
-        .filter((slot) => slot.is_available)
-        .filter((slot) => slot.slot_date >= today)
-        .filter((slot) => !isPastDeliverySlot(slot))
-        .filter((slot) => !isSlotBlocked(slot, noDeliveryBlocks))
-        .sort((a, b) => {
-          if (a.slot_date !== b.slot_date) {
-            return a.slot_date.localeCompare(b.slot_date);
+        setSelectedDeliveryDate((current) => {
+          if (
+            current &&
+            availableSlots.some((slot) => slot.slot_date === current)
+          ) {
+            return current;
           }
 
-          return a.start_time.localeCompare(b.start_time);
+          return availableSlots[0]?.slot_date || "";
         });
-
-      const uniqueSlots = Array.from(
-        new Map(
-          availableSlots.map((slot) => [
-            `${slot.slot_date}-${slot.slot_label}-${slot.start_time}-${slot.end_time}`,
-            slot,
-          ]),
-        ).values(),
-      );
-
-      const firstFourWorkingDaysSlots = limitToFirstWorkingDays(
-        uniqueSlots,
-        CUSTOMER_WORKING_DAYS_LIMIT,
-      );
-
-      setDeliverySlots(firstFourWorkingDaysSlots);
-
-      setSelectedDeliverySlotId((current) => {
-        if (firstFourWorkingDaysSlots.some((slot) => slot.id === current)) {
-          return current;
-        }
-
-        return "";
-      });
-
-      setSelectedDeliveryDate((current) => {
-        if (
-          current &&
-          firstFourWorkingDaysSlots.some((slot) => slot.slot_date === current)
-        ) {
-          return current;
-        }
-
-        return firstFourWorkingDaysSlots[0]?.slot_date || "";
-      });
-
-      setIsLoadingSlots(false);
+      } catch (error) {
+        setSubmitError(
+          error instanceof Error
+            ? error.message
+            : "Could not load delivery sessions.",
+        );
+        setDeliverySlots([]);
+      } finally {
+        setIsLoadingSlots(false);
+      }
     }
 
-    loadDeliverySlots();
+    void loadDeliverySlots();
   }, []);
 
   useEffect(() => {
@@ -719,9 +630,7 @@ export default function Order() {
         return;
       }
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getAuthenticatedUser();
 
       if (user) {
         setIsExistingCustomerEmail(false);
@@ -753,61 +662,7 @@ export default function Order() {
   }, [form.senderEmail]);
 
   useEffect(() => {
-    async function loadDeliveryPricing() {
-      setIsLoadingDeliveryPricing(true);
-
-      const [rulesRes, pricesRes, settingsRes] = await Promise.all([
-        supabase
-          .from("delivery_vehicle_rules")
-          .select("*")
-          .eq("is_active", true)
-          .order("min_quantity", { ascending: true }),
-
-        supabase
-          .from("delivery_distance_prices")
-          .select("*")
-          .eq("is_active", true)
-          .eq("price_table_key", "PICKME_FLASH")
-          .order("distance_km", { ascending: true }),
-
-        supabase.from("delivery_settings").select("setting_key, setting_value"),
-      ]);
-
-      if (rulesRes.error) {
-        console.warn(
-          "Could not load delivery vehicle rules:",
-          rulesRes.error.message,
-        );
-      }
-
-      if (pricesRes.error) {
-        console.warn(
-          "Could not load delivery prices:",
-          pricesRes.error.message,
-        );
-      }
-
-      if (settingsRes.error) {
-        console.warn(
-          "Could not load delivery settings:",
-          settingsRes.error.message,
-        );
-      }
-
-      setVehicleRules((rulesRes.data || []) as DeliveryVehicleRule[]);
-      setDistancePrices((pricesRes.data || []) as DeliveryDistancePrice[]);
-
-      const settingMap: Record<string, string> = {};
-
-      for (const row of (settingsRes.data || []) as DeliverySetting[]) {
-        settingMap[row.setting_key] = row.setting_value;
-      }
-
-      setDeliverySettings(settingMap);
-      setIsLoadingDeliveryPricing(false);
-    }
-
-    loadDeliveryPricing();
+    setIsLoadingDeliveryPricing(false);
   }, []);
 
   const totalLkr = useMemo(() => {
@@ -899,17 +754,7 @@ export default function Order() {
     );
   }, [effectiveDelivery.address, deliveryLocationCoords]);
 
-  const selectedVehicleType = useMemo(() => {
-    const matchedRule = vehicleRules.find((rule) => {
-      const minOk = totalQuantity >= rule.min_quantity;
-      const maxOk =
-        rule.max_quantity === null || totalQuantity <= rule.max_quantity;
-
-      return minOk && maxOk;
-    });
-
-    return matchedRule?.vehicle_type || "BIKE";
-  }, [vehicleRules, totalQuantity]);
+  const selectedVehicleType = checkoutQuote?.vehicle_type || "BIKE";
 
   const estimatedRoadDistanceKm = useMemo(() => {
     if (!deliveryLocationCoords) return null;
@@ -928,7 +773,8 @@ export default function Order() {
     let ignore = false;
 
     async function calculateRoadDistance() {
-      if (!deliveryLocationCoords) {
+      if (!deliveryLocationCoords || totalQuantity < 1) {
+        setCheckoutQuote(null);
         setApiRoadDistanceKm(null);
         setDistanceNotice("");
         return;
@@ -938,29 +784,29 @@ export default function Order() {
       setDistanceNotice("");
 
       try {
-        const response = await fetch("/api/delivery-distance", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lat: deliveryLocationCoords.lat,
-            lng: deliveryLocationCoords.lng,
-          }),
+        const quote = await getCheckoutQuote({
+          lat: deliveryLocationCoords.lat,
+          lng: deliveryLocationCoords.lng,
+          totalQuantity,
         });
 
-        const data = await response.json();
-
-        if (!response.ok || !Number.isFinite(Number(data.distanceKm))) {
-          throw new Error("Could not calculate road distance.");
-        }
-
         if (!ignore) {
-          setApiRoadDistanceKm(Number(data.distanceKm));
+          setCheckoutQuote(quote);
+          setApiRoadDistanceKm(quote.distance_km);
+          setDistanceNotice(
+            quote.distance_source === "ESTIMATED"
+              ? "Using Laravel's estimated road distance for local testing."
+              : "",
+          );
         }
-      } catch {
+      } catch (error) {
         if (!ignore) {
+          setCheckoutQuote(null);
           setApiRoadDistanceKm(null);
           setDistanceNotice(
-            "Using an estimated road distance. Please confirm final delivery fee on WhatsApp if the location is unusual.",
+            error instanceof Error
+              ? error.message
+              : "Could not calculate the delivery fee.",
           );
         }
       } finally {
@@ -970,61 +816,30 @@ export default function Order() {
       }
     }
 
-    calculateRoadDistance();
+    void calculateRoadDistance();
 
     return () => {
       ignore = true;
     };
-  }, [deliveryLocationCoords]);
+  }, [deliveryLocationCoords, totalQuantity]);
 
-  const roadDistanceKm = apiRoadDistanceKm ?? estimatedRoadDistanceKm;
+  const roadDistanceKm =
+    checkoutQuote?.distance_km ?? apiRoadDistanceKm ?? estimatedRoadDistanceKm;
 
-  const pricingDistanceKm = useMemo(() => {
-    if (!roadDistanceKm) return null;
+  const pricingDistanceKm =
+    checkoutQuote?.pricing_distance_km ??
+    (roadDistanceKm ? roundUpDistanceKm(roadDistanceKm) : null);
 
-    return roundUpDistanceKm(roadDistanceKm);
-  }, [roadDistanceKm]);
+  const selectedDistancePrice = checkoutQuote
+    ? { normal_price_lkr: checkoutQuote.base_price_lkr }
+    : null;
 
-  const selectedDistancePrice = useMemo(() => {
-    if (!pricingDistanceKm) return null;
-
-    const pricesForVehicle = distancePrices
-      .filter(
-        (price) =>
-          price.vehicle_type === selectedVehicleType &&
-          price.normal_price_lkr > 0 &&
-          price.distance_km >= pricingDistanceKm,
-      )
-      .sort((a, b) => a.distance_km - b.distance_km);
-
-    return pricesForVehicle[0] || null;
-  }, [distancePrices, selectedVehicleType, pricingDistanceKm]);
-
-  const deliveryPricingMode = "NORMAL";
-
-  const deliveryFeeLkr = useMemo(() => {
-    if (!selectedDistancePrice) return 0;
-
-    const basePrice = selectedDistancePrice.normal_price_lkr;
-
-    const safetyMarginPercent = Number(
-      deliverySettings.safety_margin_percent || 0,
-    );
-
-    const roundToLkr = Number(deliverySettings.round_to_lkr || 50);
-    const safeRoundToLkr = roundToLkr > 0 ? roundToLkr : 50;
-    const withMargin = basePrice + (basePrice * safetyMarginPercent) / 100;
-
-    return Math.ceil(withMargin / safeRoundToLkr) * safeRoundToLkr;
-  }, [selectedDistancePrice, deliverySettings]);
-
+  const deliveryPricingMode = checkoutQuote?.pricing_mode || "NORMAL";
+  const deliveryFeeLkr = checkoutQuote?.delivery_fee_lkr || 0;
   const finalTotalLkr = totalLkr + deliveryFeeLkr;
 
   const deliveryCostValid = Boolean(
-    roadDistanceKm &&
-      pricingDistanceKm &&
-      selectedDistancePrice &&
-      deliveryFeeLkr > 0,
+    checkoutQuote && roadDistanceKm && pricingDistanceKm && deliveryFeeLkr > 0,
   );
 
   const scheduleValid = Boolean(selectedDeliverySlot) && deliveryCostValid;
@@ -1312,6 +1127,7 @@ export default function Order() {
       deliveryLocationUrl: effectiveDelivery.locationUrl || fallbackLocationUrl,
       deliveryLat: deliveryLocationCoords?.lat ?? null,
       deliveryLng: deliveryLocationCoords?.lng ?? null,
+      deliverySlotId: selectedDeliverySlot.id,
 
       deliveryDate: selectedDeliverySlot.slot_date,
       deliverySlotLabel: selectedDeliverySlot.slot_label,
@@ -1364,11 +1180,7 @@ export default function Order() {
           )}?t=${encodeURIComponent(savedOrder.trackingToken)}`
         : `${window.location.origin}/track/${encodeURIComponent(orderId)}`;
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const isLoggedIn = Boolean(session?.user);
+      const isLoggedIn = Boolean(await getAuthenticatedUser());
 
       localStorage.setItem(
         "baura_completed_bank_transfer_v1",
