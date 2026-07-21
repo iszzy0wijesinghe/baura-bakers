@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
-import { supabase } from "../lib/supabase";
+import { getCurrentUser } from "../lib/auth";
+import {
+  getAllAdminOrders,
+  updateAdminOrder,
+} from "../lib/adminOrdersApi";
 
 type OrderItemRow = {
   id: string;
   product_name: string;
   size_label: string;
-  sugar_level: string;
+  sugar_level: string | null;
   quantity: number;
   unit_price_lkr: number;
   line_total_lkr: number;
@@ -108,22 +112,14 @@ export default function AdminOrders() {
   const [errorText, setErrorText] = useState("");
 
   async function verifyAdmin() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
 
     if (!user) {
       navigate("/login");
       return false;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") {
+    if (user.role !== "admin") {
       navigate("/account");
       return false;
     }
@@ -138,46 +134,19 @@ export default function AdminOrders() {
     const isAdmin = await verifyAdmin();
     if (!isAdmin) return;
 
-    const { data, error } = await supabase
-      .from("orders")
-      .select(
-        `
-        id,
-        order_no,
-        customer_name,
-        customer_email,
-        contact_number,
-        customer_address,
-        delivery_address,
-        delivery_location_url,
-        subtotal_lkr,
-        payment_status,
-        order_status,
-       payment_method,
-admin_note,
-note,
-confirmation_email_sent_at,
-created_at,
-        order_items (
-          id,
-          product_name,
-          size_label,
-          sugar_level,
-          quantity,
-          unit_price_lkr,
-          line_total_lkr
-        )
-      `,
-      )
-      .order("created_at", { ascending: false });
+    let rows: AdminOrder[];
 
-    if (error) {
-      setErrorText(error.message);
+    try {
+      rows = (await getAllAdminOrders()) as AdminOrder[];
+    } catch (error) {
+      setErrorText(
+        error instanceof Error
+          ? error.message
+          : "Could not load MySQL orders.",
+      );
       setIsLoading(false);
       return;
     }
-
-    const rows = (data || []) as AdminOrder[];
     setOrders(rows);
 
     if (!selectedId && rows.length > 0) {
@@ -236,50 +205,10 @@ created_at,
     };
   }, [orders]);
 
-  async function sendConfirmationEmail(orderId: string) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("Admin session not found.");
-    }
-
-    const response = await fetch("/api/send-order-confirmation", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        orderId,
-      }),
-    });
-
-    const text = await response.text();
-
-    let result: any = null;
-
-    try {
-      result = JSON.parse(text);
-    } catch {
-      result = {
-        raw: text,
-      };
-    }
-
-    console.log("Email API response:", response.status, result);
-
-    if (!response.ok) {
-      throw new Error(
-        result?.error ||
-          result?.reason ||
-          result?.raw ||
-          `Email API failed with status ${response.status}`,
-      );
-    }
-
-    return result;
+  async function sendConfirmationEmail(_orderId: string) {
+    throw new Error(
+      "Confirmation email sending will be moved to Laravel in the payment/email stage.",
+    );
   }
 
   async function handleManualSendConfirmationEmail(orderId: string) {
@@ -325,59 +254,14 @@ created_at,
       setSavingId(orderId);
       setErrorText("");
 
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", orderId);
+      const updatedOrder = (await updateAdminOrder(
+        orderId,
+        updates,
+      )) as AdminOrder;
 
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const oldOrder = orders.find((order) => order.id === orderId);
-
-      const nextPaymentStatus =
-        updates.payment_status || oldOrder?.payment_status;
-
-      const nextOrderStatus = updates.order_status || oldOrder?.order_status;
-
-      const shouldSendConfirmationEmail =
-        nextPaymentStatus === "PAID" &&
-        nextOrderStatus === "CONFIRMED" &&
-        !oldOrder?.confirmation_email_sent_at;
-
-      if (shouldSendConfirmationEmail) {
-        try {
-          const emailResult = await sendConfirmationEmail(orderId);
-          console.log("Confirmation email sent:", emailResult);
-        } catch (emailError) {
-          const message =
-            emailError instanceof Error
-              ? emailError.message
-              : "Unknown email sending error.";
-
-          console.error("Confirmation email failed:", emailError);
-
-          setErrorText(
-            `Order status updated, but confirmation email failed: ${message}`,
-          );
-        }
-      }
-
-      setOrders((prev) =>
-        prev.map((order) =>
-          order.id === orderId
-            ? {
-                ...order,
-                ...updates,
-                confirmation_email_sent_at: shouldSendConfirmationEmail
-                  ? new Date().toISOString()
-                  : order.confirmation_email_sent_at,
-              }
-            : order,
+      setOrders((previousOrders) =>
+        previousOrders.map((order) =>
+          order.id === orderId ? updatedOrder : order,
         ),
       );
     } catch (error) {

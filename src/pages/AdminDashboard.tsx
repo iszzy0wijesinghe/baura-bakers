@@ -3,8 +3,8 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Page from "../components/Page";
-import { supabase } from "../lib/supabase";
-import { logout } from "../lib/auth";
+import { getCurrentUser, logout } from "../lib/auth";
+import { getAdminDashboardStats } from "../lib/adminOrdersApi";
 
 type Stats = {
   totalOrders: number;
@@ -29,51 +29,30 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function loadDashboard() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const user = await getCurrentUser();
 
-      if (!user) {
-        navigate("/login");
-        return;
-      }
+        if (!user) {
+          navigate("/login");
+          return;
+        }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name, role")
-        .eq("id", user.id)
-        .single();
+        if (user.role !== "admin") {
+          navigate("/account");
+          return;
+        }
 
-      if (profile?.role !== "admin") {
-        navigate("/account");
-        return;
-      }
-
-      setAdminName(profile.full_name || "Admin");
-
-      const { data: orders, error } = await supabase
-        .from("orders")
-        .select("payment_status, order_status");
-
-      if (error) {
-        setErrorText(error.message);
+        setAdminName(user.name || "Admin");
+        setStats(await getAdminDashboardStats());
+      } catch (error) {
+        setErrorText(
+          error instanceof Error
+            ? error.message
+            : "Could not load the admin dashboard.",
+        );
+      } finally {
         setIsLoading(false);
-        return;
       }
-
-      const rows = orders || [];
-
-      setStats({
-        totalOrders: rows.length,
-        pendingPayments: rows.filter(
-          (x) => x.payment_status === "PENDING_PAYMENT",
-        ).length,
-        paidOrders: rows.filter((x) => x.payment_status === "PAID").length,
-        completedOrders: rows.filter((x) => x.order_status === "COMPLETED")
-          .length,
-      });
-
-      setIsLoading(false);
     }
 
     loadDashboard();
