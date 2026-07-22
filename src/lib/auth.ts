@@ -56,6 +56,6 @@ export async function logout() {
   }
 }
 
-export async function getCurrentUser() {
-  return getAuthenticatedUser();
+export async function getCurrentUser(forceRefresh = false) {
+  return getAuthenticatedUser(forceRefresh);
 }

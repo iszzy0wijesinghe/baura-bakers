@@ -1,4 +1,3 @@
-import jsPDF from "jspdf";
 import { Download, Printer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -63,6 +62,7 @@ function loadImageAsDataUrl(src: string) {
 }
 
 async function createReceiptPdf(order: OrderRow, items: OrderItemRow[]) {
+  const { default: jsPDF } = await import("jspdf");
   const doc = new jsPDF("p", "mm", "a4");
 
   const pageWidth = doc.internal.pageSize.getWidth();

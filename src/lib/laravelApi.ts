@@ -33,6 +33,13 @@ type RequestOptions = {
   csrf?: boolean;
 };
 
+const CSRF_REFRESH_MS = 20 * 60 * 1000;
+
+let csrfReadyUntil = 0;
+let csrfRequest: Promise<void> | null = null;
+
+const inFlightGetRequests = new Map<string, Promise<unknown>>();
+
 function buildUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
@@ -75,27 +82,52 @@ function firstValidationMessage(payload: ApiErrorPayload | null) {
   return null;
 }
 
-export async function ensureLaravelCsrfCookie() {
-  const response = await fetch(buildUrl("/sanctum/csrf-cookie"), {
+export async function ensureLaravelCsrfCookie(force = false) {
+  const now = Date.now();
+  const existingToken = readCookie("XSRF-TOKEN");
+
+  if (!force && existingToken && csrfReadyUntil > now) {
+    return;
+  }
+
+  if (!force && existingToken && csrfReadyUntil === 0) {
+    csrfReadyUntil = now + CSRF_REFRESH_MS;
+    return;
+  }
+
+  if (!force && csrfRequest) {
+    return csrfRequest;
+  }
+
+  csrfRequest = fetch(buildUrl("/sanctum/csrf-cookie"), {
     method: "GET",
     credentials: "include",
     headers: {
       Accept: "application/json",
     },
-  });
+  })
+    .then((response) => {
+      if (!response.ok && response.status !== 204) {
+        throw new LaravelApiError(
+          "Could not initialize the secure session.",
+          response.status,
+          null,
+        );
+      }
 
-  if (!response.ok && response.status !== 204) {
-    throw new LaravelApiError(
-      "Could not initialize the secure session.",
-      response.status,
-      null,
-    );
-  }
+      csrfReadyUntil = Date.now() + CSRF_REFRESH_MS;
+    })
+    .finally(() => {
+      csrfRequest = null;
+    });
+
+  return csrfRequest;
 }
 
-export async function laravelRequest<T>(
+async function performRequest<T>(
   path: string,
-  options: RequestOptions = {},
+  options: RequestOptions,
+  retryAfterCsrfFailure: boolean,
 ): Promise<T> {
   const method = options.method || "GET";
 
@@ -129,6 +161,17 @@ export async function laravelRequest<T>(
         : JSON.stringify(options.body),
   });
 
+  if (
+    response.status === 419 &&
+    options.csrf &&
+    retryAfterCsrfFailure
+  ) {
+    csrfReadyUntil = 0;
+    await ensureLaravelCsrfCookie(true);
+
+    return performRequest<T>(path, options, false);
+  }
+
   const payload = await readJson(response);
 
   if (!response.ok) {
@@ -147,6 +190,32 @@ export async function laravelRequest<T>(
   }
 
   return payload as T;
+}
+
+export async function laravelRequest<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  const method = options.method || "GET";
+
+  if (method !== "GET") {
+    return performRequest<T>(path, options, true);
+  }
+
+  const key = buildUrl(path);
+  const existing = inFlightGetRequests.get(key);
+
+  if (existing) {
+    return existing as Promise<T>;
+  }
+
+  const request = performRequest<T>(path, options, true).finally(() => {
+    inFlightGetRequests.delete(key);
+  });
+
+  inFlightGetRequests.set(key, request);
+
+  return request;
 }
 
 export function laravelGet<T>(path: string) {

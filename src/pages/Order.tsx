@@ -438,6 +438,12 @@ export default function Order() {
 
   const [submitError, setSubmitError] = useState("");
   const [savedOrderNo, setSavedOrderNo] = useState<string | null>(null);
+  const savedOrderRef = useRef<
+    Awaited<ReturnType<typeof createGuestOrder>> | null
+  >(null);
+  const saveOrderPromiseRef = useRef<
+    Promise<Awaited<ReturnType<typeof createGuestOrder>>> | null
+  >(null);
 
   const [deliverySlots, setDeliverySlots] = useState<DeliverySlot[]>([]);
   const [selectedDeliverySlotId, setSelectedDeliverySlotId] = useState("");
@@ -1081,8 +1087,12 @@ export default function Order() {
   }
 
   async function saveOrderOnce(paymentMethod: string) {
-    if (savedOrderNo === orderId) {
-      return null;
+    if (savedOrderRef.current) {
+      return savedOrderRef.current;
+    }
+
+    if (saveOrderPromiseRef.current) {
+      return saveOrderPromiseRef.current;
     }
 
     if (!selectedDeliverySlot) {
@@ -1093,7 +1103,7 @@ export default function Order() {
       ? `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}`
       : "";
 
-    const savedOrder = await createGuestOrder({
+    const request = createGuestOrder({
       orderNo: orderId,
 
       senderName: form.senderName,
@@ -1135,12 +1145,20 @@ export default function Order() {
       paymentMethod,
       note: form.note,
       items,
-    });
+    })
+      .then((savedOrder) => {
+        savedOrderRef.current = savedOrder;
+        setSavedOrderNo(savedOrder.orderNo);
 
-    console.log("Order saved successfully:", savedOrder);
-    setSavedOrderNo(orderId);
+        return savedOrder;
+      })
+      .finally(() => {
+        saveOrderPromiseRef.current = null;
+      });
 
-    return savedOrder;
+    saveOrderPromiseRef.current = request;
+
+    return request;
   }
 
   async function bankTransferViaWhatsApp() {
@@ -1154,11 +1172,11 @@ export default function Order() {
       return;
     }
 
-    const whatsappTab = window.open(
-      "about:blank",
-      "_blank",
-      "noopener,noreferrer",
-    );
+    const whatsappTab = window.open("about:blank", "_blank");
+
+    if (whatsappTab) {
+      whatsappTab.opener = null;
+    }
 
     try {
       setIsSubmitting(true);
@@ -1166,18 +1184,23 @@ export default function Order() {
 
       const savedOrder = await saveOrderOnce("BANK_TRANSFER_WHATSAPP");
 
-      const trackingUrl = savedOrder?.trackingToken
+      const savedOrderNoForTracking = savedOrder.orderNo;
+      const trackingUrl = savedOrder.trackingToken
         ? `${window.location.origin}/track/${encodeURIComponent(
-            orderId,
+            savedOrderNoForTracking,
           )}?t=${encodeURIComponent(savedOrder.trackingToken)}`
-        : `${window.location.origin}/track/${encodeURIComponent(orderId)}`;
+        : `${window.location.origin}/track/${encodeURIComponent(
+            savedOrderNoForTracking,
+          )}`;
 
-      const isLoggedIn = Boolean(await getAuthenticatedUser());
+      const isLoggedIn = await getAuthenticatedUser()
+        .then(Boolean)
+        .catch(() => false);
 
       localStorage.setItem(
         "baura_completed_bank_transfer_v1",
         JSON.stringify({
-          orderNo: orderId,
+          orderNo: savedOrderNoForTracking,
           email: form.senderEmail.trim(),
           trackingUrl,
           savedAt: new Date().toISOString(),

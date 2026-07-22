@@ -84,6 +84,26 @@ export type AccountOrder = {
   order_items?: AccountOrderItem[];
 };
 
+const AUTH_CACHE_MS = 30_000;
+
+let authenticatedUserCache: LaravelUser | null = null;
+let authenticatedUserCacheKnown = false;
+let authenticatedUserCacheExpiresAt = 0;
+let authenticatedUserRequest: Promise<LaravelUser | null> | null = null;
+
+function cacheAuthenticatedUser(user: LaravelUser | null) {
+  authenticatedUserCache = user;
+  authenticatedUserCacheKnown = true;
+  authenticatedUserCacheExpiresAt = Date.now() + AUTH_CACHE_MS;
+}
+
+export function clearAuthenticatedUserCache() {
+  authenticatedUserCache = null;
+  authenticatedUserCacheKnown = false;
+  authenticatedUserCacheExpiresAt = 0;
+  authenticatedUserRequest = null;
+}
+
 type UserResponse = {
   data: {
     user: LaravelUser;
@@ -129,6 +149,8 @@ export async function loginAccount(
     },
   );
 
+  cacheAuthenticatedUser(response.data.user);
+
   return response.data.user;
 }
 
@@ -143,27 +165,52 @@ export async function registerAccount(input: {
     input,
   );
 
+  cacheAuthenticatedUser(response.data.user);
+
   return response.data.user;
 }
 
 export async function logoutAccount() {
-  await laravelPost<{ message: string }>("/api/v1/auth/logout");
+  try {
+    await laravelPost<{ message: string }>("/api/v1/auth/logout");
+  } finally {
+    clearAuthenticatedUserCache();
+  }
 }
 
-export async function getAuthenticatedUser() {
-  try {
-    const response = await laravelGet<UserResponse>(
-      "/api/v1/auth/user",
-    );
-
-    return response.data.user;
-  } catch (error) {
-    if (error instanceof LaravelApiError && error.status === 401) {
-      return null;
-    }
-
-    throw error;
+export async function getAuthenticatedUser(forceRefresh = false) {
+  if (
+    !forceRefresh &&
+    authenticatedUserCacheKnown &&
+    authenticatedUserCacheExpiresAt > Date.now()
+  ) {
+    return authenticatedUserCache;
   }
+
+  if (!forceRefresh && authenticatedUserRequest) {
+    return authenticatedUserRequest;
+  }
+
+  authenticatedUserRequest = laravelGet<UserResponse>(
+    "/api/v1/auth/user",
+  )
+    .then((response) => {
+      cacheAuthenticatedUser(response.data.user);
+      return response.data.user;
+    })
+    .catch((error) => {
+      if (error instanceof LaravelApiError && error.status === 401) {
+        cacheAuthenticatedUser(null);
+        return null;
+      }
+
+      throw error;
+    })
+    .finally(() => {
+      authenticatedUserRequest = null;
+    });
+
+  return authenticatedUserRequest;
 }
 
 export async function getAccountSummary() {
@@ -181,6 +228,8 @@ export async function updateAccountProfile(input: {
     "/api/v1/account/profile",
     input,
   );
+
+  cacheAuthenticatedUser(response.data.user);
 
   return response.data.user;
 }

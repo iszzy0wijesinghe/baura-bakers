@@ -14,55 +14,131 @@ type Profile = {
   role: "customer" | "admin";
 };
 
-export function useAuthSession() {
-  const [user, setUser] = useState<LaravelUser | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+type SessionSnapshot = {
+  user: LaravelUser | null;
+  profile: Profile | null;
+  isLoading: boolean;
+};
 
-  async function loadSession() {
-    setIsLoading(true);
+const SESSION_REFRESH_MS = 60_000;
 
-    try {
-      const currentUser = await getCurrentUser();
+let snapshot: SessionSnapshot = {
+  user: null,
+  profile: null,
+  isLoading: true,
+};
 
-      setUser(currentUser);
-      setProfile(
-        currentUser
-          ? {
-              id: String(currentUser.id),
-              full_name: currentUser.name,
-              phone: currentUser.phone,
-              role: currentUser.role,
-            }
-          : null,
-      );
-    } finally {
-      setIsLoading(false);
-    }
+let lastLoadedAt = 0;
+let sessionRequest: Promise<void> | null = null;
+let globalListenersAttached = false;
+
+const listeners = new Set<(next: SessionSnapshot) => void>();
+
+function profileFromUser(user: LaravelUser | null): Profile | null {
+  if (!user) return null;
+
+  return {
+    id: String(user.id),
+    full_name: user.name,
+    phone: user.phone,
+    role: user.role,
+  };
+}
+
+function publish(next: SessionSnapshot) {
+  snapshot = next;
+
+  for (const listener of listeners) {
+    listener(snapshot);
+  }
+}
+
+async function loadSharedSession(forceRefresh = false) {
+  if (!forceRefresh && sessionRequest) {
+    return sessionRequest;
   }
 
+  if (
+    !forceRefresh &&
+    lastLoadedAt > 0 &&
+    Date.now() - lastLoadedAt < SESSION_REFRESH_MS
+  ) {
+    return;
+  }
+
+  const initialLoad = lastLoadedAt === 0;
+
+  if (initialLoad && !snapshot.isLoading) {
+    publish({
+      ...snapshot,
+      isLoading: true,
+    });
+  }
+
+  sessionRequest = getCurrentUser(forceRefresh)
+    .then((user) => {
+      lastLoadedAt = Date.now();
+
+      publish({
+        user,
+        profile: profileFromUser(user),
+        isLoading: false,
+      });
+    })
+    .catch(() => {
+      if (initialLoad) {
+        publish({
+          user: null,
+          profile: null,
+          isLoading: false,
+        });
+      }
+    })
+    .finally(() => {
+      sessionRequest = null;
+    });
+
+  return sessionRequest;
+}
+
+function attachGlobalListeners() {
+  if (globalListenersAttached || typeof window === "undefined") {
+    return;
+  }
+
+  globalListenersAttached = true;
+
+  window.addEventListener(AUTH_CHANGED_EVENT, () => {
+    void loadSharedSession(true);
+  });
+
+  window.addEventListener("focus", () => {
+    if (Date.now() - lastLoadedAt >= SESSION_REFRESH_MS) {
+      void loadSharedSession(true);
+    }
+  });
+}
+
+export function useAuthSession() {
+  const [state, setState] = useState<SessionSnapshot>(snapshot);
+
   useEffect(() => {
-    void loadSession();
-
-    const refresh = () => {
-      void loadSession();
-    };
-
-    window.addEventListener(AUTH_CHANGED_EVENT, refresh);
-    window.addEventListener("focus", refresh);
+    attachGlobalListeners();
+    listeners.add(setState);
+    setState(snapshot);
+    void loadSharedSession();
 
     return () => {
-      window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
-      window.removeEventListener("focus", refresh);
+      listeners.delete(setState);
     };
   }, []);
 
   return {
-    user,
-    profile,
-    isLoading,
-    isAdmin: profile?.role === "admin",
-    isCustomer: profile?.role === "customer",
-    refresh: loadSession,
+    user: state.user,
+    profile: state.profile,
+    isLoading: state.isLoading,
+    isAdmin: state.profile?.role === "admin",
+    isCustomer: state.profile?.role === "customer",
+    refresh: () => loadSharedSession(true),
   };
 }

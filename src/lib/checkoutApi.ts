@@ -98,16 +98,68 @@ type CreateCheckoutOrderResponse = {
   data: {
     order: CreatedCheckoutOrder;
     tracking_token: string;
-    replayed: boolean;
+    replayed?: boolean;
   };
 };
 
-export async function getCheckoutBootstrap() {
-  const response = await laravelGet<CheckoutBootstrapResponse>(
-    "/api/v1/checkout/bootstrap",
-  );
+type TimedValue<T> = {
+  expiresAt: number;
+  value: T;
+};
 
-  return response.data;
+const BOOTSTRAP_CACHE_MS = 15_000;
+const QUOTE_CACHE_MS = 30_000;
+const EMAIL_CACHE_MS = 5 * 60_000;
+
+let bootstrapCache: TimedValue<CheckoutBootstrap> | null = null;
+let bootstrapRequest: Promise<CheckoutBootstrap> | null = null;
+
+const quoteCache = new Map<string, TimedValue<CheckoutQuote>>();
+const quoteRequests = new Map<string, Promise<CheckoutQuote>>();
+const emailCache = new Map<string, TimedValue<boolean>>();
+const emailRequests = new Map<string, Promise<boolean>>();
+
+function quoteKey(input: {
+  lat: number;
+  lng: number;
+  totalQuantity: number;
+}) {
+  return [
+    input.lat.toFixed(5),
+    input.lng.toFixed(5),
+    String(input.totalQuantity),
+  ].join(":");
+}
+
+export async function getCheckoutBootstrap(forceRefresh = false) {
+  if (
+    !forceRefresh &&
+    bootstrapCache &&
+    bootstrapCache.expiresAt > Date.now()
+  ) {
+    return bootstrapCache.value;
+  }
+
+  if (!forceRefresh && bootstrapRequest) {
+    return bootstrapRequest;
+  }
+
+  bootstrapRequest = laravelGet<CheckoutBootstrapResponse>(
+    "/api/v1/checkout/bootstrap",
+  )
+    .then((response) => {
+      bootstrapCache = {
+        expiresAt: Date.now() + BOOTSTRAP_CACHE_MS,
+        value: response.data,
+      };
+
+      return response.data;
+    })
+    .finally(() => {
+      bootstrapRequest = null;
+    });
+
+  return bootstrapRequest;
 }
 
 export async function getCheckoutQuote(input: {
@@ -115,25 +167,85 @@ export async function getCheckoutQuote(input: {
   lng: number;
   totalQuantity: number;
 }) {
-  const response = await laravelPost<CheckoutQuoteResponse>(
+  const key = quoteKey(input);
+  const cached = quoteCache.get(key);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  const existing = quoteRequests.get(key);
+
+  if (existing) {
+    return existing;
+  }
+
+  const request = laravelPost<CheckoutQuoteResponse>(
     "/api/v1/checkout/quote",
     {
       lat: input.lat,
       lng: input.lng,
       total_quantity: input.totalQuantity,
     },
-  );
+  )
+    .then((response) => {
+      quoteCache.set(key, {
+        expiresAt: Date.now() + QUOTE_CACHE_MS,
+        value: response.data.quote,
+      });
 
-  return response.data.quote;
+      if (quoteCache.size > 40) {
+        const oldestKey = quoteCache.keys().next().value;
+
+        if (oldestKey) {
+          quoteCache.delete(oldestKey);
+        }
+      }
+
+      return response.data.quote;
+    })
+    .finally(() => {
+      quoteRequests.delete(key);
+    });
+
+  quoteRequests.set(key, request);
+
+  return request;
 }
 
 export async function checkCheckoutEmailExists(email: string) {
-  const response = await laravelPost<EmailExistsResponse>(
-    "/api/v1/checkout/email-exists",
-    { email },
-  );
+  const key = email.trim().toLowerCase();
+  const cached = emailCache.get(key);
 
-  return response.data.exists;
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  const existing = emailRequests.get(key);
+
+  if (existing) {
+    return existing;
+  }
+
+  const request = laravelPost<EmailExistsResponse>(
+    "/api/v1/checkout/email-exists",
+    { email: key },
+  )
+    .then((response) => {
+      emailCache.set(key, {
+        expiresAt: Date.now() + EMAIL_CACHE_MS,
+        value: response.data.exists,
+      });
+
+      return response.data.exists;
+    })
+    .finally(() => {
+      emailRequests.delete(key);
+    });
+
+  emailRequests.set(key, request);
+
+  return request;
 }
 
 export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
@@ -141,6 +253,8 @@ export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
     "/api/v1/checkout/orders",
     input,
   );
+
+  bootstrapCache = null;
 
   return response.data;
 }

@@ -7,8 +7,6 @@ import CriticalBreakPage from "../pages/system/CriticalBreakPage";
 import MaintenancePage from "../pages/system/MaintenancePage";
 import BakingLoader from "./BakingLoader";
 
-const MIN_LOADER_TIME_MS = 2300;
-
 const adminBypassPrefixes = ["/login", "/admin"];
 
 function canAdminBypassPath(pathname: string) {
@@ -35,22 +33,12 @@ export default function SiteAccessGate({ children }: { children: ReactNode }) {
 
   const [activeMode, setActiveMode] = useState<SiteModeRow | null>(null);
   const [isModeLoading, setIsModeLoading] = useState(true);
-  const [minimumLoaderDone, setMinimumLoaderDone] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setMinimumLoaderDone(true);
-    }, MIN_LOADER_TIME_MS);
-
-    return () => window.clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     let mounted = true;
 
     async function loadMode() {
       try {
-        setIsModeLoading(true);
         const mode = await getActiveSiteMode();
 
         if (mounted) {
@@ -80,16 +68,16 @@ export default function SiteAccessGate({ children }: { children: ReactNode }) {
       }
     }
 
-    loadMode();
+    void loadMode();
 
     return () => {
       mounted = false;
     };
-  }, [location.pathname]);
+  }, []);
 
   const adminBypass = isAdmin && canAdminBypassPath(location.pathname);
 
-  if (isModeLoading || isAuthLoading || !minimumLoaderDone) {
+  if (isModeLoading || isAuthLoading) {
     return <BakingLoader />;
   }
 
