@@ -100,6 +100,7 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
 
   const result = await createCheckoutOrder({
     order_no: input.orderNo,
+    idempotency_key: input.orderNo,
     device_id: getBauraDeviceId(),
     sender_name: input.senderName.trim(),
     sender_email: input.senderEmail?.trim().toLowerCase() || "",
@@ -131,7 +132,10 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
     delivery_lat: input.deliveryLat,
     delivery_lng: input.deliveryLng,
     delivery_slot_id: input.deliverySlotId,
-    payment_method: "BANK_TRANSFER_WHATSAPP",
+    payment_method:
+      input.paymentMethod === "PAYHERE"
+        ? "PAYHERE"
+        : "BANK_TRANSFER_WHATSAPP",
     note: input.note?.trim() || null,
     items: input.items.map((item) => ({
       product_id: item.itemId,

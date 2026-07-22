@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
-import { supabase } from "../lib/supabase";
+import { getCurrentUser } from "../lib/auth";
+import {
+  getAdminSiteModes,
+  resetAdminSiteModes,
+  updateAdminSiteMode,
+} from "../lib/adminDeliverySettingsApi";
 
 type SiteMode = {
   id: string;
@@ -37,129 +42,104 @@ export default function AdminSiteSettings() {
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
 
-  async function verifyAdmin() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
-    if (!user) {
-      navigate("/login");
-      return false;
-    }
+async function verifyAdmin() {
+  const user = await getCurrentUser();
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") {
-      navigate("/account");
-      return false;
-    }
-
-    return true;
+  if (!user) {
+    navigate("/login");
+    return false;
   }
 
-  async function loadModes() {
-    setLoading(true);
-    setErrorText("");
+  if (user.role !== "admin" || !user.is_active) {
+    navigate("/account");
+    return false;
+  }
 
+  return true;
+}
+
+
+async function loadModes() {
+  setLoading(true);
+  setErrorText("");
+
+  try {
     const isAdmin = await verifyAdmin();
     if (!isAdmin) return;
 
-    const { data, error } = await supabase
-      .from("site_modes")
-      .select("*")
-      .order("mode", { ascending: true });
-
+    setModes(await getAdminSiteModes());
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not load site modes.",
+    );
+  } finally {
     setLoading(false);
-
-    if (error) {
-      setErrorText(error.message);
-      return;
-    }
-
-    setModes((data || []) as SiteMode[]);
   }
+}
 
   useEffect(() => {
     loadModes();
   }, []);
 
-  async function sendModeEmail(mode: SiteMode["mode"], enabled: boolean) {
-    const { error } = await supabase.functions.invoke("send-site-mode-alert", {
-      body: {
-        mode,
-        enabled,
-        siteUrl: window.location.origin,
-      },
-    });
 
-    if (error) {
-      console.warn("Mode email failed:", error.message);
-    }
-  }
+async function sendModeEmail(
+  _mode: SiteMode["mode"],
+  _enabled: boolean,
+) {
+  // Site-mode persistence is now handled entirely by Laravel/MySQL.
+}
 
-  async function toggleMode(mode: SiteMode) {
-    setSavingMode(mode.mode);
-    setErrorText("");
-    setSuccessText("");
 
-    const nextEnabled = !mode.is_enabled;
+async function toggleMode(mode: SiteMode) {
+  setSavingMode(mode.mode);
+  setErrorText("");
+  setSuccessText("");
 
-    const { error } = await supabase
-      .from("site_modes")
-      .update({
-        is_enabled: nextEnabled,
-        starts_at: null,
-        ends_at: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("mode", mode.mode);
+  const nextEnabled = !mode.is_enabled;
 
-    setSavingMode("");
-
-    if (error) {
-      setErrorText(error.message);
-      return;
-    }
-
-    if (nextEnabled) {
-      await sendModeEmail(mode.mode, true);
-    }
+  try {
+    await updateAdminSiteMode(mode.mode, nextEnabled);
 
     setSuccessText(
       `${modeLabels[mode.mode]} ${nextEnabled ? "enabled" : "disabled"}.`,
     );
 
-    loadModes();
-  }
-
-  async function resetAllModes() {
-    if (!window.confirm("Turn off all site modes?")) return;
-
-    setSavingMode("RESET_ALL");
-    setErrorText("");
-    setSuccessText("");
-
-    const { error } = await supabase.from("site_modes").update({
-      is_enabled: false,
-      starts_at: null,
-      ends_at: null,
-      updated_at: new Date().toISOString(),
-    });
-
+    await loadModes();
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not update the site mode.",
+    );
+  } finally {
     setSavingMode("");
-
-    if (error) {
-      setErrorText(error.message);
-      return;
-    }
-
-    setSuccessText("All site modes turned off.");
-    loadModes();
   }
+}
+
+
+async function resetAllModes() {
+  if (!window.confirm("Turn off all site modes?")) return;
+
+  setSavingMode("RESET_ALL");
+  setErrorText("");
+  setSuccessText("");
+
+  try {
+    setModes(await resetAdminSiteModes());
+    setSuccessText("All site modes turned off.");
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not reset the site modes.",
+    );
+  } finally {
+    setSavingMode("");
+  }
+}
 
   return (
     <Page>

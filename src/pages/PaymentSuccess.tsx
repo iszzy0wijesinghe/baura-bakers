@@ -1,67 +1,118 @@
-import { useEffect, useState } from "react";
+/** @format */
+
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCart } from "../app/cart";
 import Page from "../components/Page";
+import {
+  getPayHerePaymentStatus,
+  type PayHerePaymentStatus,
+} from "../lib/payhere";
 
-type OrderStatus = {
-  order_no: string;
-  payment_status: string;
-  order_status: string;
-  subtotal_lkr: number;
+type PendingPayment = {
+  orderNo?: string;
+  trackingToken?: string | null;
 };
+
+function readPendingPayment(): PendingPayment | null {
+  try {
+    const raw = localStorage.getItem(
+      "baura_pending_payment_v1",
+    );
+
+    return raw
+      ? (JSON.parse(raw) as PendingPayment)
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
   const orderNo = searchParams.get("orderNo");
   const { clear } = useCart();
 
-  const [status, setStatus] = useState<OrderStatus | null>(null);
+  const pendingPayment = useMemo(
+    () => readPendingPayment(),
+    [],
+  );
+
+  const trackingToken =
+    pendingPayment?.orderNo === orderNo
+      ? pendingPayment.trackingToken || null
+      : null;
+
+  const [status, setStatus] =
+    useState<PayHerePaymentStatus | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!orderNo) return;
 
     let cancelled = false;
+    let timer: number | null = null;
 
     async function checkStatus() {
       try {
-        const response = await fetch(
-          `/api/order-status?orderNo=${encodeURIComponent(orderNo!)}`,
+        const data = await getPayHerePaymentStatus(
+          orderNo!,
+          trackingToken,
         );
-
-        if (!response.ok) {
-          throw new Error("Could not check payment status.");
-        }
-
-        const data = (await response.json()) as OrderStatus;
 
         if (cancelled) return;
 
         setStatus(data);
+        setError("");
 
         if (data.payment_status === "PAID") {
           clear();
-          localStorage.removeItem("baura_pending_payment_v1");
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Could not check payment status.",
+          localStorage.removeItem(
+            "baura_pending_payment_v1",
           );
+          return;
         }
+
+        if (
+          [
+            "FAILED",
+            "CANCELLED",
+            "CHARGEDBACK",
+          ].includes(data.payment_status)
+        ) {
+          return;
+        }
+
+        timer = window.setTimeout(checkStatus, 3000);
+      } catch (err) {
+        if (cancelled) return;
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Could not check payment status.",
+        );
+        timer = window.setTimeout(checkStatus, 5000);
       }
     }
 
-    checkStatus();
-    const timer = window.setInterval(checkStatus, 3000);
+    void checkStatus();
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
     };
-  }, [orderNo, clear]);
+  }, [orderNo, trackingToken, clear]);
+
+  const paid = status?.payment_status === "PAID";
+  const failed = status
+    ? ["FAILED", "CANCELLED", "CHARGEDBACK"].includes(
+        status.payment_status,
+      )
+    : false;
 
   return (
     <Page>
@@ -71,23 +122,40 @@ export default function PaymentSuccess() {
         </p>
 
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-brand-ink">
-          {status?.payment_status === "PAID"
+          {paid
             ? "Payment successful"
-            : "Checking your payment"}
+            : failed
+              ? "Payment was not completed"
+              : "Checking your payment"}
         </h1>
 
         <p className="mt-3 text-sm leading-relaxed text-brand-ink/70">
-          Order No: <span className="font-semibold">{orderNo || "-"}</span>
+          Order No:{" "}
+          <span className="font-semibold">
+            {orderNo || "-"}
+          </span>
         </p>
 
-        {status?.payment_status === "PAID" ? (
+        {paid ? (
           <p className="mt-4 rounded-2xl bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-            Your order is confirmed. Your cart has been cleared.
+            PayHere confirmed your payment. The MySQL order is
+            now marked as paid and confirmed.
+          </p>
+        ) : failed ? (
+          <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {status?.latest_attempt?.status_message ||
+              "The payment was cancelled or unsuccessful. You can try again."}
           </p>
         ) : (
           <p className="mt-4 rounded-2xl bg-yellow-50 px-4 py-3 text-sm font-medium text-yellow-800">
-            Please wait. PayHere is confirming your payment. Do not worry if
-            this takes a few seconds.
+            PayHere confirms payments through a secure server
+            notification. This page will update automatically.
+          </p>
+        )}
+
+        {status && (
+          <p className="mt-3 text-xs text-brand-ink/55">
+            Current status: {status.payment_status}
           </p>
         )}
 
@@ -97,19 +165,28 @@ export default function PaymentSuccess() {
           </p>
         )}
 
-        <div className="mt-6 flex justify-center gap-3">
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Link
-            to="/"
+            to="/orders"
             className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg"
           >
-            Go home
+            My orders
           </Link>
 
+          {!paid && (
+            <Link
+              to="/order"
+              className="rounded-2xl border border-brand-ink/20 px-5 py-3 text-sm font-semibold text-brand-ink"
+            >
+              Try again
+            </Link>
+          )}
+
           <Link
-            to="/cart"
+            to="/"
             className="rounded-2xl border border-brand-ink/20 px-5 py-3 text-sm font-semibold text-brand-ink"
           >
-            View cart
+            Go home
           </Link>
         </div>
       </div>

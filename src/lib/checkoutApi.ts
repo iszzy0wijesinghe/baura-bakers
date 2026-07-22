@@ -41,6 +41,7 @@ export type CheckoutOrderItemInput = {
 
 export type CreateCheckoutOrderInput = {
   order_no?: string | null;
+  idempotency_key?: string | null;
   device_id?: string | null;
   sender_name: string;
   sender_email: string;
@@ -60,7 +61,7 @@ export type CreateCheckoutOrderInput = {
   delivery_lat: number;
   delivery_lng: number;
   delivery_slot_id: string;
-  payment_method: "BANK_TRANSFER_WHATSAPP";
+  payment_method: "BANK_TRANSFER_WHATSAPP" | "PAYHERE";
   note?: string | null;
   items: CheckoutOrderItemInput[];
 };
@@ -97,6 +98,7 @@ type CreateCheckoutOrderResponse = {
   data: {
     order: CreatedCheckoutOrder;
     tracking_token: string;
+    replayed: boolean;
   };
 };
 

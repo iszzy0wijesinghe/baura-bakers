@@ -1,9 +1,46 @@
+/** @format */
+
+import { getBauraDeviceId } from "./device";
+import { laravelGet, laravelPost } from "./laravelApi";
+
 type CreatePaymentResponse = {
-  actionUrl: string;
-  fields: Record<string, string>;
+  data: {
+    action_url: string;
+    fields: Record<string, string>;
+    payment: {
+      attempt_no: number;
+      merchant_order_id: string;
+    };
+  };
 };
 
-function submitPostForm(actionUrl: string, fields: Record<string, string>) {
+export type PayHerePaymentStatus = {
+  order_no: string;
+  payment_method: string;
+  payment_status:
+    | "PENDING_PAYMENT"
+    | "PAYMENT_STARTED"
+    | "PAID"
+    | "FAILED"
+    | "CANCELLED"
+    | "CHARGEDBACK"
+    | "UNKNOWN";
+  order_status: string;
+  order_total_lkr: number;
+  latest_attempt: {
+    attempt_no: number;
+    status: string;
+    provider_status_code: string | null;
+    status_message: string | null;
+    completed_at: string | null;
+  } | null;
+  updated_at: string | null;
+};
+
+function submitPostForm(
+  actionUrl: string,
+  fields: Record<string, string>,
+) {
   const form = document.createElement("form");
   form.method = "POST";
   form.action = actionUrl;
@@ -21,37 +58,48 @@ function submitPostForm(actionUrl: string, fields: Record<string, string>) {
   form.submit();
 }
 
-export async function startPayHerePayment(orderNo: string) {
-  const response = await fetch("/api/create-payment", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+export async function startPayHerePayment(
+  orderNo: string,
+  trackingToken?: string | null,
+) {
+  const response = await laravelPost<CreatePaymentResponse>(
+    "/api/v1/payments/payhere/initiate",
+    {
+      order_no: orderNo,
+      device_id: getBauraDeviceId(),
+      token: trackingToken || null,
     },
-    body: JSON.stringify({ orderNo }),
-  });
+  );
 
-  const rawText = await response.text();
-
-  let result: any = null;
-
-  try {
-    result = rawText ? JSON.parse(rawText) : null;
-  } catch {
-    console.error("Non-JSON API response:", rawText);
-    throw new Error("Payment API returned an invalid response.");
+  if (!response.data.action_url || !response.data.fields) {
+    throw new Error(
+      "Laravel returned an incomplete PayHere payment request.",
+    );
   }
 
-  if (!response.ok) {
-    console.error("Payment API error:", result);
-    throw new Error(result?.message || "Could not start PayHere payment.");
-  }
+  submitPostForm(
+    response.data.action_url,
+    response.data.fields,
+  );
+}
 
-  const paymentResult = result as CreatePaymentResponse;
+export async function getPayHerePaymentStatus(
+  orderNo: string,
+  trackingToken?: string | null,
+) {
+  const params = new URLSearchParams();
+  const deviceId = getBauraDeviceId();
 
-  if (!paymentResult.actionUrl || !paymentResult.fields) {
-    console.error("Invalid payment payload:", paymentResult);
-    throw new Error("Payment API response is missing PayHere fields.");
-  }
+  if (deviceId) params.set("device_id", deviceId);
+  if (trackingToken) params.set("token", trackingToken);
 
-  submitPostForm(paymentResult.actionUrl, paymentResult.fields);
+  const response = await laravelGet<{
+    data: {
+      payment: PayHerePaymentStatus;
+    };
+  }>(
+    `/api/v1/payments/orders/${encodeURIComponent(orderNo)}/status?${params.toString()}`,
+  );
+
+  return response.data.payment;
 }

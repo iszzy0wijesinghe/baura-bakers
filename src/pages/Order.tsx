@@ -18,7 +18,6 @@ import {
 
 const WHATSAPP_NUMBER = "94769878770";
 const DELIVERY_METHOD = "Regular Baura delivery arrangement";
-const OFFICIAL_EMAIL = "baura.bakers@gmail.com";
 
 const BAURA_LAT = 6.832636909688839;
 const BAURA_LNG = 79.99981842449598;
@@ -444,13 +443,6 @@ export default function Order() {
   const [selectedDeliverySlotId, setSelectedDeliverySlotId] = useState("");
   const [selectedDeliveryDate, setSelectedDeliveryDate] = useState("");
   const [isLoadingSlots, setIsLoadingSlots] = useState(true);
-
-  const [orderNotice, setOrderNotice] = useState<{
-    orderNo: string;
-    email: string;
-    trackingUrl: string;
-    isLoggedIn: boolean;
-  } | null>(null);
 
   const [isExistingCustomerEmail, setIsExistingCustomerEmail] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
@@ -1210,19 +1202,14 @@ export default function Order() {
         window.open(url, "_blank", "noopener,noreferrer");
       }
 
-      if (isLoggedIn) {
-        navigate("/orders");
-        return;
+      if (!isLoggedIn) {
+        sessionStorage.setItem(
+          "baura_after_login_redirect",
+          "/orders",
+        );
       }
 
-      setOrderNotice({
-        orderNo: orderId,
-        email: form.senderEmail.trim(),
-        trackingUrl,
-        isLoggedIn,
-      });
-
-      setIsSubmitting(false);
+      navigate("/orders");
     } catch (error) {
       if (whatsappTab) {
         whatsappTab.close();
@@ -1239,6 +1226,7 @@ export default function Order() {
       setIsSubmitting(false);
     }
   }
+
 
   const currentLocationUrl =
     form.deliveryTarget === "RECEIVER"
@@ -1268,75 +1256,10 @@ export default function Order() {
     {
       id: 4,
       label: "Confirm",
-      helper: "WhatsApp order",
+      helper: "WhatsApp confirmation",
     },
   ] as const;
 
-  if (orderNotice) {
-    return (
-      <Page>
-        <section className="mx-auto max-w-3xl rounded-[2.4rem] border border-black/10 bg-white/75 p-6 text-center shadow-[0_24px_80px_rgba(55,38,25,0.1)] backdrop-blur sm:p-10">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-ink/45">
-            Order Sent
-          </p>
-
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-brand-ink sm:text-5xl">
-            Please check your email
-          </h1>
-
-          <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-brand-ink/65 sm:text-base">
-            We saved your order and opened WhatsApp with your order details.
-            Please check{" "}
-            <span className="font-semibold text-brand-ink">
-              {orderNotice.email}
-            </span>{" "}
-            for updates from our official Baura Bakers email.
-          </p>
-
-          <p className="mx-auto mt-4 w-fit rounded-2xl bg-brand-bg px-4 py-3 text-sm font-semibold text-brand-ink">
-            {OFFICIAL_EMAIL}
-          </p>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <a
-              href={orderNotice.trackingUrl}
-              className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95"
-            >
-              Track order
-            </a>
-
-            <Link
-              to="/register"
-              className="rounded-2xl border border-brand-ink/20 bg-white/70 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white"
-            >
-              Register to save order history
-            </Link>
-          </div>
-
-          <p className="mx-auto mt-6 max-w-xl text-xs leading-relaxed text-brand-ink/55">
-            If you register or login using the same email or this same device,
-            this guest order will be added to your Baura Bakers order history.
-          </p>
-
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link
-              to="/login"
-              className="rounded-2xl border border-brand-ink/15 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink"
-            >
-              Login
-            </Link>
-
-            <Link
-              to="/menu"
-              className="rounded-2xl border border-brand-ink/15 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink"
-            >
-              Back to menu
-            </Link>
-          </div>
-        </section>
-      </Page>
-    );
-  }
 
   if (!items.length && !savedOrderNo) {
     return (
@@ -2023,7 +1946,7 @@ export default function Order() {
                   <StepHeader
                     eyebrow="Step 4"
                     title="Confirm and send order"
-                    description="Review the order summary. When you continue, the order is saved and WhatsApp opens with all order details."
+                    description="Review the order summary, save it securely in MySQL, then open WhatsApp with all order details for confirmation."
                   />
 
                   <div className="rounded-3xl border border-black/10 bg-brand-bg/75 p-4 sm:p-5">
@@ -2092,8 +2015,9 @@ export default function Order() {
                     </div>
 
                     <InfoBox tone="neutral" className="mt-4">
-                      Online payment is currently disabled. Continue through
-                      WhatsApp for order confirmation and bank transfer details.
+                      Your order is saved in MySQL before WhatsApp opens.
+                      Baura Bakers will confirm availability, delivery, and bank
+                      transfer details through WhatsApp.
                     </InfoBox>
                   </div>
 
@@ -2108,7 +2032,9 @@ export default function Order() {
                         : "border-brand-ink/25 bg-brand-ink text-brand-bg hover:bg-brand-ink/95",
                     ].join(" ")}
                   >
-                    {isSubmitting ? "Saving order..." : "Order via WhatsApp"}
+                    {isSubmitting
+                      ? "Saving order..."
+                      : "Place order & open WhatsApp"}
                   </button>
 
                   <button

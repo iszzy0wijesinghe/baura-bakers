@@ -23,10 +23,18 @@ export default function Login() {
 
       const { user } = await loginWithEmail(email, password);
 
+      const customerRedirect = sessionStorage.getItem(
+        "baura_after_login_redirect",
+      );
+
+      if (customerRedirect) {
+        sessionStorage.removeItem("baura_after_login_redirect");
+      }
+
       navigate(
         user.role === "admin"
           ? "/admin/dashboard"
-          : "/account",
+          : customerRedirect || "/account",
       );
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : "Could not login.");

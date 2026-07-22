@@ -28,7 +28,7 @@ import {
   type ProductPayload,
   type SubcategoryPayload,
 } from "../lib/adminCatalog";
-import { supabase } from "../lib/supabase";
+import { getCurrentUser } from "../lib/auth";
 
 type TabKey = "products" | "categories" | "subcategories";
 
@@ -129,22 +129,14 @@ export default function AdminProducts() {
   const [errorText, setErrorText] = useState("");
 
   async function verifyAdmin() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
 
     if (!user) {
       navigate("/login");
       return false;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") {
+    if (!user.is_active || user.role !== "admin") {
       navigate("/account");
       return false;
     }

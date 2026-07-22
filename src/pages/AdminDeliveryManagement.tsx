@@ -3,7 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
-import { supabase } from "../lib/supabase";
+import { getCurrentUser } from "../lib/auth";
+import {
+  createAdminDeliverySlots,
+  deleteAdminDeliverySlot,
+  deleteAdminDistancePrice,
+  deleteAdminVehicleRule,
+  getAdminDeliveryData,
+  saveAdminDeliverySettings,
+  saveAdminDistancePrice,
+  saveAdminVehicleRule,
+} from "../lib/adminDeliverySettingsApi";
 
 type TabKey = "availability" | "pricing" | "vehicles" | "settings";
 
@@ -352,112 +362,80 @@ export default function AdminDeliveryManagement() {
     (slot) => slot.is_available && slot.slot_date >= todayIso,
   ).length;
 
-  async function verifyAdmin() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
-    if (!user) {
-      navigate("/login");
-      return false;
-    }
+async function verifyAdmin() {
+  const user = await getCurrentUser();
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") {
-      navigate("/account");
-      return false;
-    }
-
-    return true;
+  if (!user) {
+    navigate("/login");
+    return false;
   }
 
-  async function loadDeliveryData() {
-    setErrorText("");
+  if (user.role !== "admin" || !user.is_active) {
+    navigate("/account");
+    return false;
+  }
 
+  return true;
+}
+
+
+async function loadDeliveryData() {
+  setErrorText("");
+
+  try {
     const isAdmin = await verifyAdmin();
     if (!isAdmin) return;
 
-    const [slotsRes, rulesRes, pricesRes, settingsRes] = await Promise.all([
-      supabase
-        .from("delivery_slots")
-        .select("*")
-        .order("slot_date", { ascending: true })
-        .order("start_time", { ascending: true }),
+    const data = await getAdminDeliveryData();
 
-      supabase
-        .from("delivery_vehicle_rules")
-        .select("*")
-        .order("min_quantity", { ascending: true }),
-
-      supabase
-        .from("delivery_distance_prices")
-        .select("*")
-        .eq("price_table_key", REGULAR_PRICE_TABLE_KEY)
-        .order("vehicle_type", { ascending: true })
-        .order("distance_km", { ascending: true }),
-
-      supabase.from("delivery_settings").select("setting_key, setting_value"),
-    ]);
-
-    if (
-      slotsRes.error ||
-      rulesRes.error ||
-      pricesRes.error ||
-      settingsRes.error
-    ) {
-      setErrorText(
-        slotsRes.error?.message ||
-          rulesRes.error?.message ||
-          pricesRes.error?.message ||
-          settingsRes.error?.message ||
-          "Could not load delivery data.",
-      );
-      return;
-    }
-
-    setSlots((slotsRes.data || []) as DeliverySlot[]);
-    setVehicleRules((rulesRes.data || []) as DeliveryVehicleRule[]);
-    setDistancePrices((pricesRes.data || []) as DeliveryDistancePrice[]);
-
-    const map: Record<string, string> = {};
-
-    for (const row of (settingsRes.data || []) as DeliverySetting[]) {
-      map[row.setting_key] = row.setting_value;
-    }
-
-    setSettings(map);
+    setSlots(data.slots as DeliverySlot[]);
+    setVehicleRules(data.vehicleRules as DeliveryVehicleRule[]);
+    setDistancePrices(data.distancePrices as DeliveryDistancePrice[]);
+    setSettings(data.settings);
 
     setPatternForm((prev) => ({
       ...prev,
-      delivery_mode: (map.delivery_mode || "SCHEDULED") as DeliveryMode,
-      business_open_time: map.business_open_time || "09:00",
-      business_close_time: map.business_close_time || "18:00",
+      delivery_mode: (data.settings.delivery_mode ||
+        "SCHEDULED") as DeliveryMode,
+      business_open_time:
+        data.settings.business_open_time || "09:00",
+      business_close_time:
+        data.settings.business_close_time || "18:00",
     }));
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not load delivery data.",
+    );
   }
+}
 
   useEffect(() => {
     loadDeliveryData();
   }, []);
 
-  async function saveSettingRows(rows: DeliverySetting[]) {
-    const { error } = await supabase
-      .from("delivery_settings")
-      .upsert(rows, { onConflict: "setting_key" });
 
-    if (error) {
-      setErrorText(error.message);
-      return false;
-    }
+async function saveSettingRows(rows: DeliverySetting[]) {
+  try {
+    const data = await saveAdminDeliverySettings(rows);
 
-    await loadDeliveryData();
+    setSlots(data.slots as DeliverySlot[]);
+    setVehicleRules(data.vehicleRules as DeliveryVehicleRule[]);
+    setDistancePrices(data.distancePrices as DeliveryDistancePrice[]);
+    setSettings(data.settings);
     setSuccessText("Delivery settings updated.");
     return true;
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not update delivery settings.",
+    );
+    return false;
   }
+}
 
   async function savePatternSettings() {
     setSaving(true);
@@ -482,52 +460,48 @@ export default function AdminDeliveryManagement() {
     setSaving(false);
   }
 
-  async function saveManualSchedule() {
-    if (!manualScheduleForm.slot_date) {
-      setErrorText("Please select a start date.");
-      return;
-    }
 
-    if (
-      manualScheduleForm.recurrence !== "NONE" &&
-      !manualScheduleForm.end_date
-    ) {
-      setErrorText("Please select an end date for recurring delivery sessions.");
-      return;
-    }
+async function saveManualSchedule() {
+  if (!manualScheduleForm.slot_date) {
+    setErrorText("Please select a start date.");
+    return;
+  }
 
-    const dates = generateRecurringDates({
-      startDate: manualScheduleForm.slot_date,
-      endDate: manualScheduleForm.end_date,
-      recurrence: manualScheduleForm.recurrence,
-    });
+  if (
+    manualScheduleForm.recurrence !== "NONE" &&
+    !manualScheduleForm.end_date
+  ) {
+    setErrorText("Please select an end date for recurring delivery sessions.");
+    return;
+  }
 
-    if (!dates.length) {
-      setErrorText("No valid delivery dates found.");
-      return;
-    }
+  const dates = generateRecurringDates({
+    startDate: manualScheduleForm.slot_date,
+    endDate: manualScheduleForm.end_date,
+    recurrence: manualScheduleForm.recurrence,
+  });
 
-    setSaving(true);
-    setErrorText("");
-    setSuccessText("");
+  if (!dates.length) {
+    setErrorText("No valid delivery dates found.");
+    return;
+  }
 
-    const payload = dates.map((date) => ({
-      slot_date: date,
-      slot_label: manualScheduleForm.slot_label,
-      start_time: manualScheduleForm.start_time,
-      end_time: manualScheduleForm.end_time,
-      max_orders: Number(manualScheduleForm.max_orders || 0),
-      is_available: manualScheduleForm.is_available,
-    }));
+  setSaving(true);
+  setErrorText("");
+  setSuccessText("");
 
-    const { error } = await supabase.from("delivery_slots").insert(payload);
-
-    setSaving(false);
-
-    if (error) {
-      setErrorText(error.message);
-      return;
-    }
+  try {
+    await createAdminDeliverySlots(
+      dates.map((date) => ({
+        id: "",
+        slot_date: date,
+        slot_label: manualScheduleForm.slot_label,
+        start_time: manualScheduleForm.start_time,
+        end_time: manualScheduleForm.end_time,
+        max_orders: Number(manualScheduleForm.max_orders || 0),
+        is_available: manualScheduleForm.is_available,
+      })),
+    );
 
     setManualScheduleForm({
       slot_date: "",
@@ -546,25 +520,34 @@ export default function AdminDeliveryManagement() {
         : `${dates.length} delivery sessions created.`,
     );
 
-    loadDeliveryData();
+    await loadDeliveryData();
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not create delivery sessions.",
+    );
+  } finally {
+    setSaving(false);
   }
+}
 
-  async function deleteSlot(id: string) {
-    if (!window.confirm("Delete this delivery slot?")) return;
 
-    const { error } = await supabase
-      .from("delivery_slots")
-      .delete()
-      .eq("id", id);
+async function deleteSlot(id: string) {
+  if (!window.confirm("Delete this delivery slot?")) return;
 
-    if (error) {
-      setErrorText(error.message);
-      return;
-    }
-
+  try {
+    await deleteAdminDeliverySlot(id);
     setSuccessText("Delivery slot deleted.");
-    loadDeliveryData();
+    await loadDeliveryData();
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not delete the delivery slot.",
+    );
   }
+}
 
   async function saveDailySlot() {
     if (!dailySlotForm.slot_label.trim()) {
@@ -751,126 +734,122 @@ export default function AdminDeliveryManagement() {
     ]);
   }
 
-  async function savePrice() {
-    if (!priceForm.distance_km || Number(priceForm.distance_km) < 1) {
-      setErrorText("Distance must be at least 1km.");
-      return;
-    }
 
-    if (!priceForm.normal_price_lkr || Number(priceForm.normal_price_lkr) <= 0) {
-      setErrorText("Please enter a valid regular delivery fee.");
-      return;
-    }
+async function savePrice() {
+  if (!priceForm.distance_km || Number(priceForm.distance_km) < 1) {
+    setErrorText("Distance must be at least 1km.");
+    return;
+  }
 
-    setSaving(true);
-    setErrorText("");
-    setSuccessText("");
+  if (!priceForm.normal_price_lkr || Number(priceForm.normal_price_lkr) <= 0) {
+    setErrorText("Please enter a valid regular delivery fee.");
+    return;
+  }
 
+  setSaving(true);
+  setErrorText("");
+  setSuccessText("");
+
+  try {
     const regularPrice = Number(priceForm.normal_price_lkr || 0);
 
-    const payload = {
+    await saveAdminDistancePrice({
+      id: priceForm.id || undefined,
       price_table_key: REGULAR_PRICE_TABLE_KEY,
       distance_km: Number(priceForm.distance_km || 0),
       vehicle_type: priceForm.vehicle_type,
       normal_price_lkr: regularPrice,
       peak_price_lkr: regularPrice,
       is_active: priceForm.is_active,
-    };
+    });
 
-    const result = priceForm.id
-      ? await supabase
-          .from("delivery_distance_prices")
-          .update(payload)
-          .eq("id", priceForm.id)
-      : await supabase.from("delivery_distance_prices").insert(payload);
-
-    setSaving(false);
-
-    if (result.error) {
-      setErrorText(result.error.message);
-      return;
-    }
-
+    const wasEditing = Boolean(priceForm.id);
     setPriceForm(resetPriceForm());
-
-    setSuccessText(priceForm.id ? "Price row updated." : "Price row created.");
-    loadDeliveryData();
+    setSuccessText(wasEditing ? "Price row updated." : "Price row created.");
+    await loadDeliveryData();
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not save the delivery price.",
+    );
+  } finally {
+    setSaving(false);
   }
+}
 
-  async function deletePrice(id: string) {
-    if (!window.confirm("Delete this price row?")) return;
 
-    const { error } = await supabase
-      .from("delivery_distance_prices")
-      .delete()
-      .eq("id", id);
+async function deletePrice(id: string) {
+  if (!window.confirm("Delete this price row?")) return;
 
-    if (error) {
-      setErrorText(error.message);
-      return;
-    }
-
+  try {
+    await deleteAdminDistancePrice(id);
     setSuccessText("Price row deleted.");
-    loadDeliveryData();
+    await loadDeliveryData();
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not delete the price row.",
+    );
+  }
+}
+
+
+async function saveVehicleRule() {
+  if (!vehicleForm.min_quantity || Number(vehicleForm.min_quantity) < 1) {
+    setErrorText("Minimum quantity must be at least 1.");
+    return;
   }
 
-  async function saveVehicleRule() {
-    if (!vehicleForm.min_quantity || Number(vehicleForm.min_quantity) < 1) {
-      setErrorText("Minimum quantity must be at least 1.");
-      return;
-    }
+  setSaving(true);
+  setErrorText("");
+  setSuccessText("");
 
-    setSaving(true);
-    setErrorText("");
-    setSuccessText("");
-
-    const payload = {
+  try {
+    await saveAdminVehicleRule({
+      id: vehicleForm.id || undefined,
       vehicle_type: vehicleForm.vehicle_type,
       min_quantity: Number(vehicleForm.min_quantity || 0),
       max_quantity: vehicleForm.max_quantity
         ? Number(vehicleForm.max_quantity)
         : null,
       is_active: vehicleForm.is_active,
-    };
+    });
 
-    const result = vehicleForm.id
-      ? await supabase
-          .from("delivery_vehicle_rules")
-          .update(payload)
-          .eq("id", vehicleForm.id)
-      : await supabase.from("delivery_vehicle_rules").insert(payload);
-
-    setSaving(false);
-
-    if (result.error) {
-      setErrorText(result.error.message);
-      return;
-    }
-
+    const wasEditing = Boolean(vehicleForm.id);
     setVehicleForm(resetVehicleForm());
-
     setSuccessText(
-      vehicleForm.id ? "Vehicle rule updated." : "Vehicle rule created.",
+      wasEditing ? "Vehicle rule updated." : "Vehicle rule created.",
     );
-    loadDeliveryData();
+    await loadDeliveryData();
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not save the vehicle rule.",
+    );
+  } finally {
+    setSaving(false);
   }
+}
 
-  async function deleteVehicleRule(id: string) {
-    if (!window.confirm("Delete this vehicle rule?")) return;
 
-    const { error } = await supabase
-      .from("delivery_vehicle_rules")
-      .delete()
-      .eq("id", id);
+async function deleteVehicleRule(id: string) {
+  if (!window.confirm("Delete this vehicle rule?")) return;
 
-    if (error) {
-      setErrorText(error.message);
-      return;
-    }
-
+  try {
+    await deleteAdminVehicleRule(id);
     setSuccessText("Vehicle rule deleted.");
-    loadDeliveryData();
+    await loadDeliveryData();
+  } catch (error) {
+    setErrorText(
+      error instanceof Error
+        ? error.message
+        : "Could not delete the vehicle rule.",
+    );
   }
+}
 
   async function saveCommonSettings() {
     setSaving(true);

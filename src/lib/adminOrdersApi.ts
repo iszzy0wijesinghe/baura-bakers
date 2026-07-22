@@ -1,6 +1,6 @@
 /** @format */
 
-import { laravelGet, laravelPatch } from "./laravelApi";
+import { laravelGet, laravelPatch, laravelPost } from "./laravelApi";
 
 export type AdminOrderItem = {
   id: string;
@@ -116,4 +116,22 @@ export async function updateAdminOrder(
   );
 
   return response.data.order;
+}
+export async function sendAdminOrderConfirmationEmail(
+  orderId: string,
+) {
+  const response = await laravelPost<{
+    message: string;
+    data: {
+      sent: boolean;
+      already_sent: boolean;
+      order: AdminOrder;
+    };
+  }>(
+    `/api/v1/admin/orders/${encodeURIComponent(
+      orderId,
+    )}/confirmation-email`,
+  );
+
+  return response.data;
 }

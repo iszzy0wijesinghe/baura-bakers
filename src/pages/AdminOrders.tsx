@@ -4,6 +4,7 @@ import Page from "../components/Page";
 import { getCurrentUser } from "../lib/auth";
 import {
   getAllAdminOrders,
+  sendAdminOrderConfirmationEmail,
   updateAdminOrder,
 } from "../lib/adminOrdersApi";
 
@@ -205,33 +206,24 @@ export default function AdminOrders() {
     };
   }, [orders]);
 
-  async function sendConfirmationEmail(_orderId: string) {
-    throw new Error(
-      "Confirmation email sending will be moved to Laravel in the payment/email stage.",
-    );
-  }
-
   async function handleManualSendConfirmationEmail(orderId: string) {
     try {
       setSavingId(orderId);
       setErrorText("");
 
-      const result = await sendConfirmationEmail(orderId);
-
-      console.log("Manual confirmation email result:", result);
+      const result = await sendAdminOrderConfirmationEmail(orderId);
 
       setOrders((prev) =>
         prev.map((order) =>
-          order.id === orderId
-            ? {
-                ...order,
-                confirmation_email_sent_at: new Date().toISOString(),
-              }
-            : order,
+          order.id === orderId ? result.order : order,
         ),
       );
 
-      alert("Confirmation email sent successfully.");
+      alert(
+        result.already_sent
+          ? "The confirmation email was already sent."
+          : "Confirmation email sent successfully.",
+      );
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown email sending error.";

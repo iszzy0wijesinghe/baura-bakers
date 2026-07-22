@@ -37,7 +37,15 @@ export default function Register() {
         phone,
       );
 
-      navigate("/account");
+      const customerRedirect = sessionStorage.getItem(
+        "baura_after_login_redirect",
+      );
+
+      if (customerRedirect) {
+        sessionStorage.removeItem("baura_after_login_redirect");
+      }
+
+      navigate(customerRedirect || "/account");
     } catch (error) {
       setErrorText(
         error instanceof Error ? error.message : "Could not create account.",

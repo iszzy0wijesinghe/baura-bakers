@@ -1,3 +1,5 @@
+/** @format */
+
 import { Link, useSearchParams } from "react-router-dom";
 import Page from "../components/Page";
 
@@ -17,20 +19,30 @@ export default function PaymentCancelled() {
         </h1>
 
         <p className="mt-3 text-sm leading-relaxed text-brand-ink/70">
-          Order No: <span className="font-semibold">{orderNo || "-"}</span>
+          Order No:{" "}
+          <span className="font-semibold">
+            {orderNo || "-"}
+          </span>
         </p>
 
         <p className="mt-4 rounded-2xl bg-yellow-50 px-4 py-3 text-sm font-medium text-yellow-800">
-          Your cart is still saved. You can return and try payment again or
-          continue with WhatsApp ordering.
+          Your MySQL order remains saved. You can return to
+          checkout and start a new PayHere payment attempt.
         </p>
 
-        <div className="mt-6 flex justify-center gap-3">
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Link
             to="/order"
             className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg"
           >
             Try again
+          </Link>
+
+          <Link
+            to="/orders"
+            className="rounded-2xl border border-brand-ink/20 px-5 py-3 text-sm font-semibold text-brand-ink"
+          >
+            My orders
           </Link>
 
           <Link
