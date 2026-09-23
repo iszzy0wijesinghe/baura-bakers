@@ -2,43 +2,2127 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
+/* =======================================================
+   GLOBAL
+======================================================= */
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
 }
 
 body {
   margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
   background: #f9f4e0;
   color: #372619;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
-    Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
+#root {
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+button,
 a {
-  text-underline-offset: 3px;
+  -webkit-tap-highlight-color: transparent;
 }
 
-@layer components {
-  .input-admin {
-    @apply w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-sm text-brand-ink outline-none placeholder:text-brand-ink/35 focus:border-brand-ink/30 focus:ring-2 focus:ring-brand-ink/10;
+::selection {
+  background: #372619;
+  color: #f9f4e0;
+}
+
+/* =======================================================
+   HOME
+======================================================= */
+
+.baura-home {
+  --cream: #f9f4e0;
+  --light: #fffaf0;
+  --brown: #372619;
+  --brown-soft: rgba(55, 38, 25, 0.7);
+  --brown-muted: rgba(55, 38, 25, 0.5);
+
+  position: relative;
+  left: 50%;
+  width: 100vw;
+  margin-top: 0 !important;
+  margin-left: -50vw;
+  padding-top: 0 !important;
+  overflow: hidden;
+  background: var(--cream);
+}
+
+body:has(.baura-home) #root {
+  padding-top: 0;
+}
+
+body:has(.baura-home) main {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.baura-home > .baura-hero:first-child {
+  margin-top: 0 !important;
+}
+
+/* =======================================================
+   HERO
+======================================================= */
+
+.baura-hero {
+  position: relative;
+  width: 100%;
+  height: clamp(640px, 84svh, 820px);
+  min-height: 640px;
+  margin: 0;
+  overflow: hidden;
+  background: #211712;
+  isolation: isolate;
+}
+
+/* =======================================================
+   HERO SLIDES
+======================================================= */
+
+.baura-hero__slides {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #211712;
+}
+
+.baura-hero__slide {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  will-change: opacity;
+}
+
+/* =======================================================
+   HERO ARTWORK
+======================================================= */
+
+.baura-hero__artwork {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #211712;
+}
+
+/*
+   Both layers below use the EXACT SAME uploaded image.
+
+   Blur:
+   - fills the entire hero
+   - provides the atmosphere behind the text
+   - prevents empty bars when the viewport ratio changes
+
+   Photo:
+   - fills the entire hero
+   - remains sharp
+   - fades softly on the text side
+
+   There is no generated background colour and no
+   extracted image palette.
+*/
+
+.baura-hero__photo-blur,
+.baura-hero__photo {
+  position: absolute;
+  inset: 0;
+  background-image: var(--baura-hero-image);
+  background-repeat: no-repeat;
+  background-position: var(
+    --baura-hero-image-position,
+    right center
+  );
+}
+
+/* =======================================================
+   BLURRED PHOTO
+======================================================= */
+
+.baura-hero__photo-blur {
+  z-index: 0;
+
+  /*
+     Slight enlargement prevents blur from exposing
+     transparent/empty edges.
+  */
+  inset: -4%;
+
+  background-size: cover;
+
+  filter:
+    blur(30px)
+    saturate(0.94)
+    brightness(0.7);
+
+  transform: scale(1.035);
+  transform-origin: center;
+}
+
+/* =======================================================
+   SHARP PHOTO
+======================================================= */
+
+.baura-hero__photo {
+  z-index: 1;
+  background-size: cover;
+}
+
+/*
+   RIGHT
+
+   Keep the actual photograph sharp on the right.
+   As it approaches the copy area it gradually reveals
+   the blurred copy underneath.
+
+   This creates:
+
+   blurred photograph
+          ↓
+   soft photograph
+          ↓
+   sharp photograph
+
+   instead of:
+
+   brown block | photograph
+*/
+
+.baura-hero__artwork--right
+  .baura-hero__photo {
+  -webkit-mask-image:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.12) 0%,
+      rgba(0, 0, 0, 0.16) 18%,
+      rgba(0, 0, 0, 0.25) 30%,
+      rgba(0, 0, 0, 0.42) 40%,
+      rgba(0, 0, 0, 0.65) 49%,
+      rgba(0, 0, 0, 0.84) 57%,
+      rgba(0, 0, 0, 0.96) 64%,
+      #000 70%,
+      #000 100%
+    );
+
+  mask-image:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.12) 0%,
+      rgba(0, 0, 0, 0.16) 18%,
+      rgba(0, 0, 0, 0.25) 30%,
+      rgba(0, 0, 0, 0.42) 40%,
+      rgba(0, 0, 0, 0.65) 49%,
+      rgba(0, 0, 0, 0.84) 57%,
+      rgba(0, 0, 0, 0.96) 64%,
+      #000 70%,
+      #000 100%
+    );
+}
+
+/* =======================================================
+   LEFT
+======================================================= */
+
+.baura-hero__artwork--left
+  .baura-hero__photo {
+  -webkit-mask-image:
+    linear-gradient(
+      270deg,
+      rgba(0, 0, 0, 0.12) 0%,
+      rgba(0, 0, 0, 0.16) 18%,
+      rgba(0, 0, 0, 0.25) 30%,
+      rgba(0, 0, 0, 0.42) 40%,
+      rgba(0, 0, 0, 0.65) 49%,
+      rgba(0, 0, 0, 0.84) 57%,
+      rgba(0, 0, 0, 0.96) 64%,
+      #000 70%,
+      #000 100%
+    );
+
+  mask-image:
+    linear-gradient(
+      270deg,
+      rgba(0, 0, 0, 0.12) 0%,
+      rgba(0, 0, 0, 0.16) 18%,
+      rgba(0, 0, 0, 0.25) 30%,
+      rgba(0, 0, 0, 0.42) 40%,
+      rgba(0, 0, 0, 0.65) 49%,
+      rgba(0, 0, 0, 0.84) 57%,
+      rgba(0, 0, 0, 0.96) 64%,
+      #000 70%,
+      #000 100%
+    );
+}
+
+/* =======================================================
+   CENTER
+======================================================= */
+
+.baura-hero__artwork--center
+  .baura-hero__photo {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* =======================================================
+   HERO DARKNESS
+======================================================= */
+
+/*
+   This is the only variable darkness layer.
+
+   --baura-hero-overlay comes directly from:
+   slide.overlayStrength
+
+   Example:
+   20 -> rgba(..., 0.20)
+   35 -> rgba(..., 0.35)
+*/
+
+.baura-hero__darkness {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+
+  background:
+    rgba(
+      0,
+      0,
+      0,
+      var(
+        --baura-hero-overlay,
+        0.24
+      )
+    );
+}
+
+/* =======================================================
+   HEADER READABILITY
+======================================================= */
+
+.baura-hero__header-shade {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  height: 170px;
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.2) 0%,
+      rgba(0, 0, 0, 0.075) 52%,
+      transparent 100%
+    );
+}
+
+/* =======================================================
+   TEXT READABILITY
+======================================================= */
+
+/*
+   This is intentionally neutral.
+
+   It does not replace the photo with brown.
+   It only gives the cream text enough contrast.
+*/
+
+.baura-hero__text-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.34) 0%,
+      rgba(0, 0, 0, 0.27) 20%,
+      rgba(0, 0, 0, 0.17) 36%,
+      rgba(0, 0, 0, 0.07) 49%,
+      transparent 63%
+    );
+}
+
+.baura-hero:has(
+    .baura-hero__artwork--left
+  )
+  .baura-hero__text-shade {
+  background:
+    linear-gradient(
+      270deg,
+      rgba(0, 0, 0, 0.34) 0%,
+      rgba(0, 0, 0, 0.27) 20%,
+      rgba(0, 0, 0, 0.17) 36%,
+      rgba(0, 0, 0, 0.07) 49%,
+      transparent 63%
+    );
+}
+
+.baura-hero:has(
+    .baura-hero__artwork--center
+  )
+  .baura-hero__text-shade {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.31) 0%,
+      rgba(0, 0, 0, 0.2) 29%,
+      rgba(0, 0, 0, 0.06) 52%,
+      transparent 70%
+    );
+}
+
+/* =======================================================
+   BOTTOM READABILITY
+======================================================= */
+
+.baura-hero__bottom-shade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  height: 28%;
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.2),
+      rgba(0, 0, 0, 0.045) 52%,
+      transparent
+    );
+}
+
+/* =======================================================
+   HERO CONTENT
+======================================================= */
+
+.baura-hero__content {
+  position: relative;
+  z-index: 3;
+
+  display: flex;
+
+  width:
+    min(
+      calc(100% - 8vw),
+      1540px
+    );
+
+  height: 100%;
+  margin: 0 auto;
+
+  flex-direction: column;
+  justify-content: space-between;
+
+  padding:
+    clamp(
+      6.3rem,
+      11vh,
+      7.6rem
+    )
+    0
+    clamp(
+      1.25rem,
+      2.5vh,
+      1.8rem
+    );
+}
+
+.baura-hero__copy {
+  display: flex;
+  max-width: 670px;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  color: var(--cream);
+}
+
+.baura-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: rgba(249, 244, 224, 0.68);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.baura-hero__eyebrow::before {
+  content: "";
+  width: 1.45rem;
+  height: 1px;
+  flex: 0 0 auto;
+  background: rgba(249, 244, 224, 0.48);
+}
+
+.baura-hero h1 {
+  max-width: 700px;
+  margin: 0.9rem 0 0;
+  color: var(--cream);
+
+  font-size:
+    clamp(
+      3.8rem,
+      6vw,
+      6.3rem
+    );
+
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.035em;
+}
+
+.baura-hero__title-line {
+  display: block;
+}
+
+.baura-hero__copy > p {
+  max-width: 480px;
+  margin: 1.3rem 0 0;
+  color: rgba(249, 244, 224, 0.76);
+
+  font-size:
+    clamp(
+      0.8rem,
+      0.9vw,
+      0.92rem
+    );
+
+  line-height: 1.68;
+}
+
+.baura-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.35rem;
+  margin-top: 1.6rem;
+}
+
+/* =======================================================
+   BUTTONS
+======================================================= */
+
+.baura-button {
+  display: inline-flex;
+  min-height: 3.1rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  border-radius: 999px;
+  padding: 0 1.4rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+button.baura-button {
+  border: 0;
+}
+
+.baura-button:hover {
+  transform: translateY(-2px);
+}
+
+.baura-button--light {
+  background: var(--cream);
+  color: var(--brown);
+
+  box-shadow:
+    0 14px 38px
+    rgba(0, 0, 0, 0.18);
+}
+
+.baura-button--light:hover {
+  background: var(--light);
+
+  box-shadow:
+    0 18px 44px
+    rgba(0, 0, 0, 0.23);
+}
+
+.baura-button--dark {
+  background: var(--brown);
+  color: var(--cream);
+}
+
+.baura-button--dark:hover {
+  box-shadow:
+    0 16px 38px
+    rgba(55, 38, 25, 0.18);
+}
+
+.baura-hero__secondary,
+.baura-celebration__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: rgba(249, 244, 224, 0.86);
+  font-size: 0.77rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+button.baura-hero__secondary {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.baura-hero__secondary svg,
+.baura-celebration__link svg,
+.baura-text-link svg {
+  transition: transform 180ms ease;
+}
+
+.baura-hero__secondary:hover svg,
+.baura-celebration__link:hover svg,
+.baura-text-link:hover svg {
+  transform: translateX(4px);
+}
+
+/* =======================================================
+   HERO BOTTOM
+======================================================= */
+
+.baura-hero__bottom {
+  display: flex;
+  min-height: 2.8rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  color: var(--cream);
+}
+
+.baura-hero__fresh {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: rgba(249, 244, 224, 0.66);
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+
+.baura-hero__fresh > span {
+  width: 0.46rem;
+  height: 0.46rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #f1cf87;
+
+  box-shadow:
+    0 0 0 5px
+      rgba(241, 207, 135, 0.09),
+    0 0 22px
+      rgba(241, 207, 135, 0.35);
+}
+
+.baura-hero__slide-status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.baura-hero__progress {
+  display: flex;
+  width: 116px;
+  align-items: center;
+  gap: 5px;
+}
+
+.baura-hero__progress button {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.baura-hero__progress button::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: rgba(249, 244, 224, 0.24);
+  transform: translateY(-50%);
+}
+
+.baura-hero__progress button span {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--cream);
+  transform: translateY(-50%);
+}
+
+.baura-hero__progress
+  button.is-active span {
+  width: 100%;
+  transition: width 6.3s linear;
+}
+
+.baura-hero__number {
+  display: flex;
+  min-width: 3.3rem;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(249, 244, 224, 0.7);
+  font-size: 0.59rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.baura-hero__number > span {
+  color: rgba(249, 244, 224, 0.3);
+}
+
+.baura-hero__discover {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: rgba(249, 244, 224, 0.7);
+  font-size: 0.63rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.baura-hero__discover svg {
+  transition: transform 180ms ease;
+}
+
+.baura-hero__discover:hover svg {
+  transform: translateY(3px);
+}
+
+/* =======================================================
+   OPENING
+======================================================= */
+
+.baura-opening {
+  width:
+    min(
+      calc(100% - 10vw),
+      1480px
+    );
+
+  margin: 0 auto;
+
+  padding:
+    clamp(
+      6.5rem,
+      10vw,
+      10.5rem
+    )
+    0;
+}
+
+.baura-opening__small,
+.baura-mini-label {
+  color: var(--brown-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.baura-opening__statement {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.4fr)
+    minmax(280px, 0.5fr);
+
+  align-items: end;
+
+  gap:
+    clamp(
+      3rem,
+      8vw,
+      9rem
+    );
+
+  margin-top: 1.3rem;
+}
+
+.baura-opening h2 {
+  max-width: 950px;
+  margin: 0;
+
+  font-size:
+    clamp(
+      3.5rem,
+      6.7vw,
+      7.1rem
+    );
+
+  font-weight: 700;
+  line-height: 0.91;
+  letter-spacing: -0.035em;
+}
+
+.baura-opening__side {
+  padding-bottom: 0.45rem;
+}
+
+.baura-opening__side p {
+  max-width: 410px;
+  margin: 0 0 1.7rem;
+  color: var(--brown-soft);
+  font-size: 0.86rem;
+  line-height: 1.8;
+}
+
+.baura-text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  border-bottom:
+    1px solid
+    rgba(55, 38, 25, 0.3);
+
+  padding-bottom: 0.3rem;
+  color: var(--brown);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* =======================================================
+   FRESH COMPOSITION
+======================================================= */
+
+.baura-fresh {
+  position: relative;
+  display: grid;
+
+  width:
+    min(
+      calc(100% - 6vw),
+      1600px
+    );
+
+  min-height: 820px;
+  margin: 0 auto;
+
+  grid-template-columns:
+    minmax(0, 1.15fr)
+    minmax(340px, 0.62fr);
+
+  grid-template-rows:
+    auto 1fr;
+
+  column-gap:
+    clamp(
+      3rem,
+      8vw,
+      9rem
+    );
+}
+
+.baura-fresh__primary {
+  grid-row: 1 / 3;
+  overflow: hidden;
+  align-self: start;
+}
+
+.baura-fresh__primary img {
+  width: 100%;
+
+  height:
+    min(
+      62vw,
+      820px
+    );
+
+  max-height: 820px;
+  object-fit: cover;
+
+  transition:
+    transform
+    900ms
+    cubic-bezier(
+      0.22,
+      1,
+      0.36,
+      1
+    );
+}
+
+.baura-fresh__primary:hover img {
+  transform: scale(1.008);
+}
+
+.baura-fresh__copy {
+  align-self: center;
+  max-width: 520px;
+  padding-top: 4rem;
+}
+
+.baura-fresh__copy h2 {
+  margin: 1rem 0 0;
+
+  font-size:
+    clamp(
+      3rem,
+      5.3vw,
+      5.8rem
+    );
+
+  font-weight: 700;
+  line-height: 0.93;
+  letter-spacing: -0.035em;
+}
+
+.baura-fresh__copy p {
+  max-width: 430px;
+  margin: 1.5rem 0 1.8rem;
+  color: var(--brown-soft);
+  font-size: 0.84rem;
+  line-height: 1.8;
+}
+
+.baura-fresh__secondary {
+  width:
+    min(
+      100%,
+      350px
+    );
+
+  margin-top: 4rem;
+  margin-left: auto;
+  overflow: hidden;
+}
+
+.baura-fresh__secondary img {
+  width: 100%;
+  aspect-ratio: 0.82;
+  object-fit: cover;
+
+  transition:
+    transform
+    900ms
+    cubic-bezier(
+      0.22,
+      1,
+      0.36,
+      1
+    );
+}
+
+.baura-fresh__secondary:hover img {
+  transform: scale(1.012);
+}
+
+/* =======================================================
+   PRODUCTS
+======================================================= */
+
+.baura-products {
+  width:
+    min(
+      calc(100% - 8vw),
+      1540px
+    );
+
+  margin: 0 auto;
+
+  padding:
+    clamp(
+      7rem,
+      11vw,
+      11rem
+    )
+    0;
+}
+
+.baura-products__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 3rem;
+
+  margin-bottom:
+    clamp(
+      2.5rem,
+      5vw,
+      5rem
+    );
+}
+
+.baura-products__heading h2 {
+  margin: 0.8rem 0 0;
+
+  font-size:
+    clamp(
+      3rem,
+      5.8vw,
+      6rem
+    );
+
+  font-weight: 700;
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+}
+
+.baura-products__composition {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.25fr)
+    minmax(350px, 0.7fr);
+
+  gap:
+    clamp(
+      1.5rem,
+      4vw,
+      4rem
+    );
+
+  align-items: start;
+}
+
+.baura-products__side {
+  display: flex;
+  flex-direction: column;
+
+  gap:
+    clamp(
+      2.5rem,
+      5vw,
+      5rem
+    );
+
+  padding-top: 8vw;
+}
+
+.baura-featured-product__image {
+  position: relative;
+  display: block;
+  overflow: hidden;
+
+  background:
+    rgba(
+      55,
+      38,
+      25,
+      0.06
+    );
+
+  color: var(--brown);
+  text-decoration: none;
+}
+
+.baura-featured-product__image img {
+  width: 100%;
+  aspect-ratio: 1.05;
+  object-fit: cover;
+
+  transition:
+    transform
+    650ms
+    cubic-bezier(
+      0.22,
+      1,
+      0.36,
+      1
+    );
+}
+
+.baura-featured-product--large
+  .baura-featured-product__image
+  img {
+  aspect-ratio: 0.95;
+}
+
+.baura-featured-product:hover
+  .baura-featured-product__image
+  img {
+  transform: scale(1.02);
+}
+
+.baura-featured-product__go {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 50%;
+
+  background:
+    rgba(
+      249,
+      244,
+      224,
+      0.95
+    );
+
+  opacity: 0;
+  transform: translateY(6px);
+
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.baura-featured-product:hover
+  .baura-featured-product__go {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.baura-featured-product__fallback {
+  display: grid;
+  min-height: 420px;
+  place-items: center;
+
+  color:
+    rgba(
+      55,
+      38,
+      25,
+      0.35
+    );
+}
+
+.baura-featured-product__fallback
+  span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.baura-featured-product__info {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  padding-top: 1rem;
+}
+
+.baura-featured-product__info h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.baura-featured-product__info p {
+  max-width: 420px;
+  margin: 0.35rem 0 0;
+  color: var(--brown-muted);
+  font-size: 0.7rem;
+  line-height: 1.6;
+}
+
+.baura-featured-product__info strong {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+}
+
+/* =======================================================
+   CELEBRATION
+======================================================= */
+
+.baura-celebration {
+  position: relative;
+  width: 100%;
+
+  height:
+    clamp(
+      620px,
+      78svh,
+      760px
+    );
+
+  min-height: 620px;
+  overflow: hidden;
+  background: #24150e;
+  isolation: isolate;
+}
+
+.baura-celebration__image {
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  overflow: hidden;
+}
+
+.baura-celebration__image img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  transform: none !important;
+}
+
+.baura-celebration__shade {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(
+        25,
+        13,
+        8,
+        0.86
+      ),
+      rgba(
+        25,
+        13,
+        8,
+        0.55
+      ) 37%,
+      rgba(
+        25,
+        13,
+        8,
+        0.1
+      ) 70%
+    ),
+    linear-gradient(
+      0deg,
+      rgba(
+        20,
+        10,
+        6,
+        0.35
+      ),
+      transparent 55%
+    );
+}
+
+.baura-celebration__copy {
+  display: flex;
+
+  width:
+    min(
+      calc(100% - 8vw),
+      1540px
+    );
+
+  height: 100%;
+  margin: 0 auto;
+
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  color: var(--cream);
+}
+
+.baura-celebration__copy > span {
+  color:
+    rgba(
+      249,
+      244,
+      224,
+      0.68
+    );
+
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.19em;
+}
+
+.baura-celebration h2 {
+  max-width: 850px;
+  margin: 1rem 0 0;
+
+  font-size:
+    clamp(
+      3.6rem,
+      6.2vw,
+      6.5rem
+    );
+
+  font-weight: 700;
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+}
+
+.baura-celebration__copy > p {
+  max-width: 460px;
+  margin: 1.5rem 0 0;
+
+  color:
+    rgba(
+      249,
+      244,
+      224,
+      0.75
+    );
+
+  font-size: 0.88rem;
+  line-height: 1.75;
+}
+
+.baura-celebration__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.4rem;
+  margin-top: 2rem;
+}
+
+/* =======================================================
+   FINAL
+======================================================= */
+
+.baura-final {
+  display: flex;
+
+  width:
+    min(
+      calc(100% - 10vw),
+      1480px
+    );
+
+  min-height: 520px;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4rem;
+  padding: 7rem 0;
+}
+
+.baura-final__copy > span {
+  color: var(--brown-muted);
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.baura-final h2 {
+  max-width: 950px;
+  margin: 1rem 0 0;
+
+  font-size:
+    clamp(
+      3.4rem,
+      6.3vw,
+      6.8rem
+    );
+
+  font-weight: 700;
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+}
+
+/* =======================================================
+   LARGE DESKTOP
+======================================================= */
+
+@media (min-width: 1400px) {
+  .baura-hero {
+    height:
+      clamp(
+        660px,
+        84svh,
+        820px
+      );
+
+    min-height: 660px;
+  }
+
+  .baura-hero__content {
+    width:
+      min(
+        calc(100% - 10vw),
+        1600px
+      );
+  }
+
+  .baura-fresh__primary img {
+    height:
+      min(
+        58vw,
+        820px
+      );
   }
 }
 
-.input-order {
-  width: 100%;
-  border-radius: 1rem;
-  border: 1px solid rgb(0 0 0 / 0.1);
-  background: rgb(255 255 255 / 0.65);
-  padding: 0.75rem 0.875rem;
-  font-size: 0.875rem;
-  outline: none;
+/* =======================================================
+   WIDE DESKTOP
+======================================================= */
+
+@media
+  (min-aspect-ratio: 16 / 9)
+  and
+  (min-width: 901px) {
+  .baura-hero {
+    height:
+      clamp(
+        640px,
+        82svh,
+        780px
+      );
+
+    min-height: 640px;
+  }
 }
 
-.input-order::placeholder {
-  color: rgb(55 38 25 / 0.4);
+/* =======================================================
+   TABLET
+======================================================= */
+
+@media (max-width: 900px) {
+  .baura-hero {
+    height:
+      clamp(
+        640px,
+        84svh,
+        760px
+      );
+
+    min-height: 640px;
+  }
+
+  /*
+     Tablet keeps the same photograph system but lets
+     more of the sharp image remain visible.
+  */
+
+  .baura-hero__photo-blur {
+    inset: -5%;
+    filter:
+      blur(27px)
+      saturate(0.94)
+      brightness(0.68);
+  }
+
+  .baura-hero__artwork--right
+    .baura-hero__photo {
+    -webkit-mask-image:
+      linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.15) 0%,
+        rgba(0, 0, 0, 0.2) 18%,
+        rgba(0, 0, 0, 0.35) 31%,
+        rgba(0, 0, 0, 0.58) 43%,
+        rgba(0, 0, 0, 0.82) 54%,
+        #000 65%,
+        #000 100%
+      );
+
+    mask-image:
+      linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.15) 0%,
+        rgba(0, 0, 0, 0.2) 18%,
+        rgba(0, 0, 0, 0.35) 31%,
+        rgba(0, 0, 0, 0.58) 43%,
+        rgba(0, 0, 0, 0.82) 54%,
+        #000 65%,
+        #000 100%
+      );
+  }
+
+  .baura-hero__artwork--left
+    .baura-hero__photo {
+    -webkit-mask-image:
+      linear-gradient(
+        270deg,
+        rgba(0, 0, 0, 0.15) 0%,
+        rgba(0, 0, 0, 0.2) 18%,
+        rgba(0, 0, 0, 0.35) 31%,
+        rgba(0, 0, 0, 0.58) 43%,
+        rgba(0, 0, 0, 0.82) 54%,
+        #000 65%,
+        #000 100%
+      );
+
+    mask-image:
+      linear-gradient(
+        270deg,
+        rgba(0, 0, 0, 0.15) 0%,
+        rgba(0, 0, 0, 0.2) 18%,
+        rgba(0, 0, 0, 0.35) 31%,
+        rgba(0, 0, 0, 0.58) 43%,
+        rgba(0, 0, 0, 0.82) 54%,
+        #000 65%,
+        #000 100%
+      );
+  }
+
+  .baura-hero__content {
+    width: calc(100% - 3rem);
+
+    padding:
+      clamp(
+        6rem,
+        10vh,
+        7rem
+      )
+      0
+      1.4rem;
+  }
+
+  .baura-hero h1 {
+    font-size:
+      clamp(
+        3.7rem,
+        9vw,
+        5.5rem
+      );
+  }
+
+  .baura-opening {
+    width: calc(100% - 3rem);
+  }
+
+  .baura-opening__statement {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .baura-fresh {
+    width: calc(100% - 3rem);
+    min-height: 0;
+
+    grid-template-columns:
+      1.1fr 0.9fr;
+
+    column-gap: 2rem;
+  }
+
+  .baura-fresh__primary img {
+    height: 680px;
+  }
+
+  .baura-fresh__secondary {
+    display: none;
+  }
+
+  .baura-products {
+    width: calc(100% - 3rem);
+  }
+
+  .baura-celebration {
+    height:
+      clamp(
+        620px,
+        80svh,
+        740px
+      );
+  }
+
+  .baura-celebration__copy {
+    width: calc(100% - 3rem);
+  }
+
+  .baura-final {
+    width: calc(100% - 3rem);
+  }
 }
 
-.input-order:focus {
-  border-color: rgb(55 38 25 / 0.3);
-  box-shadow: 0 0 0 2px rgb(55 38 25 / 0.1);
+/* =======================================================
+   MOBILE
+======================================================= */
+
+@media (max-width: 640px) {
+  .baura-hero {
+    width: 100%;
+
+    height:
+      min(
+        88svh,
+        760px
+      );
+
+    min-height: 620px;
+    max-height: 760px;
+  }
+
+  /*
+     MOBILE
+
+     Still the exact same uploaded photograph.
+
+     The sharp photograph fills the hero with cover.
+     The blur remains behind it.
+
+     We stop doing the old "image on top / solid colour
+     below" composition entirely.
+  */
+
+  .baura-hero__photo-blur {
+    inset: -8%;
+
+    background-position:
+      var(
+        --baura-hero-image-position,
+        center center
+      );
+
+    filter:
+      blur(30px)
+      saturate(0.92)
+      brightness(0.62);
+
+    transform: scale(1.06);
+  }
+
+  .baura-hero__photo {
+    background-size: cover;
+  }
+
+  /*
+     On narrow screens a horizontal fade is no longer
+     useful. Keep the photograph itself visible and use
+     a gentle vertical softening toward the text area.
+  */
+
+  .baura-hero__artwork--right
+    .baura-hero__photo,
+  .baura-hero__artwork--left
+    .baura-hero__photo,
+  .baura-hero__artwork--center
+    .baura-hero__photo {
+    -webkit-mask-image:
+      linear-gradient(
+        180deg,
+        #000 0%,
+        #000 35%,
+        rgba(0, 0, 0, 0.98) 48%,
+        rgba(0, 0, 0, 0.9) 60%,
+        rgba(0, 0, 0, 0.78) 72%,
+        rgba(0, 0, 0, 0.62) 84%,
+        rgba(0, 0, 0, 0.5) 100%
+      );
+
+    mask-image:
+      linear-gradient(
+        180deg,
+        #000 0%,
+        #000 35%,
+        rgba(0, 0, 0, 0.98) 48%,
+        rgba(0, 0, 0, 0.9) 60%,
+        rgba(0, 0, 0, 0.78) 72%,
+        rgba(0, 0, 0, 0.62) 84%,
+        rgba(0, 0, 0, 0.5) 100%
+      );
+  }
+
+  .baura-hero__header-shade {
+    height: 145px;
+
+    background:
+      linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.24) 0%,
+        rgba(0, 0, 0, 0.08) 50%,
+        transparent 100%
+      );
+  }
+
+  .baura-hero__text-shade,
+  .baura-hero:has(
+      .baura-hero__artwork--left
+    )
+    .baura-hero__text-shade,
+  .baura-hero:has(
+      .baura-hero__artwork--center
+    )
+    .baura-hero__text-shade {
+    background:
+      linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.48) 0%,
+        rgba(0, 0, 0, 0.34) 28%,
+        rgba(0, 0, 0, 0.16) 52%,
+        rgba(0, 0, 0, 0.04) 70%,
+        transparent 84%
+      );
+  }
+
+  .baura-hero__bottom-shade {
+    height: 48%;
+
+    background:
+      linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.22),
+        rgba(0, 0, 0, 0.06) 54%,
+        transparent 80%
+      );
+  }
+
+  .baura-hero__content {
+    width: calc(100% - 2.4rem);
+
+    padding:
+      calc(
+        5.2rem +
+        env(
+          safe-area-inset-top
+        )
+      )
+      0
+      calc(
+        1.1rem +
+        env(
+          safe-area-inset-bottom
+        )
+      );
+  }
+
+  .baura-hero__copy {
+    justify-content: flex-end;
+    padding-bottom: 1.5rem;
+  }
+
+  .baura-hero__eyebrow {
+    font-size: 0.57rem;
+    letter-spacing: 0.19em;
+  }
+
+  .baura-hero__eyebrow::before {
+    width: 1.3rem;
+  }
+
+  .baura-hero h1 {
+    max-width: 390px;
+    margin-top: 0.75rem;
+
+    font-size:
+      clamp(
+        3rem,
+        13.5vw,
+        4.3rem
+      );
+
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+  }
+
+  .baura-hero__copy > p {
+    max-width: 340px;
+    margin-top: 1rem;
+    font-size: 0.75rem;
+    line-height: 1.58;
+  }
+
+  .baura-hero__actions {
+    align-items: flex-start;
+    gap: 1rem;
+    margin-top: 1.3rem;
+  }
+
+  .baura-button {
+    min-height: 3rem;
+    padding: 0 1.2rem;
+  }
+
+  .baura-hero__fresh {
+    display: none;
+  }
+
+  .baura-hero__bottom {
+    justify-content: flex-end;
+  }
+
+  .baura-hero__slide-status {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 0.7rem;
+  }
+
+  .baura-hero__progress {
+    width: 86px;
+  }
+
+  .baura-hero__progress button {
+    height: 22px;
+  }
+
+  .baura-hero__number {
+    min-width: 2.8rem;
+    font-size: 0.54rem;
+  }
+
+  .baura-hero__discover {
+    margin-left: auto;
+    font-size: 0.59rem;
+  }
+
+  .baura-opening {
+    width: calc(100% - 2.4rem);
+    padding: 5.5rem 0 6rem;
+  }
+
+  .baura-opening__small,
+  .baura-mini-label {
+    font-size: 0.57rem;
+  }
+
+  .baura-opening__statement {
+    display: block;
+    margin-top: 0.8rem;
+  }
+
+  .baura-opening h2 {
+    max-width: 390px;
+
+    font-size:
+      clamp(
+        3rem,
+        13.5vw,
+        4.5rem
+      );
+
+    line-height: 0.93;
+  }
+
+  .baura-opening__side {
+    margin-top: 2rem;
+  }
+
+  .baura-opening__side p {
+    max-width: 340px;
+    font-size: 0.77rem;
+    line-height: 1.7;
+  }
+
+  .baura-fresh {
+    display: flex;
+    width: 100%;
+    min-height: 0;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .baura-fresh__primary {
+    width: calc(100% - 1.5rem);
+  }
+
+  .baura-fresh__primary img {
+    width: 100%;
+    height: 58svh;
+    min-height: 430px;
+    max-height: 580px;
+    object-fit: cover;
+  }
+
+  .baura-fresh__copy {
+    width: calc(100% - 2.4rem);
+    margin: 0 auto;
+    padding: 3.5rem 0 5rem;
+  }
+
+  .baura-fresh__copy h2 {
+    max-width: 390px;
+    margin-top: 0.7rem;
+
+    font-size:
+      clamp(
+        2.9rem,
+        12.5vw,
+        4rem
+      );
+  }
+
+  .baura-fresh__copy p {
+    max-width: 340px;
+    margin-top: 1.2rem;
+    font-size: 0.77rem;
+    line-height: 1.7;
+  }
+
+  .baura-fresh__secondary {
+    display: block;
+    width: 54%;
+    margin: -1rem 0 0 auto;
+  }
+
+  .baura-fresh__secondary img {
+    aspect-ratio: 0.78;
+  }
+
+  .baura-products {
+    width: calc(100% - 2.4rem);
+    padding: 6rem 0;
+  }
+
+  .baura-products__heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .baura-products__heading h2 {
+    font-size:
+      clamp(
+        3rem,
+        13vw,
+        4.2rem
+      );
+  }
+
+  .baura-products__composition {
+    display: block;
+  }
+
+  .baura-featured-product--large
+    .baura-featured-product__image
+    img {
+    aspect-ratio: 0.88;
+  }
+
+  .baura-featured-product__go {
+    width: 2.7rem;
+    height: 2.7rem;
+    opacity: 1;
+    transform: none;
+  }
+
+  .baura-products__side {
+    gap: 3rem;
+    padding-top: 4rem;
+  }
+
+  .baura-products__side
+    .baura-featured-product:nth-child(even) {
+    width: 82%;
+    margin-left: auto;
+  }
+
+  .baura-featured-product__info {
+    gap: 1rem;
+  }
+
+  .baura-featured-product__info p {
+    max-width: 270px;
+  }
+
+  .baura-celebration {
+    height:
+      min(
+        82svh,
+        720px
+      );
+
+    min-height: 600px;
+    max-height: 720px;
+  }
+
+  .baura-celebration__image img {
+    object-position: 56% center;
+  }
+
+  .baura-celebration__shade {
+    background:
+      linear-gradient(
+        0deg,
+        rgba(
+          22,
+          11,
+          6,
+          0.94
+        ) 0%,
+        rgba(
+          22,
+          11,
+          6,
+          0.69
+        ) 39%,
+        rgba(
+          22,
+          11,
+          6,
+          0.12
+        ) 72%
+      );
+  }
+
+  .baura-celebration__copy {
+    width: calc(100% - 2.4rem);
+    justify-content: flex-end;
+    padding-bottom: 3rem;
+  }
+
+  .baura-celebration h2 {
+    max-width: 390px;
+
+    font-size:
+      clamp(
+        3rem,
+        13.5vw,
+        4.5rem
+      );
+  }
+
+  .baura-celebration__copy > p {
+    max-width: 320px;
+    font-size: 0.77rem;
+  }
+
+  .baura-final {
+    width: calc(100% - 2.4rem);
+    min-height: 0;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2.5rem;
+    padding: 6rem 0;
+  }
+
+  .baura-final h2 {
+    max-width: 390px;
+
+    font-size:
+      clamp(
+        3rem,
+        13.5vw,
+        4.5rem
+      );
+  }
+
+  .baura-final .baura-button {
+    width: 100%;
+  }
+}
+
+/* =======================================================
+   SMALL MOBILE
+======================================================= */
+
+@media (max-width: 380px) {
+  .baura-hero {
+    min-height: 590px;
+  }
+
+  .baura-hero h1 {
+    font-size: 2.85rem;
+  }
+
+  .baura-hero__actions {
+    flex-direction: column;
+  }
+
+  .baura-hero__secondary {
+    padding-left: 0.15rem;
+  }
+
+  .baura-hero__progress {
+    width: 70px;
+  }
+
+  .baura-hero__number {
+    display: none;
+  }
+
+  .baura-opening h2,
+  .baura-fresh__copy h2,
+  .baura-products__heading h2,
+  .baura-celebration h2,
+  .baura-final h2 {
+    font-size: 2.8rem;
+  }
+}
+
+/* =======================================================
+   ACCESSIBILITY
+======================================================= */
+
+.baura-button:focus-visible,
+.baura-text-link:focus-visible,
+.baura-hero__secondary:focus-visible,
+.baura-hero__discover:focus-visible,
+.baura-celebration__link:focus-visible,
+.baura-hero__progress
+  button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 5px;
+}
+
+/* =======================================================
+   REDUCED MOTION
+======================================================= */
+
+@media (
+  prefers-reduced-motion:
+    reduce
+) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .baura-hero__slide {
+    will-change: auto;
+  }
+
+  .baura-hero__progress
+    button.is-active
+    span {
+    width: 100%;
+    transition: none;
+  }
+
+  .baura-button,
+  .baura-text-link svg,
+  .baura-hero__secondary svg,
+  .baura-hero__discover svg,
+  .baura-celebration__link svg,
+  .baura-fresh__primary img,
+  .baura-fresh__secondary img,
+  .baura-featured-product__image img,
+  .baura-featured-product__go {
+    transition: none;
+  }
 }

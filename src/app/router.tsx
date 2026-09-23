@@ -23,6 +23,7 @@ import CriticalBreakPage from "../pages/system/CriticalBreakPage";
 import ErrorStatusPage from "../pages/system/ErrorStatusPage";
 import MaintenancePage from "../pages/system/MaintenancePage";
 import AdminProducts from "../pages/AdminProducts";
+import AdminHeroSlides from "../pages/AdminHeroSlides";
 import AdminPromotions from "../pages/AdminPromotions";
 import OrderTracking from "../pages/OrderTracking";
 import AdminDeliveryManagement from "../pages/AdminDeliveryManagement";
@@ -72,6 +73,7 @@ export const router = createBrowserRouter([
       { path: "/admin/promotions", element: <AdminPromotions /> },
       { path: "/admin/delivery", element: <AdminDeliveryManagement /> },
       { path: "/admin/site-settings", element: <AdminSiteSettings /> },
+      { path: "/admin/hero-slides", element: <AdminHeroSlides /> },
     ],
   },
 

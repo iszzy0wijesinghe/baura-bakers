@@ -8,6 +8,7 @@ import SiteHeader from "./SiteHeader";
 
 export default function AppLayout() {
   const location = useLocation();
+  const isHome = location.pathname === "/";
 
   return (
     <div className="min-h-dvh bg-brand-bg text-brand-ink">
@@ -22,8 +23,14 @@ export default function AppLayout() {
         <SiteHeader />
         <ScrollToTop />
 
-        <main id="main" className="mx-auto w-full max-w-6xl px-4 py-10">
-          <AnimatePresence mode="wait">
+        <main
+          id="main"
+          className={[
+            "mx-auto w-full max-w-6xl px-4",
+            isHome ? "pb-10 pt-5 sm:pt-7" : "py-10",
+          ].join(" ")}
+        >
+          <AnimatePresence mode="wait" initial={false}>
             <Outlet key={location.pathname} />
           </AnimatePresence>
 
@@ -35,5 +42,3 @@ export default function AppLayout() {
     </div>
   );
 }
-
-

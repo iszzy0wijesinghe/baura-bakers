@@ -237,3 +237,18 @@ export function laravelPatch<T>(path: string, body?: unknown) {
     csrf: true,
   });
 }
+
+export function laravelPut<T>(path: string, body?: unknown) {
+  return laravelRequest<T>(path, {
+    method: "PUT",
+    body,
+    csrf: true,
+  });
+}
+
+export function laravelDelete<T>(path: string) {
+  return laravelRequest<T>(path, {
+    method: "DELETE",
+    csrf: true,
+  });
+}

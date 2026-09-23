@@ -1,312 +1,1155 @@
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
-import ButtonLink from "../components/ButtonLink";
-import Section from "../components/Section";
-import FadeSentences from "../components/FadeSentences";
-import { ChefHat, CakeSlice, Truck } from "lucide-react";
-import ProcessSteps from "../components/ProcessSteps";
-import { getActiveItems, type MenuItem } from "../lib/items";
-import { getProductClicks } from "../lib/productClicks";
-import { Link } from "react-router-dom";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+} from "framer-motion";
+import {
+  ArrowDown,
+  ArrowRight,
+  ChevronRight,
+  ShoppingBag,
+} from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
+import {
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import Page from "../components/Page";
+import {
+  getActiveItems,
+  type MenuItem,
+} from "../lib/items";
+import { getProductClicks } from "../lib/productClicks";
+import {
+  getStorefrontBootstrap,
+  type StorefrontHeroSlide,
+} from "../lib/storefrontApi";
 
-import heroJarcakes from "../../images/home/hero-jarcakes.webp.webp";
-import heroJarcakes2 from "../../images/home/hero-image2.webp";
-import heroJarcakes4 from "../../images/home/hero-image5.webp";
-import heroJarcakes5 from "../../images/home/hero-image6.1.webp";
+import heroMain from "../../images/home/hero-jarcakes.webp.webp";
+import imageTwo from "../../images/home/hero-image2.webp";
+import imageThree from "../../images/home/hero-image5.webp";
+import imageFour from "../../images/home/hero-image6.1.webp";
 
-const trustPoints = [
-  {
-    icon: ChefHat,
-    title: "Freshly baked daily",
-    desc: "Small batches. Always fresh.",
-  },
-  {
-    icon: CakeSlice,
-    title: "Custom orders",
-    desc: "Perfect for birthdays & events.",
-  },
-  {
-    icon: Truck,
-    title: "Pickup & delivery",
-    desc: "Fast confirmation. Clear timing.",
-  },
-];
+const ease = [0.22, 1, 0.36, 1] as const;
+const HERO_INTERVAL_MS = 6500;
 
-const heroSentences = [
-  "Calm mornings. Fresh bakes. A premium taste you can trust.",
-  "Golden layers, soft crumb, and real butter, baked fresh daily.",
-  "Made with care, delivered with warmth, always consistent quality.",
-  "Signature cakes crafted for celebrations (and quiet cravings).",
-  "Fresh from the oven the kind of taste that feels expensive.",
-  "Trusted by families for birthdays, events, and everyday treats.",
-  "Clean ingredients, balanced sweetness, and a smooth finish.",
-  "Order easily, we confirm fast, bake fresh, and deliver on time.",
-];
+const fallbackHeroSlide: StorefrontHeroSlide = {
+  id: -1,
+  name: "Default Baura Hero",
+  eyebrow: "BAURA BAKERS",
+  title: "Freshly baked.\nSeriously delicious.",
+  description:
+    "Cakes, desserts and bakery favourites made for cravings, celebrations and those “just one more bite” moments.",
+  imageUrl: heroMain,
+  imageAlt: "Fresh desserts from Baura Bakers",
+  backgroundColor: "#17120f",
+  overlayStrength: 24,
+  imagePosition: "right",
+  primaryButtonLabel: "Explore the menu",
+  primaryButtonUrl: "/menu",
+  secondaryButtonLabel: "Something special?",
+  secondaryButtonUrl: "/contact",
+};
+
+type HeroCSSProperties = CSSProperties & {
+  "--baura-hero-overlay"?: string;
+  "--baura-hero-image"?: string;
+  "--baura-hero-image-position"?: string;
+  "--baura-hero-mobile-position"?: string;
+};
+
+function getHeroImageUrl(imageUrl: string) {
+  return `url(${JSON.stringify(imageUrl)})`;
+}
+
+function getHeroOverlay(
+  overlayStrength: number,
+) {
+  const value = Number.isFinite(
+    overlayStrength,
+  )
+    ? overlayStrength
+    : 0;
+
+  return (
+    Math.min(
+      100,
+      Math.max(0, value),
+    ) / 100
+  );
+}
 
 export default function Home() {
-  const reduce = useReducedMotion();
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [isMenuLoading, setIsMenuLoading] = useState(true);
-
-  const heroBgImages = useMemo(
-    () => [heroJarcakes, heroJarcakes2, heroJarcakes4, heroJarcakes5],
-    [],
+  const reduceMotion = Boolean(
+    useReducedMotion(),
   );
 
-  const [sentenceIndex, setSentenceIndex] = useState(0);
+  const [items, setItems] = useState<
+    MenuItem[]
+  >([]);
 
-  // ✅ Change image after every 3 sentence changes
-  const bgIndex = reduce
-    ? 0
-    : Math.floor(sentenceIndex / 2) % heroBgImages.length;
+  const [heroSlides, setHeroSlides] =
+    useState<StorefrontHeroSlide[]>([]);
 
-  const bgSrc = heroBgImages[bgIndex];
-
-  const bestSellerProducts = useMemo(() => {
-    const clicks = getProductClicks();
-
-    const sorted = [...menuItems].sort((a, b) => {
-      const ca = clicks[a.slug] ?? 0;
-      const cb = clicks[b.slug] ?? 0;
-      return cb - ca;
-    });
-
-    const hasAnyClicks = Object.values(clicks).some((n) => n > 0);
-
-    return (hasAnyClicks ? sorted : menuItems).slice(0, 4);
-  }, [menuItems]);
+  const [loading, setLoading] =
+    useState(true);
 
   useEffect(() => {
-    async function loadHomeMenuItems() {
+    let active = true;
+
+    async function load() {
       try {
-        setIsMenuLoading(true);
-        const rows = await getActiveItems();
-        setMenuItems(rows);
+        const [storefront, products] =
+          await Promise.all([
+            getStorefrontBootstrap(),
+            getActiveItems(),
+          ]);
+
+        if (!active) {
+          return;
+        }
+
+        setHeroSlides(
+          storefront.heroSlides ?? [],
+        );
+
+        setItems(products);
       } catch (error) {
-        console.error("Could not load home menu items:", error);
+        console.error(
+          "Failed to load Baura storefront:",
+          error,
+        );
       } finally {
-        setIsMenuLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
 
-    loadHomeMenuItems();
+    void load();
+
+    return () => {
+      active = false;
+    };
   }, []);
+
+  const featured = useMemo(() => {
+    const clicks = getProductClicks();
+
+    const hasClickData = Object.values(
+      clicks,
+    ).some((value) => value > 0);
+
+    if (!hasClickData) {
+      return items.slice(0, 4);
+    }
+
+    return [...items]
+      .sort(
+        (a, b) =>
+          (clicks[b.slug] ?? 0) -
+          (clicks[a.slug] ?? 0),
+      )
+      .slice(0, 4);
+  }, [items]);
+
+  const visibleHeroSlides =
+    heroSlides.length > 0
+      ? heroSlides
+      : [fallbackHeroSlide];
 
   return (
     <Page>
-      <div className="space-y-14">
-        {/* HERO */}
-        <section className="relative overflow-hidden rounded-3xl border border-black/10 p-6 shadow-sm sm:p-10">
-          {/* Background slideshow */}
-          <div className="absolute inset-0" aria-hidden="true">
-            {reduce ? (
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundImage: `url(${heroBgImages[0]})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "right center",
-                  backgroundRepeat: "no-repeat",
-                }}
-              />
-            ) : (
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={bgSrc}
-                  className="absolute inset-0"
-                  style={{
-                    backgroundImage: `url(${bgSrc})`,
-                    backgroundSize: "cover",
-                    backgroundRepeat: "no-repeat",
-                  }}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.9, ease: "easeOut" }}
-                />
-              </AnimatePresence>
-            )}
+      <main className="baura-home">
+        <Hero
+          slides={visibleHeroSlides}
+          reduceMotion={reduceMotion}
+        />
 
-            {/* 1) Global soft tint (keeps image visible) */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(90deg, rgba(249,244,224,0.55) 0%, rgba(249,244,224,0.22) 55%, rgba(249,244,224,0.08) 100%)",
-              }}
+        <OpeningStatement />
+
+        <FreshComposition
+          reduceMotion={reduceMotion}
+        />
+
+        {!loading &&
+        featured.length > 0 ? (
+          <FeaturedProducts
+            products={featured}
+            reduceMotion={reduceMotion}
+          />
+        ) : null}
+
+        <Celebration
+          reduceMotion={reduceMotion}
+        />
+
+        <FinalOrder />
+      </main>
+    </Page>
+  );
+}
+
+/* =======================================================
+   HERO
+======================================================= */
+
+function Hero({
+  slides,
+  reduceMotion,
+}: {
+  slides: StorefrontHeroSlide[];
+  reduceMotion: boolean;
+}) {
+  const navigate = useNavigate();
+
+  const [
+    activeSlide,
+    setActiveSlide,
+  ] = useState(0);
+
+  useEffect(() => {
+    setActiveSlide((current) =>
+      Math.min(
+        current,
+        Math.max(
+          0,
+          slides.length - 1,
+        ),
+      ),
+    );
+  }, [slides.length]);
+
+  useEffect(() => {
+    if (
+      reduceMotion ||
+      slides.length <= 1
+    ) {
+      return;
+    }
+
+    const interval =
+      window.setInterval(() => {
+        setActiveSlide(
+          (current) =>
+            (current + 1) %
+            slides.length,
+        );
+      }, HERO_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    reduceMotion,
+    slides.length,
+  ]);
+
+  const slide =
+    slides[activeSlide] ??
+    slides[0];
+
+  if (!slide) {
+    return null;
+  }
+
+  const overlay = getHeroOverlay(
+    slide.overlayStrength,
+  );
+
+  const heroStyle:
+    HeroCSSProperties = {
+    "--baura-hero-overlay":
+      overlay.toFixed(3),
+  };
+
+  function openAction(
+    url: string | null,
+  ) {
+    if (!url) {
+      return;
+    }
+
+    if (
+      url.startsWith("/") &&
+      !url.startsWith("//")
+    ) {
+      navigate(url);
+      return;
+    }
+
+    window.location.assign(url);
+  }
+
+  return (
+    <section
+      className="baura-hero"
+      style={heroStyle}
+    >
+      <div className="baura-hero__slides">
+        <AnimatePresence
+          initial={false}
+          mode="sync"
+        >
+          <motion.div
+            key={slide.id}
+            className="baura-hero__slide"
+            initial={
+              reduceMotion
+                ? false
+                : { opacity: 0 }
+            }
+            animate={{
+              opacity: 1,
+            }}
+            exit={{
+              opacity: 0,
+            }}
+            transition={{
+              duration: reduceMotion
+                ? 0
+                : 0.9,
+              ease,
+            }}
+          >
+            <AdaptiveHeroArtwork
+              slide={slide}
             />
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
-            {/* 2) Strong left readability panel (ONLY left side) */}
-            <div
-              className="absolute inset-y-0 left-0"
-              style={{
-                width: "62%",
-                background:
-                  "linear-gradient(90deg, rgba(249,244,224,0.98) 0%, rgba(249,244,224,0.92) 38%, rgba(249,244,224,0.66) 68%, rgba(249,244,224,0.00) 100%)",
-              }}
-            />
+      <div
+        className="baura-hero__darkness"
+        aria-hidden="true"
+      />
 
-            {/* 3) Subtle vignette */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(1000px 420px at 22% 42%, rgba(249,244,224,0.55) 0%, rgba(249,244,224,0.00) 70%)",
-              }}
-            />
-          </div>
+      <div
+        className="baura-hero__header-shade"
+        aria-hidden="true"
+      />
 
-          {/* Content */}
-          <div className="relative max-w-3xl space-y-5">
-            <p className="text-xs font-semibold tracking-widest text-brand-ink/70">
-              BAURA BAKERS
-            </p>
+      <div
+        className={[
+          "baura-hero__text-shade",
+          slide.imagePosition === "left"
+            ? "baura-hero__text-shade--right"
+            : "baura-hero__text-shade--left",
+        ].join(" ")}
+        aria-hidden="true"
+      />
 
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl text-brand-ink [text-shadow:0_2px_16px_rgba(249,244,224,0.85)]">
-              <FadeSentences
-                sentences={heroSentences}
-                intervalMs={3500}
-                onIndexChange={setSentenceIndex}
-              />
+      <div
+        className="baura-hero__bottom-shade"
+        aria-hidden="true"
+      />
+
+      <div
+        className={[
+          "baura-hero__content",
+          slide.imagePosition === "left"
+            ? "baura-hero__content--image-left"
+            : "",
+        ].join(" ")}
+      >
+        <AnimatePresence
+          mode="wait"
+          initial={false}
+        >
+          <motion.div
+            key={`copy-${slide.id}`}
+            className="baura-hero__copy"
+            initial={
+              reduceMotion
+                ? false
+                : {
+                    opacity: 0,
+                    y: 12,
+                  }
+            }
+            animate={{
+              opacity: 1,
+              y: 0,
+            }}
+            exit={
+              reduceMotion
+                ? undefined
+                : {
+                    opacity: 0,
+                    y: -8,
+                  }
+            }
+            transition={{
+              duration: reduceMotion
+                ? 0
+                : 0.5,
+              ease,
+            }}
+          >
+            {slide.eyebrow ? (
+              <span className="baura-hero__eyebrow">
+                {slide.eyebrow}
+              </span>
+            ) : null}
+
+            <h1>
+              {renderHeroTitle(
+                slide.title,
+              )}
             </h1>
 
-            <p className="max-w-2xl text-base leading-relaxed text-brand-ink/90 [text-shadow:0_1px_12px_rgba(249,244,224,0.75)]">
-              Baked with care and delivered with warmth
-              <br className="hidden sm:block" />
-              cakes, pastries, and breads made to feel special, every time.
-            </p>
-
-            <div className="flex flex-wrap gap-3 pt-2">
-              <ButtonLink to="/order" variant="primary">
-                Order now
-              </ButtonLink>
-              <ButtonLink to="/menu" variant="soft">
-                View menu
-              </ButtonLink>
-            </div>
-
-            <div className="pt-6">
-              <div className="grid gap-3 sm:grid-cols-3">
-                {trustPoints.map((p) => {
-                  const Icon = p.icon;
-                  return (
-                    <div
-                      key={p.title}
-                      className="flex items-stretch gap-3 rounded-2xl border border-black/10 bg-brand-bg/90 p-4 shadow-sm backdrop-blur"
-                    >
-                      <div className="flex w-10 items-center justify-center text-brand-ink/85">
-                        <Icon className="h-full w-6" aria-hidden="true" />
-                      </div>
-
-                      <div className="py-0.5">
-                        <p className="text-sm font-semibold text-brand-ink">
-                          {p.title}
-                        </p>
-                        <p className="mt-1 text-[11px] leading-snug text-brand-ink/85">
-                          {p.desc}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* BEST SELLERS */}
-        <Section
-          eyebrow="OUR FAVORITES"
-          title="Best sellers that people come back for"
-        >
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {bestSellerProducts.map((p) => {
-              const thumb = p.thumbnailUrl || p.images[0]?.imageUrl || "";
-              const firstSize = p.sizes[0];
-
-              return (
-                <Link
-                  key={p.slug}
-                  to={`/menu/${p.slug}`}
-                  className="group overflow-hidden rounded-2xl border border-black/10 bg-white/50 shadow-sm transition hover:bg-white/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink"
-                >
-                  <div className="aspect-[4/3] overflow-hidden bg-black/5">
-                    {thumb ? (
-                      <img
-                        src={thumb}
-                        alt={p.name}
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    ) : null}
-                  </div>
-
-                  <div className="p-5">
-                    <p className="text-sm font-semibold">{p.name}</p>
-                    <p className="mt-2 line-clamp-2 text-sm text-brand-ink/75">
-                      {p.shortDesc ||
-                        p.slogan ||
-                        p.description ||
-                        "Freshly made by Baura Bakers."}
-                    </p>
-
-                    <p className="mt-4 text-xs font-semibold tracking-wide text-brand-ink/70">
-                      {firstSize
-                        ? `From LKR ${firstSize.priceLkr.toLocaleString()}`
-                        : ""}
-                    </p>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="pt-2">
-            <ButtonLink to="/order" variant="primary">
-              Place an order
-            </ButtonLink>
-          </div>
-        </Section>
-
-        {/* HOW IT WORKS */}
-        <Section eyebrow="SIMPLE PROCESS" title="How ordering works">
-          <ProcessSteps />
-        </Section>
-
-        {/* FINAL CTA */}
-        <section className="rounded-3xl bg-brand-ink px-6 py-10 text-brand-bg sm:px-10">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="max-w-2xl">
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Ready to order something that feels premium?
-              </h2>
-              <p className="mt-2 text-sm text-brand-bg/80">
-                Tell us what you need — we’ll confirm fast and make it fresh.
+            {slide.description ? (
+              <p>
+                {slide.description}
               </p>
-            </div>
+            ) : null}
 
-            <div className="flex gap-3">
-              <ButtonLink
-                to="/order"
-                unstyled
-                className="bg-brand-bg text-brand-ink hover:bg-brand-bg/90"
-              >
-                Order now
-              </ButtonLink>
+            {(slide.primaryButtonLabel ||
+              slide.secondaryButtonLabel) && (
+              <div className="baura-hero__actions">
+                {slide.primaryButtonLabel &&
+                slide.primaryButtonUrl ? (
+                  <button
+                    type="button"
+                    className="baura-button baura-button--light"
+                    onClick={() =>
+                      openAction(
+                        slide.primaryButtonUrl,
+                      )
+                    }
+                  >
+                    {
+                      slide.primaryButtonLabel
+                    }
 
-              <ButtonLink
-                to="/contact"
-                unstyled
-                className="border border-brand-bg/25 bg-transparent text-brand-bg hover:bg-white/10"
-              >
-                Contact
-              </ButtonLink>
-            </div>
+                    <ArrowRight
+                      size={17}
+                      strokeWidth={1.8}
+                    />
+                  </button>
+                ) : null}
+
+                {slide.secondaryButtonLabel &&
+                slide.secondaryButtonUrl ? (
+                  <button
+                    type="button"
+                    className="baura-hero__secondary"
+                    onClick={() =>
+                      openAction(
+                        slide.secondaryButtonUrl,
+                      )
+                    }
+                  >
+                    {
+                      slide.secondaryButtonLabel
+                    }
+
+                    <ChevronRight
+                      size={16}
+                    />
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        <div className="baura-hero__bottom">
+          <div className="baura-hero__fresh">
+            <span />
+            Freshly prepared with care
           </div>
-        </section>
+
+          <div className="baura-hero__slide-status">
+            {slides.length > 1 ? (
+              <div
+                className="baura-hero__progress"
+                aria-label={`Hero slide ${
+                  activeSlide + 1
+                } of ${slides.length}`}
+              >
+                {slides.map(
+                  (
+                    item,
+                    index,
+                  ) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={
+                        activeSlide ===
+                        index
+                          ? "is-active"
+                          : ""
+                      }
+                      onClick={() =>
+                        setActiveSlide(
+                          index,
+                        )
+                      }
+                      aria-label={`Show hero slide ${
+                        index + 1
+                      }`}
+                      aria-current={
+                        activeSlide ===
+                        index
+                          ? "true"
+                          : undefined
+                      }
+                    >
+                      <span />
+                    </button>
+                  ),
+                )}
+              </div>
+            ) : null}
+
+            <span className="baura-hero__number">
+              {String(
+                activeSlide + 1,
+              ).padStart(2, "0")}
+
+              <span>/</span>
+
+              {String(
+                slides.length,
+              ).padStart(2, "0")}
+            </span>
+
+            <a
+              href="#discover-baura"
+              className="baura-hero__discover"
+            >
+              Discover
+
+              <ArrowDown size={15} />
+            </a>
+          </div>
+        </div>
       </div>
-    </Page>
+    </section>
+  );
+}
+
+/* =======================================================
+   HERO ARTWORK
+======================================================= */
+
+function AdaptiveHeroArtwork({
+  slide,
+}: {
+  slide: StorefrontHeroSlide;
+}) {
+  const imagePosition =
+    slide.imagePosition === "left"
+      ? "left"
+      : slide.imagePosition ===
+          "center"
+        ? "center"
+        : "right";
+
+  const desktopPosition =
+    imagePosition === "left"
+      ? "left center"
+      : imagePosition === "center"
+        ? "center center"
+        : "right center";
+
+  /*
+   * The same 16:9 image is used on mobile.
+   *
+   * For left/right artwork we bias the crop toward the
+   * selected side so the subject survives the narrower
+   * mobile viewport.
+   */
+  const mobilePosition =
+    imagePosition === "left"
+      ? "32% center"
+      : imagePosition === "center"
+        ? "center center"
+        : "68% center";
+
+  const imageStyle:
+    HeroCSSProperties = {
+    "--baura-hero-image":
+      getHeroImageUrl(
+        slide.imageUrl,
+      ),
+    "--baura-hero-image-position":
+      desktopPosition,
+    "--baura-hero-mobile-position":
+      mobilePosition,
+  };
+
+  return (
+    <div
+      className={[
+        "baura-hero__artwork",
+        `baura-hero__artwork--${imagePosition}`,
+      ].join(" ")}
+      style={imageStyle}
+    >
+      <div
+        className="baura-hero__photo-blur"
+        aria-hidden="true"
+      />
+
+      <div
+        className="baura-hero__photo"
+        role="img"
+        aria-label={
+          slide.imageAlt ||
+          slide.name
+        }
+      />
+    </div>
+  );
+}
+
+function renderHeroTitle(
+  title: string,
+) {
+  const lines = title
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length > 1) {
+    return lines.map(
+      (line, index) => (
+        <span
+          key={`${line}-${index}`}
+          className="baura-hero__title-line"
+        >
+          {line}
+        </span>
+      ),
+    );
+  }
+
+  return title;
+}
+
+/* =======================================================
+   OPENING
+======================================================= */
+
+function OpeningStatement() {
+  return (
+    <section
+      className="baura-opening"
+      id="discover-baura"
+    >
+      <div className="baura-opening__small">
+        <span>
+          FRESH FROM BAURA
+        </span>
+      </div>
+
+      <div className="baura-opening__statement">
+        <h2>
+          Made to look good.
+          <br />
+          Made to taste even
+          better.
+        </h2>
+
+        <div className="baura-opening__side">
+          <p>
+            From an afternoon
+            craving to the cake
+            at the centre of a
+            celebration, we make
+            the sweet part worth
+            looking forward to.
+          </p>
+
+          <Link
+            to="/menu"
+            className="baura-text-link"
+          >
+            See what’s baking
+
+            <ArrowRight
+              size={16}
+            />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* =======================================================
+   FRESH COMPOSITION
+======================================================= */
+
+function FreshComposition({
+  reduceMotion,
+}: {
+  reduceMotion: boolean;
+}) {
+  return (
+    <section className="baura-fresh">
+      <motion.div
+        className="baura-fresh__primary"
+        initial={
+          reduceMotion
+            ? false
+            : {
+                opacity: 0,
+                y: 24,
+              }
+        }
+        whileInView={{
+          opacity: 1,
+          y: 0,
+        }}
+        viewport={{
+          once: true,
+          amount: 0.15,
+        }}
+        transition={{
+          duration: 0.7,
+          ease,
+        }}
+      >
+        <img
+          src={imageTwo}
+          alt="Freshly prepared Baura Bakers treats"
+          loading="lazy"
+          decoding="async"
+        />
+      </motion.div>
+
+      <motion.div
+        className="baura-fresh__copy"
+        initial={
+          reduceMotion
+            ? false
+            : {
+                opacity: 0,
+                y: 20,
+              }
+        }
+        whileInView={{
+          opacity: 1,
+          y: 0,
+        }}
+        viewport={{
+          once: true,
+          amount: 0.25,
+        }}
+        transition={{
+          duration: 0.65,
+          ease,
+        }}
+      >
+        <span className="baura-mini-label">
+          FRESHNESS FIRST
+        </span>
+
+        <h2>
+          That first bite
+          <br />
+          should be worth it.
+        </h2>
+
+        <p>
+          Soft cake, smooth
+          cream, rich chocolate
+          and freshly finished
+          favourites. We want
+          every Baura order to
+          feel like something you
+          were actually excited
+          to open.
+        </p>
+
+        <Link
+          to="/about-us"
+          className="baura-text-link"
+        >
+          Our story
+
+          <ArrowRight
+            size={16}
+          />
+        </Link>
+      </motion.div>
+
+      <motion.div
+        className="baura-fresh__secondary"
+        initial={
+          reduceMotion
+            ? false
+            : {
+                opacity: 0,
+                y: 32,
+              }
+        }
+        whileInView={{
+          opacity: 1,
+          y: 0,
+        }}
+        viewport={{
+          once: true,
+          amount: 0.2,
+        }}
+        transition={{
+          duration: 0.75,
+          delay: 0.08,
+          ease,
+        }}
+      >
+        <img
+          src={imageThree}
+          alt="Baura Bakers cake"
+          loading="lazy"
+          decoding="async"
+        />
+      </motion.div>
+    </section>
+  );
+}
+
+/* =======================================================
+   FEATURED PRODUCTS
+======================================================= */
+
+function FeaturedProducts({
+  products,
+  reduceMotion,
+}: {
+  products: MenuItem[];
+  reduceMotion: boolean;
+}) {
+  const first = products[0];
+
+  const rest = products.slice(
+    1,
+    4,
+  );
+
+  if (!first) {
+    return null;
+  }
+
+  return (
+    <section className="baura-products">
+      <div className="baura-products__heading">
+        <div>
+          <span className="baura-mini-label">
+            CURRENT FAVOURITES
+          </span>
+
+          <h2>
+            Start with
+            <br />
+            something good.
+          </h2>
+        </div>
+
+        <Link
+          to="/menu"
+          className="baura-text-link"
+        >
+          View everything
+
+          <ArrowRight
+            size={16}
+          />
+        </Link>
+      </div>
+
+      <div className="baura-products__composition">
+        <FeaturedProduct
+          product={first}
+          large
+          reduceMotion={
+            reduceMotion
+          }
+        />
+
+        {rest.length > 0 ? (
+          <div className="baura-products__side">
+            {rest.map(
+              (
+                product,
+                index,
+              ) => (
+                <FeaturedProduct
+                  key={
+                    product.slug
+                  }
+                  product={
+                    product
+                  }
+                  reduceMotion={
+                    reduceMotion
+                  }
+                  delay={
+                    (index + 1) *
+                    0.06
+                  }
+                />
+              ),
+            )}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function FeaturedProduct({
+  product,
+  large = false,
+  reduceMotion,
+  delay = 0,
+}: {
+  product: MenuItem;
+  large?: boolean;
+  reduceMotion: boolean;
+  delay?: number;
+}) {
+  const image =
+    product.thumbnailUrl ||
+    product.images?.[0]
+      ?.imageUrl ||
+    "";
+
+  const firstSize =
+    product.sizes?.[0];
+
+  return (
+    <motion.article
+      className={
+        large
+          ? "baura-featured-product baura-featured-product--large"
+          : "baura-featured-product"
+      }
+      initial={
+        reduceMotion
+          ? false
+          : {
+              opacity: 0,
+              y: 20,
+            }
+      }
+      whileInView={{
+        opacity: 1,
+        y: 0,
+      }}
+      viewport={{
+        once: true,
+        amount: 0.15,
+      }}
+      transition={{
+        duration: 0.6,
+        delay,
+        ease,
+      }}
+    >
+      <Link
+        to={`/menu/${product.slug}`}
+        className="baura-featured-product__image"
+        aria-label={`View ${product.name}`}
+      >
+        {image ? (
+          <img
+            src={image}
+            alt={product.name}
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div className="baura-featured-product__fallback">
+            <span>
+              BAURA
+            </span>
+          </div>
+        )}
+
+        <span className="baura-featured-product__go">
+          <ArrowRight
+            size={18}
+          />
+        </span>
+      </Link>
+
+      <div className="baura-featured-product__info">
+        <div>
+          <h3>
+            {product.name}
+          </h3>
+
+          <p>
+            {product.shortDesc ||
+              product.slogan ||
+              "Freshly prepared by Baura Bakers."}
+          </p>
+        </div>
+
+        {firstSize ? (
+          <strong>
+            LKR{" "}
+            {firstSize.priceLkr.toLocaleString()}
+          </strong>
+        ) : null}
+      </div>
+    </motion.article>
+  );
+}
+
+/* =======================================================
+   CELEBRATION
+======================================================= */
+
+function Celebration({
+  reduceMotion,
+}: {
+  reduceMotion: boolean;
+}) {
+  return (
+    <section className="baura-celebration">
+      <div className="baura-celebration__image">
+        <motion.img
+          src={imageFour}
+          alt="Celebration cake from Baura Bakers"
+          loading="lazy"
+          decoding="async"
+          initial={
+            reduceMotion
+              ? false
+              : {
+                  opacity:
+                    0.96,
+                }
+          }
+          whileInView={{
+            opacity: 1,
+          }}
+          viewport={{
+            once: true,
+            amount: 0.1,
+          }}
+          transition={{
+            duration: 1,
+            ease,
+          }}
+        />
+      </div>
+
+      <div className="baura-celebration__shade" />
+
+      <motion.div
+        className="baura-celebration__copy"
+        initial={
+          reduceMotion
+            ? false
+            : {
+                opacity: 0,
+                y: 24,
+              }
+        }
+        whileInView={{
+          opacity: 1,
+          y: 0,
+        }}
+        viewport={{
+          once: true,
+          amount: 0.25,
+        }}
+        transition={{
+          duration: 0.7,
+          ease,
+        }}
+      >
+        <span>
+          SOMETHING TO
+          CELEBRATE?
+        </span>
+
+        <h2>
+          Bring the cake.
+          <br />
+          Make the memory.
+        </h2>
+
+        <p>
+          Birthdays, surprises,
+          gifts or simply a good
+          day made better.
+        </p>
+
+        <div className="baura-celebration__actions">
+          <Link
+            to="/menu"
+            className="baura-button baura-button--light"
+          >
+            Find your cake
+
+            <ArrowRight
+              size={17}
+            />
+          </Link>
+
+          <Link
+            to="/contact"
+            className="baura-celebration__link"
+          >
+            Talk to Baura
+
+            <ChevronRight
+              size={16}
+            />
+          </Link>
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
+/* =======================================================
+   FINAL
+======================================================= */
+
+function FinalOrder() {
+  return (
+    <section className="baura-final">
+      <div className="baura-final__copy">
+        <span>
+          READY FOR SOMETHING
+          DELICIOUS?
+        </span>
+
+        <h2>
+          Your next favourite
+          <br />
+          might be one bite away.
+        </h2>
+      </div>
+
+      <Link
+        to="/menu"
+        className="baura-button baura-button--dark"
+      >
+        <ShoppingBag
+          size={17}
+        />
+
+        Explore the menu
+
+        <ArrowRight
+          size={17}
+        />
+      </Link>
+    </section>
   );
 }

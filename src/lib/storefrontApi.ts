@@ -79,6 +79,33 @@ export type MenuItem = {
   sugarLevels: MenuSugarLevel[];
 };
 
+export type HeroImagePosition =
+  | "left"
+  | "center"
+  | "right";
+
+export type StorefrontHeroSlide = {
+  id: number;
+  name: string;
+
+  eyebrow: string | null;
+  title: string;
+  description: string | null;
+
+  imageUrl: string;
+  imageAlt: string | null;
+
+  backgroundColor: string;
+  overlayStrength: number;
+  imagePosition: HeroImagePosition;
+
+  primaryButtonLabel: string | null;
+  primaryButtonUrl: string | null;
+
+  secondaryButtonLabel: string | null;
+  secondaryButtonUrl: string | null;
+};
+
 export type SiteModeKey =
   | "COMING_SOON"
   | "MAINTENANCE"
@@ -101,6 +128,7 @@ export type StorefrontBootstrap = {
   subcategories: MenuSubcategory[];
   products: MenuItem[];
   activeSiteMode: SiteModeRow | null;
+  heroSlides: StorefrontHeroSlide[];
 };
 
 type StorefrontBootstrapResponse = {
@@ -122,7 +150,9 @@ let cachedBootstrap:
     }
   | null = null;
 
-let bootstrapRequest: Promise<StorefrontBootstrap> | null = null;
+let bootstrapRequest:
+  | Promise<StorefrontBootstrap>
+  | null = null;
 
 export async function getStorefrontBootstrap(
   forceRefresh = false,
@@ -141,20 +171,28 @@ export async function getStorefrontBootstrap(
     return bootstrapRequest;
   }
 
-  bootstrapRequest = laravelGet<StorefrontBootstrapResponse>(
-    "/api/v1/storefront/bootstrap",
-  )
-    .then((response) => {
-      cachedBootstrap = {
-        expiresAt: Date.now() + BOOTSTRAP_CACHE_MS,
-        value: response.data,
-      };
+  bootstrapRequest =
+    laravelGet<StorefrontBootstrapResponse>(
+      "/api/v1/storefront/bootstrap",
+    )
+      .then((response) => {
+        const value: StorefrontBootstrap = {
+          ...response.data,
+          heroSlides:
+            response.data.heroSlides ?? [],
+        };
 
-      return response.data;
-    })
-    .finally(() => {
-      bootstrapRequest = null;
-    });
+        cachedBootstrap = {
+          expiresAt:
+            Date.now() + BOOTSTRAP_CACHE_MS,
+          value,
+        };
+
+        return value;
+      })
+      .finally(() => {
+        bootstrapRequest = null;
+      });
 
   return bootstrapRequest;
 }
@@ -162,9 +200,12 @@ export async function getStorefrontBootstrap(
 export async function getStorefrontProductBySlug(
   slug: string,
 ): Promise<MenuItem> {
-  const response = await laravelGet<StorefrontProductResponse>(
-    `/api/v1/storefront/products/${encodeURIComponent(slug)}`,
-  );
+  const response =
+    await laravelGet<StorefrontProductResponse>(
+      `/api/v1/storefront/products/${encodeURIComponent(
+        slug,
+      )}`,
+    );
 
   return response.data.product;
 }
