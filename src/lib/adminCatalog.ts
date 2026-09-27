@@ -28,6 +28,15 @@ export type AdminSubcategory = {
 export type AdminSugarLevel = {
   id: number;
   name: string;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+export type SugarLevelPayload = {
+  id?: number;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
 };
 
 export type AdminProductSize = {
@@ -126,15 +135,27 @@ type AdminCatalogResponse = {
 };
 
 type CategoryResponse = {
-  data: { category: AdminCategory };
+  data: {
+    category: AdminCategory;
+  };
 };
 
 type SubcategoryResponse = {
-  data: { subcategory: AdminSubcategory };
+  data: {
+    subcategory: AdminSubcategory;
+  };
+};
+
+type SugarLevelResponse = {
+  data: {
+    sugarLevel: AdminSugarLevel;
+  };
 };
 
 type ProductResponse = {
-  data: { product: AdminProduct };
+  data: {
+    product: AdminProduct;
+  };
 };
 
 let catalogRequest: Promise<AdminCatalogData> | null = null;
@@ -167,7 +188,14 @@ export function productToPayload(product: AdminProduct): ProductPayload {
     sortOrder: product.sortOrder,
     sizes: product.sizes.length
       ? product.sizes
-      : [{ label: "Regular", serves: "1", priceLkr: 0, sortOrder: 0 }],
+      : [
+          {
+            label: "Regular",
+            serves: "1",
+            priceLkr: 0,
+            sortOrder: 0,
+          },
+        ],
     images: product.images,
     tags: product.tags,
     sugarLevelIds: product.sugarLevelIds,
@@ -180,10 +208,17 @@ function clearAdminCatalogCache() {
 }
 
 async function getAdminCatalog(forceRefresh = false) {
-  if (!forceRefresh && catalogCache) return catalogCache;
-  if (!forceRefresh && catalogRequest) return catalogRequest;
+  if (!forceRefresh && catalogCache) {
+    return catalogCache;
+  }
 
-  catalogRequest = laravelGet<AdminCatalogResponse>("/api/v1/admin/catalog")
+  if (!forceRefresh && catalogRequest) {
+    return catalogRequest;
+  }
+
+  catalogRequest = laravelGet<AdminCatalogResponse>(
+    "/api/v1/admin/catalog",
+  )
     .then((response) => {
       catalogCache = response.data;
       return response.data;
@@ -233,10 +268,13 @@ export async function saveCategory(payload: CategoryPayload) {
       );
 
   clearAdminCatalogCache();
+
   return response.data.category;
 }
 
-export async function saveSubcategory(payload: SubcategoryPayload) {
+export async function saveSubcategory(
+  payload: SubcategoryPayload,
+) {
   const body = {
     categoryId: payload.categoryId,
     name: payload.name.trim(),
@@ -259,7 +297,36 @@ export async function saveSubcategory(payload: SubcategoryPayload) {
       );
 
   clearAdminCatalogCache();
+
   return response.data.subcategory;
+}
+
+export async function saveSugarLevel(
+  payload: SugarLevelPayload,
+) {
+  const body = {
+    name: payload.name.trim(),
+    isActive: payload.isActive,
+    sortOrder: Number(payload.sortOrder || 0),
+  };
+
+  if (!body.name) {
+    throw new Error("Enter a sugar level name.");
+  }
+
+  const response = payload.id
+    ? await laravelPatch<SugarLevelResponse>(
+        `/api/v1/admin/catalog/sugar-levels/${payload.id}`,
+        body,
+      )
+    : await laravelPost<SugarLevelResponse>(
+        "/api/v1/admin/catalog/sugar-levels",
+        body,
+      );
+
+  clearAdminCatalogCache();
+
+  return response.data.sugarLevel;
 }
 
 export async function saveProduct(payload: ProductPayload) {
@@ -286,27 +353,45 @@ export async function saveProduct(payload: ProductPayload) {
     shortDesc: payload.shortDesc.trim() || null,
     description: payload.description.trim() || null,
     thumbnailUrl: payload.thumbnailUrl.trim() || null,
-    thumbnailPublicId: payload.thumbnailPublicId.trim() || null,
+    thumbnailPublicId:
+      payload.thumbnailPublicId.trim() || null,
     isActive: payload.isActive,
     isCombo: payload.isCombo,
-    comboConfig: payload.isCombo ? payload.comboConfig || {} : null,
+    comboConfig: payload.isCombo
+      ? payload.comboConfig || {}
+      : null,
     sortOrder: Number(payload.sortOrder || 0),
     sizes,
     images: payload.images
       .filter((image) => image.imageUrl.trim())
       .map((image, index) => ({
         imageUrl: image.imageUrl.trim(),
-        imagePublicId: image.imagePublicId?.trim() || null,
-        alt: image.alt?.trim() || payload.name.trim(),
+        imagePublicId:
+          image.imagePublicId?.trim() || null,
+        alt:
+          image.alt?.trim() ||
+          payload.name.trim(),
         sortOrder: index,
       })),
-    tags: [...new Set(payload.tags.map((tag) => tag.trim()).filter(Boolean))],
-    sugarLevelIds: [...new Set(payload.sugarLevelIds.map(Number))],
+    tags: [
+      ...new Set(
+        payload.tags
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      ),
+    ],
+    sugarLevelIds: [
+      ...new Set(
+        payload.sugarLevelIds.map(Number),
+      ),
+    ],
   };
 
   const response = payload.id
     ? await laravelPatch<ProductResponse>(
-        `/api/v1/admin/catalog/products/${encodeURIComponent(payload.id)}`,
+        `/api/v1/admin/catalog/products/${encodeURIComponent(
+          payload.id,
+        )}`,
         body,
       )
     : await laravelPost<ProductResponse>(
@@ -315,5 +400,6 @@ export async function saveProduct(payload: ProductPayload) {
       );
 
   clearAdminCatalogCache();
+
   return response.data.product;
 }

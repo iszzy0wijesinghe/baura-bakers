@@ -17,6 +17,7 @@ import {
   saveCategory,
   saveProduct,
   saveSubcategory,
+  saveSugarLevel,
   slugify,
   type AdminCategory,
   type AdminProduct,
@@ -27,10 +28,15 @@ import {
   type CategoryPayload,
   type ProductPayload,
   type SubcategoryPayload,
+  type SugarLevelPayload,
 } from "../lib/adminCatalog";
 import { getCurrentUser } from "../lib/auth";
 
-type TabKey = "products" | "categories" | "subcategories";
+type TabKey =
+  | "products"
+  | "categories"
+  | "subcategories"
+  | "sugarLevels";
 
 function formatLkr(value: number) {
   return `LKR ${Number(value || 0).toLocaleString()}`;
@@ -38,31 +44,32 @@ function formatLkr(value: number) {
 
 function emptyProductPayload(
   categories: AdminCategory[],
-  sugarLevels: AdminSugarLevel[],
 ): ProductPayload {
   return {
     categoryId: categories[0]?.id || 0,
     subcategoryId: null,
-
     slug: "",
     name: "",
     slogan: "",
     shortDesc: "",
     description: "",
-
     thumbnailUrl: "",
     thumbnailPublicId: "",
-
     isActive: true,
     isCombo: false,
     comboConfig: null,
-
     sortOrder: 0,
-
-    sizes: [{ label: "Regular", serves: "1", priceLkr: 0, sortOrder: 0 }],
+    sizes: [
+      {
+        label: "Regular",
+        serves: "1",
+        priceLkr: 0,
+        sortOrder: 0,
+      },
+    ],
     images: [],
     tags: [],
-    sugarLevelIds: sugarLevels[0]?.id ? [sugarLevels[0].id] : [],
+    sugarLevelIds: [],
   };
 }
 
@@ -93,6 +100,14 @@ function emptySubcategoryPayload(
   };
 }
 
+function emptySugarLevelPayload(): SugarLevelPayload {
+  return {
+    name: "",
+    isActive: true,
+    sortOrder: 0,
+  };
+}
+
 export default function AdminProducts() {
   const navigate = useNavigate();
 
@@ -101,24 +116,39 @@ export default function AdminProducts() {
 
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
-  const [subcategories, setSubcategories] = useState<AdminSubcategory[]>([]);
-  const [sugarLevels, setSugarLevels] = useState<AdminSugarLevel[]>([]);
+  const [subcategories, setSubcategories] =
+    useState<AdminSubcategory[]>([]);
+  const [sugarLevels, setSugarLevels] =
+    useState<AdminSugarLevel[]>([]);
 
-  const [productModalOpen, setProductModalOpen] = useState(false);
-  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
-  const [subcategoryModalOpen, setSubcategoryModalOpen] = useState(false);
+  const [productModalOpen, setProductModalOpen] =
+    useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] =
+    useState(false);
+  const [subcategoryModalOpen, setSubcategoryModalOpen] =
+    useState(false);
+  const [sugarLevelModalOpen, setSugarLevelModalOpen] =
+    useState(false);
 
-  const [productForm, setProductForm] = useState<ProductPayload>(
-    emptyProductPayload([], []),
-  );
+  const [productForm, setProductForm] =
+    useState<ProductPayload>(
+      emptyProductPayload([]),
+    );
 
-  const [categoryForm, setCategoryForm] = useState<CategoryPayload>(
-    emptyCategoryPayload(),
-  );
+  const [categoryForm, setCategoryForm] =
+    useState<CategoryPayload>(
+      emptyCategoryPayload(),
+    );
 
-  const [subcategoryForm, setSubcategoryForm] = useState<SubcategoryPayload>(
-    emptySubcategoryPayload([]),
-  );
+  const [subcategoryForm, setSubcategoryForm] =
+    useState<SubcategoryPayload>(
+      emptySubcategoryPayload([]),
+    );
+
+  const [sugarLevelForm, setSugarLevelForm] =
+    useState<SugarLevelPayload>(
+      emptySugarLevelPayload(),
+    );
 
   const [tagText, setTagText] = useState("");
   const [comboNotes, setComboNotes] = useState("");
@@ -151,13 +181,17 @@ export default function AdminProducts() {
 
       if (!(await verifyAdmin())) return;
 
-      const [categoryRows, subcategoryRows, sugarRows, productRows] =
-        await Promise.all([
-          getAdminCategories(),
-          getAdminSubcategories(),
-          getAdminSugarLevels(),
-          getAdminProducts(),
-        ]);
+      const [
+        categoryRows,
+        subcategoryRows,
+        sugarRows,
+        productRows,
+      ] = await Promise.all([
+        getAdminCategories(),
+        getAdminSubcategories(),
+        getAdminSugarLevels(),
+        getAdminProducts(),
+      ]);
 
       setCategories(categoryRows);
       setSubcategories(subcategoryRows);
@@ -203,7 +237,11 @@ export default function AdminProducts() {
     return categories.filter((category) => {
       if (!query) return true;
 
-      return [category.name, category.slug, category.description || ""]
+      return [
+        category.name,
+        category.slug,
+        category.description || "",
+      ]
         .join(" ")
         .toLowerCase()
         .includes(query);
@@ -217,24 +255,46 @@ export default function AdminProducts() {
       if (!query) return true;
 
       const parent =
-        categories.find((category) => category.id === subcategory.categoryId)
-          ?.name || "";
+        categories.find(
+          (category) =>
+            category.id === subcategory.categoryId,
+        )?.name || "";
 
-      return [subcategory.name, subcategory.slug, parent]
+      return [
+        subcategory.name,
+        subcategory.slug,
+        parent,
+      ]
         .join(" ")
         .toLowerCase()
         .includes(query);
     });
   }, [subcategories, categories, searchText]);
 
+  const filteredSugarLevels = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+
+    return sugarLevels.filter((level) => {
+      if (!query) return true;
+
+      return level.name
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [sugarLevels, searchText]);
+
   const productSubcategories = useMemo(() => {
     return subcategories.filter(
-      (subcategory) => subcategory.categoryId === productForm.categoryId,
+      (subcategory) =>
+        subcategory.categoryId ===
+        productForm.categoryId,
     );
   }, [subcategories, productForm.categoryId]);
 
   function openAddProduct() {
-    setProductForm(emptyProductPayload(categories, sugarLevels));
+    setProductForm(
+      emptyProductPayload(categories),
+    );
     setTagText("");
     setComboNotes("");
     setProductModalOpen(true);
@@ -260,14 +320,17 @@ export default function AdminProducts() {
     setCategoryModalOpen(true);
   }
 
-  function openEditCategory(category: AdminCategory) {
+  function openEditCategory(
+    category: AdminCategory,
+  ) {
     setCategoryForm({
       id: category.id,
       name: category.name,
       slug: category.slug,
       description: category.description || "",
       imageUrl: category.imageUrl || "",
-      imagePublicId: category.imagePublicId || "",
+      imagePublicId:
+        category.imagePublicId || "",
       isActive: category.isActive,
       sortOrder: category.sortOrder,
     });
@@ -276,19 +339,25 @@ export default function AdminProducts() {
   }
 
   function openAddSubcategory() {
-    setSubcategoryForm(emptySubcategoryPayload(categories));
+    setSubcategoryForm(
+      emptySubcategoryPayload(categories),
+    );
     setSubcategoryModalOpen(true);
   }
 
-  function openEditSubcategory(subcategory: AdminSubcategory) {
+  function openEditSubcategory(
+    subcategory: AdminSubcategory,
+  ) {
     setSubcategoryForm({
       id: subcategory.id,
       categoryId: subcategory.categoryId,
       name: subcategory.name,
       slug: subcategory.slug,
-      description: subcategory.description || "",
+      description:
+        subcategory.description || "",
       imageUrl: subcategory.imageUrl || "",
-      imagePublicId: subcategory.imagePublicId || "",
+      imagePublicId:
+        subcategory.imagePublicId || "",
       isActive: subcategory.isActive,
       sortOrder: subcategory.sortOrder,
     });
@@ -296,11 +365,36 @@ export default function AdminProducts() {
     setSubcategoryModalOpen(true);
   }
 
-  function updateProductSize(index: number, patch: Partial<AdminProductSize>) {
+  function openAddSugarLevel() {
+    setSugarLevelForm(
+      emptySugarLevelPayload(),
+    );
+    setSugarLevelModalOpen(true);
+  }
+
+  function openEditSugarLevel(
+    sugarLevel: AdminSugarLevel,
+  ) {
+    setSugarLevelForm({
+      id: sugarLevel.id,
+      name: sugarLevel.name,
+      isActive: sugarLevel.isActive,
+      sortOrder: sugarLevel.sortOrder,
+    });
+
+    setSugarLevelModalOpen(true);
+  }
+
+  function updateProductSize(
+    index: number,
+    patch: Partial<AdminProductSize>,
+  ) {
     setProductForm((prev) => ({
       ...prev,
       sizes: prev.sizes.map((size, i) =>
-        i === index ? { ...size, ...patch } : size,
+        i === index
+          ? { ...size, ...patch }
+          : size,
       ),
     }));
   }
@@ -323,7 +417,9 @@ export default function AdminProducts() {
   function removeProductSize(index: number) {
     setProductForm((prev) => ({
       ...prev,
-      sizes: prev.sizes.filter((_, i) => i !== index),
+      sizes: prev.sizes.filter(
+        (_, i) => i !== index,
+      ),
     }));
   }
 
@@ -334,7 +430,9 @@ export default function AdminProducts() {
     setProductForm((prev) => ({
       ...prev,
       images: prev.images.map((image, i) =>
-        i === index ? { ...image, ...patch } : image,
+        i === index
+          ? { ...image, ...patch }
+          : image,
       ),
     }));
   }
@@ -347,7 +445,9 @@ export default function AdminProducts() {
         {
           imageUrl: "",
           imagePublicId: "",
-          alt: prev.name || "Product image",
+          alt:
+            prev.name ||
+            "Product image",
           sortOrder: prev.images.length,
         },
       ],
@@ -357,11 +457,36 @@ export default function AdminProducts() {
   function removeGalleryImage(index: number) {
     setProductForm((prev) => ({
       ...prev,
-      images: prev.images.filter((_, i) => i !== index),
+      images: prev.images.filter(
+        (_, i) => i !== index,
+      ),
     }));
   }
 
-  async function handleProductSave(event: FormEvent) {
+  function toggleProductSugarLevel(
+    levelId: number,
+  ) {
+    setProductForm((prev) => {
+      const selected =
+        prev.sugarLevelIds.includes(levelId);
+
+      return {
+        ...prev,
+        sugarLevelIds: selected
+          ? prev.sugarLevelIds.filter(
+              (id) => id !== levelId,
+            )
+          : [
+              ...prev.sugarLevelIds,
+              levelId,
+            ],
+      };
+    });
+  }
+
+  async function handleProductSave(
+    event: FormEvent,
+  ) {
     event.preventDefault();
 
     try {
@@ -371,7 +496,9 @@ export default function AdminProducts() {
 
       await saveProduct({
         ...productForm,
-        slug: productForm.slug || slugify(productForm.name),
+        slug:
+          productForm.slug ||
+          slugify(productForm.name),
         tags: tagText
           .split(",")
           .map((tag) => tag.trim())
@@ -379,24 +506,32 @@ export default function AdminProducts() {
         comboConfig: productForm.isCombo
           ? {
               notes: comboNotes,
-              managedAsSingleSellableProduct: true,
+              managedAsSingleSellableProduct:
+                true,
             }
           : null,
       });
 
       setProductModalOpen(false);
-      setMessage("Product saved successfully.");
+      setMessage(
+        "Product saved successfully.",
+      );
+
       await loadData();
     } catch (error) {
       setErrorText(
-        error instanceof Error ? error.message : "Product could not be saved.",
+        error instanceof Error
+          ? error.message
+          : "Product could not be saved.",
       );
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleCategorySave(event: FormEvent) {
+  async function handleCategorySave(
+    event: FormEvent,
+  ) {
     event.preventDefault();
 
     try {
@@ -406,22 +541,31 @@ export default function AdminProducts() {
 
       await saveCategory({
         ...categoryForm,
-        slug: categoryForm.slug || slugify(categoryForm.name),
+        slug:
+          categoryForm.slug ||
+          slugify(categoryForm.name),
       });
 
       setCategoryModalOpen(false);
-      setMessage("Category saved successfully.");
+      setMessage(
+        "Category saved successfully.",
+      );
+
       await loadData();
     } catch (error) {
       setErrorText(
-        error instanceof Error ? error.message : "Category could not be saved.",
+        error instanceof Error
+          ? error.message
+          : "Category could not be saved.",
       );
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleSubcategorySave(event: FormEvent) {
+  async function handleSubcategorySave(
+    event: FormEvent,
+  ) {
     event.preventDefault();
 
     try {
@@ -431,17 +575,53 @@ export default function AdminProducts() {
 
       await saveSubcategory({
         ...subcategoryForm,
-        slug: subcategoryForm.slug || slugify(subcategoryForm.name),
+        slug:
+          subcategoryForm.slug ||
+          slugify(subcategoryForm.name),
       });
 
       setSubcategoryModalOpen(false);
-      setMessage("Subcategory saved successfully.");
+      setMessage(
+        "Subcategory saved successfully.",
+      );
+
       await loadData();
     } catch (error) {
       setErrorText(
         error instanceof Error
           ? error.message
           : "Subcategory could not be saved.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleSugarLevelSave(
+    event: FormEvent,
+  ) {
+    event.preventDefault();
+
+    try {
+      setIsSaving(true);
+      setErrorText("");
+      setMessage("");
+
+      await saveSugarLevel(
+        sugarLevelForm,
+      );
+
+      setSugarLevelModalOpen(false);
+      setMessage(
+        "Sugar level saved successfully.",
+      );
+
+      await loadData();
+    } catch (error) {
+      setErrorText(
+        error instanceof Error
+          ? error.message
+          : "Sugar level could not be saved.",
       );
     } finally {
       setIsSaving(false);
@@ -462,8 +642,10 @@ export default function AdminProducts() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/70">
-              Manage products, categories, subcategories, prices, active status,
-              and Cloudinary image URLs.
+              Manage products, categories,
+              subcategories, prices, sugar
+              options, active status, and
+              catalogue images.
             </p>
           </div>
 
@@ -492,30 +674,53 @@ export default function AdminProducts() {
             <div className="flex flex-wrap gap-2">
               <TabButton
                 active={tab === "products"}
-                onClick={() => setTab("products")}
+                onClick={() =>
+                  setTab("products")
+                }
               >
                 Products
               </TabButton>
 
               <TabButton
                 active={tab === "categories"}
-                onClick={() => setTab("categories")}
+                onClick={() =>
+                  setTab("categories")
+                }
               >
                 Categories
               </TabButton>
 
               <TabButton
-                active={tab === "subcategories"}
-                onClick={() => setTab("subcategories")}
+                active={
+                  tab === "subcategories"
+                }
+                onClick={() =>
+                  setTab("subcategories")
+                }
               >
                 Subcategories
+              </TabButton>
+
+              <TabButton
+                active={
+                  tab === "sugarLevels"
+                }
+                onClick={() =>
+                  setTab("sugarLevels")
+                }
+              >
+                Sugar levels
               </TabButton>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <input
                 value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
+                onChange={(event) =>
+                  setSearchText(
+                    event.target.value,
+                  )
+                }
                 className="w-full rounded-2xl border border-brand-ink/10 bg-white/70 px-4 py-3 text-sm font-medium text-brand-ink outline-none placeholder:text-brand-ink/35 focus:border-brand-ink/25 focus:ring-2 focus:ring-brand-ink/10 sm:w-72"
                 placeholder="Search..."
               />
@@ -540,13 +745,29 @@ export default function AdminProducts() {
                 </button>
               )}
 
-              {tab === "subcategories" && (
+              {tab ===
+                "subcategories" && (
                 <button
                   type="button"
-                  onClick={openAddSubcategory}
+                  onClick={
+                    openAddSubcategory
+                  }
                   className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg"
                 >
                   Add subcategory
+                </button>
+              )}
+
+              {tab ===
+                "sugarLevels" && (
+                <button
+                  type="button"
+                  onClick={
+                    openAddSugarLevel
+                  }
+                  className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg"
+                >
+                  Add sugar level
                 </button>
               )}
             </div>
@@ -566,71 +787,127 @@ export default function AdminProducts() {
                     <Th>Product</Th>
                     <Th>Category</Th>
                     <Th>Price</Th>
+                    <Th>Sugar</Th>
                     <Th>Status</Th>
                     <Th>Actions</Th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {filteredProducts.map((product) => (
-                    <tr key={product.id} className="border-t border-black/10">
-                      <Td>
-                        <div className="flex items-center gap-3">
-                          <div className="h-14 w-14 overflow-hidden rounded-2xl border border-black/10 bg-brand-bg/70">
-                            {product.thumbnailUrl ? (
-                              <img
-                                src={product.thumbnailUrl}
-                                alt={product.name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="grid h-full place-items-center text-xs text-brand-ink/40">
-                                No img
-                              </div>
-                            )}
+                  {filteredProducts.map(
+                    (product) => (
+                      <tr
+                        key={product.id}
+                        className="border-t border-black/10"
+                      >
+                        <Td>
+                          <div className="flex items-center gap-3">
+                            <div className="h-14 w-14 overflow-hidden rounded-2xl border border-black/10 bg-brand-bg/70">
+                              {product.thumbnailUrl ? (
+                                <img
+                                  src={
+                                    product.thumbnailUrl
+                                  }
+                                  alt={
+                                    product.name
+                                  }
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="grid h-full place-items-center text-xs text-brand-ink/40">
+                                  No img
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <p className="font-semibold text-brand-ink">
+                                {
+                                  product.name
+                                }
+                              </p>
+
+                              <p className="mt-0.5 text-xs text-brand-ink/50">
+                                /
+                                {
+                                  product.slug
+                                }
+                              </p>
+                            </div>
                           </div>
+                        </Td>
 
-                          <div>
-                            <p className="font-semibold text-brand-ink">
-                              {product.name}
-                            </p>
-                            <p className="mt-0.5 text-xs text-brand-ink/50">
-                              /{product.slug}
-                            </p>
-                          </div>
-                        </div>
-                      </Td>
+                        <Td>
+                          <p className="font-medium text-brand-ink">
+                            {
+                              product.categoryName
+                            }
+                          </p>
 
-                      <Td>
-                        <p className="font-medium text-brand-ink">
-                          {product.categoryName}
-                        </p>
-                        <p className="mt-0.5 text-xs text-brand-ink/50">
-                          {product.subcategoryName || "No subcategory"}
-                        </p>
-                      </Td>
+                          <p className="mt-0.5 text-xs text-brand-ink/50">
+                            {product.subcategoryName ||
+                              "No subcategory"}
+                          </p>
+                        </Td>
 
-                      <Td>
-                        {product.sizes[0]
-                          ? formatLkr(product.sizes[0].priceLkr)
-                          : "No price"}
-                      </Td>
+                        <Td>
+                          {product.sizes[0]
+                            ? formatLkr(
+                                product
+                                  .sizes[0]
+                                  .priceLkr,
+                              )
+                            : "No price"}
+                        </Td>
 
-                      <Td>
-                        <StatusBadge active={product.isActive} />
-                      </Td>
+                        <Td>
+                          {product
+                            .sugarLevelIds
+                            .length > 0 ? (
+                            <span className="rounded-full border border-brand-ink/10 bg-white/70 px-2.5 py-1 text-xs font-semibold text-brand-ink">
+                              {
+                                product
+                                  .sugarLevelIds
+                                  .length
+                              }{" "}
+                              option
+                              {product
+                                .sugarLevelIds
+                                .length === 1
+                                ? ""
+                                : "s"}
+                            </span>
+                          ) : (
+                            <span className="text-xs font-medium text-brand-ink/45">
+                              Not applicable
+                            </span>
+                          )}
+                        </Td>
 
-                      <Td>
-                        <button
-                          type="button"
-                          onClick={() => openEditProduct(product)}
-                          className="rounded-xl border border-brand-ink/15 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-white"
-                        >
-                          Edit
-                        </button>
-                      </Td>
-                    </tr>
-                  ))}
+                        <Td>
+                          <StatusBadge
+                            active={
+                              product.isActive
+                            }
+                          />
+                        </Td>
+
+                        <Td>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openEditProduct(
+                                product,
+                              )
+                            }
+                            className="rounded-xl border border-brand-ink/15 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-white"
+                          >
+                            Edit
+                          </button>
+                        </Td>
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </DataTable>
             )}
@@ -648,47 +925,78 @@ export default function AdminProducts() {
                 </thead>
 
                 <tbody>
-                  {filteredCategories.map((category) => (
-                    <tr key={category.id} className="border-t border-black/10">
-                      <Td>
-                        <div className="flex items-center gap-3">
-                          <IconPreview
-                            imageUrl={category.imageUrl}
-                            label={category.name}
-                          />
+                  {filteredCategories.map(
+                    (category) => (
+                      <tr
+                        key={category.id}
+                        className="border-t border-black/10"
+                      >
+                        <Td>
+                          <div className="flex items-center gap-3">
+                            <IconPreview
+                              imageUrl={
+                                category.imageUrl
+                              }
+                              label={
+                                category.name
+                              }
+                            />
 
-                          <div>
-                            <p className="font-semibold text-brand-ink">
-                              {category.name}
-                            </p>
-                            <p className="mt-0.5 text-xs text-brand-ink/50">
-                              {category.description || "No description"}
-                            </p>
+                            <div>
+                              <p className="font-semibold text-brand-ink">
+                                {
+                                  category.name
+                                }
+                              </p>
+
+                              <p className="mt-0.5 text-xs text-brand-ink/50">
+                                {category.description ||
+                                  "No description"}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </Td>
+                        </Td>
 
-                      <Td>{category.slug}</Td>
-                      <Td>{category.sortOrder}</Td>
-                      <Td>
-                        <StatusBadge active={category.isActive} />
-                      </Td>
-                      <Td>
-                        <button
-                          type="button"
-                          onClick={() => openEditCategory(category)}
-                          className="rounded-xl border border-brand-ink/15 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-white"
-                        >
-                          Edit
-                        </button>
-                      </Td>
-                    </tr>
-                  ))}
+                        <Td>
+                          {category.slug}
+                        </Td>
+
+                        <Td>
+                          {
+                            category.sortOrder
+                          }
+                        </Td>
+
+                        <Td>
+                          <StatusBadge
+                            active={
+                              category.isActive
+                            }
+                          />
+                        </Td>
+
+                        <Td>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openEditCategory(
+                                category,
+                              )
+                            }
+                            className="rounded-xl border border-brand-ink/15 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-white"
+                          >
+                            Edit
+                          </button>
+                        </Td>
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </DataTable>
             )}
 
-            {tab === "subcategories" && (
+            {tab ===
+              "subcategories" && (
               <DataTable>
                 <thead>
                   <tr>
@@ -701,55 +1009,190 @@ export default function AdminProducts() {
                 </thead>
 
                 <tbody>
-                  {filteredSubcategories.map((subcategory) => (
-                    <tr
-                      key={subcategory.id}
-                      className="border-t border-black/10"
-                    >
-                      <Td>
-                        <div className="flex items-center gap-3">
-                          <IconPreview
-                            imageUrl={subcategory.imageUrl}
-                            label={subcategory.name}
-                          />
-
-                          <div>
-                            <p className="font-semibold text-brand-ink">
-                              {subcategory.name}
-                            </p>
-                            <p className="mt-0.5 text-xs text-brand-ink/50">
-                              /{subcategory.slug}
-                            </p>
-                          </div>
-                        </div>
-                      </Td>
-
-                      <Td>
-                        {
-                          categories.find(
-                            (category) =>
-                              category.id === subcategory.categoryId,
-                          )?.name
+                  {filteredSubcategories.map(
+                    (subcategory) => (
+                      <tr
+                        key={
+                          subcategory.id
                         }
-                      </Td>
+                        className="border-t border-black/10"
+                      >
+                        <Td>
+                          <div className="flex items-center gap-3">
+                            <IconPreview
+                              imageUrl={
+                                subcategory.imageUrl
+                              }
+                              label={
+                                subcategory.name
+                              }
+                            />
 
-                      <Td>{subcategory.sortOrder}</Td>
+                            <div>
+                              <p className="font-semibold text-brand-ink">
+                                {
+                                  subcategory.name
+                                }
+                              </p>
 
-                      <Td>
-                        <StatusBadge active={subcategory.isActive} />
-                      </Td>
+                              <p className="mt-0.5 text-xs text-brand-ink/50">
+                                /
+                                {
+                                  subcategory.slug
+                                }
+                              </p>
+                            </div>
+                          </div>
+                        </Td>
 
-                      <Td>
-                        <button
-                          type="button"
-                          onClick={() => openEditSubcategory(subcategory)}
-                          className="rounded-xl border border-brand-ink/15 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-white"
-                        >
-                          Edit
-                        </button>
-                      </Td>
+                        <Td>
+                          {categories.find(
+                            (
+                              category,
+                            ) =>
+                              category.id ===
+                              subcategory.categoryId,
+                          )?.name ||
+                            "Unknown"}
+                        </Td>
+
+                        <Td>
+                          {
+                            subcategory.sortOrder
+                          }
+                        </Td>
+
+                        <Td>
+                          <StatusBadge
+                            active={
+                              subcategory.isActive
+                            }
+                          />
+                        </Td>
+
+                        <Td>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openEditSubcategory(
+                                subcategory,
+                              )
+                            }
+                            className="rounded-xl border border-brand-ink/15 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-white"
+                          >
+                            Edit
+                          </button>
+                        </Td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </DataTable>
+            )}
+
+            {tab ===
+              "sugarLevels" && (
+              <DataTable>
+                <thead>
+                  <tr>
+                    <Th>Sugar level</Th>
+                    <Th>Products</Th>
+                    <Th>Sort</Th>
+                    <Th>Status</Th>
+                    <Th>Actions</Th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filteredSugarLevels.length ===
+                  0 ? (
+                    <tr className="border-t border-black/10">
+                      <td
+                        colSpan={5}
+                        className="px-5 py-10 text-center"
+                      >
+                        <p className="font-semibold text-brand-ink">
+                          No sugar levels
+                          yet
+                        </p>
+
+                        <p className="mt-1 text-sm text-brand-ink/55">
+                          Add a sugar
+                          option only when
+                          a product needs
+                          customer sugar
+                          selection.
+                        </p>
+                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredSugarLevels.map(
+                      (level) => {
+                        const productCount =
+                          products.filter(
+                            (product) =>
+                              product.sugarLevelIds.includes(
+                                level.id,
+                              ),
+                          ).length;
+
+                        return (
+                          <tr
+                            key={level.id}
+                            className="border-t border-black/10"
+                          >
+                            <Td>
+                              <p className="font-semibold text-brand-ink">
+                                {
+                                  level.name
+                                }
+                              </p>
+                            </Td>
+
+                            <Td>
+                              {productCount ===
+                              0
+                                ? "Not assigned"
+                                : `${productCount} product${
+                                    productCount ===
+                                    1
+                                      ? ""
+                                      : "s"
+                                  }`}
+                            </Td>
+
+                            <Td>
+                              {
+                                level.sortOrder
+                              }
+                            </Td>
+
+                            <Td>
+                              <StatusBadge
+                                active={
+                                  level.isActive
+                                }
+                              />
+                            </Td>
+
+                            <Td>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openEditSugarLevel(
+                                    level,
+                                  )
+                                }
+                                className="rounded-xl border border-brand-ink/15 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-white"
+                              >
+                                Edit
+                              </button>
+                            </Td>
+                          </tr>
+                        );
+                      },
+                    )
+                  )}
                 </tbody>
               </DataTable>
             )}
@@ -758,20 +1201,42 @@ export default function AdminProducts() {
 
         {productModalOpen && (
           <Modal
-            title={productForm.id ? "Edit product" : "Add product"}
-            onClose={() => setProductModalOpen(false)}
+            title={
+              productForm.id
+                ? "Edit product"
+                : "Add product"
+            }
+            onClose={() =>
+              setProductModalOpen(false)
+            }
           >
-            <form onSubmit={handleProductSave} className="space-y-5">
+            <form
+              onSubmit={
+                handleProductSave
+              }
+              className="space-y-5"
+            >
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Product name">
                   <input
-                    value={productForm.name}
+                    value={
+                      productForm.name
+                    }
                     onChange={(event) =>
-                      setProductForm((prev) => ({
-                        ...prev,
-                        name: event.target.value,
-                        slug: prev.id ? prev.slug : slugify(event.target.value),
-                      }))
+                      setProductForm(
+                        (prev) => ({
+                          ...prev,
+                          name: event
+                            .target.value,
+                          slug: prev.id
+                            ? prev.slug
+                            : slugify(
+                                event
+                                  .target
+                                  .value,
+                              ),
+                        }),
+                      )
                     }
                     className="input-admin"
                     placeholder="Chocolate Jar Cake"
@@ -780,12 +1245,20 @@ export default function AdminProducts() {
 
                 <Field label="Slug">
                   <input
-                    value={productForm.slug}
+                    value={
+                      productForm.slug
+                    }
                     onChange={(event) =>
-                      setProductForm((prev) => ({
-                        ...prev,
-                        slug: slugify(event.target.value),
-                      }))
+                      setProductForm(
+                        (prev) => ({
+                          ...prev,
+                          slug: slugify(
+                            event
+                              .target
+                              .value,
+                          ),
+                        }),
+                      )
                     }
                     className="input-admin"
                   />
@@ -793,44 +1266,92 @@ export default function AdminProducts() {
 
                 <Field label="Category">
                   <select
-                    value={productForm.categoryId}
+                    value={
+                      productForm.categoryId
+                    }
                     onChange={(event) =>
-                      setProductForm((prev) => ({
-                        ...prev,
-                        categoryId: Number(event.target.value),
-                        subcategoryId: null,
-                      }))
+                      setProductForm(
+                        (prev) => ({
+                          ...prev,
+                          categoryId:
+                            Number(
+                              event
+                                .target
+                                .value,
+                            ),
+                          subcategoryId:
+                            null,
+                        }),
+                      )
                     }
                     className="input-admin"
                   >
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
+                    {categories.map(
+                      (category) => (
+                        <option
+                          key={
+                            category.id
+                          }
+                          value={
+                            category.id
+                          }
+                        >
+                          {
+                            category.name
+                          }
+                        </option>
+                      ),
+                    )}
                   </select>
                 </Field>
 
                 <Field label="Subcategory">
                   <select
-                    value={productForm.subcategoryId || ""}
+                    value={
+                      productForm.subcategoryId ||
+                      ""
+                    }
                     onChange={(event) =>
-                      setProductForm((prev) => ({
-                        ...prev,
-                        subcategoryId: event.target.value
-                          ? Number(event.target.value)
-                          : null,
-                      }))
+                      setProductForm(
+                        (prev) => ({
+                          ...prev,
+                          subcategoryId:
+                            event
+                              .target
+                              .value
+                              ? Number(
+                                  event
+                                    .target
+                                    .value,
+                                )
+                              : null,
+                        }),
+                      )
                     }
                     className="input-admin"
                   >
-                    <option value="">No subcategory</option>
+                    <option value="">
+                      No subcategory
+                    </option>
 
-                    {productSubcategories.map((subcategory) => (
-                      <option key={subcategory.id} value={subcategory.id}>
-                        {subcategory.name}
-                      </option>
-                    ))}
+                    {productSubcategories.map(
+                      (
+                        subcategory,
+                      ) => (
+                        <option
+                          key={
+                            subcategory.id
+                          }
+                          value={
+                            subcategory.id
+                          }
+                        >
+                          {
+                            subcategory.name
+                          }
+                        </option>
+                      ),
+                    )}
                   </select>
                 </Field>
               </div>
@@ -840,26 +1361,38 @@ export default function AdminProducts() {
                 folder="baura-bakers/products"
                 helperText="This image appears on product cards."
                 value={{
-                  imageUrl: productForm.thumbnailUrl,
-                  imagePublicId: productForm.thumbnailPublicId,
+                  imageUrl:
+                    productForm.thumbnailUrl,
+                  imagePublicId:
+                    productForm.thumbnailPublicId,
                 }}
                 onChange={(value) =>
-                  setProductForm((prev) => ({
-                    ...prev,
-                    thumbnailUrl: value.imageUrl,
-                    thumbnailPublicId: value.imagePublicId,
-                  }))
+                  setProductForm(
+                    (prev) => ({
+                      ...prev,
+                      thumbnailUrl:
+                        value.imageUrl,
+                      thumbnailPublicId:
+                        value.imagePublicId,
+                    }),
+                  )
                 }
               />
 
               <Field label="Slogan">
                 <input
-                  value={productForm.slogan}
+                  value={
+                    productForm.slogan
+                  }
                   onChange={(event) =>
-                    setProductForm((prev) => ({
-                      ...prev,
-                      slogan: event.target.value,
-                    }))
+                    setProductForm(
+                      (prev) => ({
+                        ...prev,
+                        slogan:
+                          event.target
+                            .value,
+                      }),
+                    )
                   }
                   className="input-admin"
                 />
@@ -867,12 +1400,18 @@ export default function AdminProducts() {
 
               <Field label="Short description">
                 <input
-                  value={productForm.shortDesc}
+                  value={
+                    productForm.shortDesc
+                  }
                   onChange={(event) =>
-                    setProductForm((prev) => ({
-                      ...prev,
-                      shortDesc: event.target.value,
-                    }))
+                    setProductForm(
+                      (prev) => ({
+                        ...prev,
+                        shortDesc:
+                          event.target
+                            .value,
+                      }),
+                    )
                   }
                   className="input-admin"
                 />
@@ -880,12 +1419,18 @@ export default function AdminProducts() {
 
               <Field label="Description">
                 <textarea
-                  value={productForm.description}
+                  value={
+                    productForm.description
+                  }
                   onChange={(event) =>
-                    setProductForm((prev) => ({
-                      ...prev,
-                      description: event.target.value,
-                    }))
+                    setProductForm(
+                      (prev) => ({
+                        ...prev,
+                        description:
+                          event.target
+                            .value,
+                      }),
+                    )
                   }
                   className="input-admin min-h-[110px]"
                 />
@@ -893,11 +1438,15 @@ export default function AdminProducts() {
 
               <section className="rounded-3xl border border-black/10 bg-white/50 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-semibold text-brand-ink">Prices</h3>
+                  <h3 className="font-semibold text-brand-ink">
+                    Prices
+                  </h3>
 
                   <button
                     type="button"
-                    onClick={addProductSize}
+                    onClick={
+                      addProductSize
+                    }
                     className="rounded-xl border border-brand-ink/15 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink"
                   >
                     Add size
@@ -905,55 +1454,99 @@ export default function AdminProducts() {
                 </div>
 
                 <div className="mt-4 space-y-3">
-                  {productForm.sizes.map((size, index) => (
-                    <div
-                      key={index}
-                      className="grid gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 sm:grid-cols-[1fr_1fr_120px_auto]"
-                    >
-                      <input
-                        value={size.label}
-                        onChange={(event) =>
-                          updateProductSize(index, {
-                            label: event.target.value,
-                          })
-                        }
-                        className="input-admin"
-                        placeholder="Regular"
-                      />
-
-                      <input
-                        value={size.serves || ""}
-                        onChange={(event) =>
-                          updateProductSize(index, {
-                            serves: event.target.value,
-                          })
-                        }
-                        className="input-admin"
-                        placeholder="Serves"
-                      />
-
-                      <input
-                        type="number"
-                        value={size.priceLkr}
-                        onChange={(event) =>
-                          updateProductSize(index, {
-                            priceLkr: Number(event.target.value || 0),
-                          })
-                        }
-                        className="input-admin"
-                        placeholder="Price"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() => removeProductSize(index)}
-                        disabled={productForm.sizes.length === 1}
-                        className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-40"
+                  {productForm.sizes.map(
+                    (size, index) => (
+                      <div
+                        key={index}
+                        className="grid gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 sm:grid-cols-[1fr_1fr_120px_auto]"
                       >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
+                        <input
+                          value={
+                            size.label
+                          }
+                          onChange={(
+                            event,
+                          ) =>
+                            updateProductSize(
+                              index,
+                              {
+                                label:
+                                  event
+                                    .target
+                                    .value,
+                              },
+                            )
+                          }
+                          className="input-admin"
+                          placeholder="Regular"
+                        />
+
+                        <input
+                          value={
+                            size.serves ||
+                            ""
+                          }
+                          onChange={(
+                            event,
+                          ) =>
+                            updateProductSize(
+                              index,
+                              {
+                                serves:
+                                  event
+                                    .target
+                                    .value,
+                              },
+                            )
+                          }
+                          className="input-admin"
+                          placeholder="Serves"
+                        />
+
+                        <input
+                          type="number"
+                          value={
+                            size.priceLkr
+                          }
+                          onChange={(
+                            event,
+                          ) =>
+                            updateProductSize(
+                              index,
+                              {
+                                priceLkr:
+                                  Number(
+                                    event
+                                      .target
+                                      .value ||
+                                      0,
+                                  ),
+                              },
+                            )
+                          }
+                          className="input-admin"
+                          placeholder="Price"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeProductSize(
+                              index,
+                            )
+                          }
+                          disabled={
+                            productForm
+                              .sizes
+                              .length === 1
+                          }
+                          className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-40"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ),
+                  )}
                 </div>
               </section>
 
@@ -965,7 +1558,9 @@ export default function AdminProducts() {
 
                   <button
                     type="button"
-                    onClick={addGalleryImage}
+                    onClick={
+                      addGalleryImage
+                    }
                     className="rounded-xl border border-brand-ink/15 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink"
                   >
                     Add gallery image
@@ -973,53 +1568,89 @@ export default function AdminProducts() {
                 </div>
 
                 <div className="mt-4 space-y-4">
-                  {productForm.images.length === 0 ? (
+                  {productForm.images
+                    .length === 0 ? (
                     <p className="text-sm text-brand-ink/55">
-                      No gallery images yet.
+                      No gallery images
+                      yet.
                     </p>
                   ) : (
-                    productForm.images.map((image, index) => (
-                      <div
-                        key={index}
-                        className="rounded-3xl border border-black/10 bg-white/60 p-4"
-                      >
-                        <div className="mb-3 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => removeGalleryImage(index)}
-                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
-                          >
-                            Remove image
-                          </button>
+                    productForm.images.map(
+                      (
+                        image,
+                        index,
+                      ) => (
+                        <div
+                          key={index}
+                          className="rounded-3xl border border-black/10 bg-white/60 p-4"
+                        >
+                          <div className="mb-3 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeGalleryImage(
+                                  index,
+                                )
+                              }
+                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+                            >
+                              Remove
+                              image
+                            </button>
+                          </div>
+
+                          <ImageUploadField
+                            label={`Gallery image ${
+                              index +
+                              1
+                            }`}
+                            folder="baura-bakers/products/gallery"
+                            value={{
+                              imageUrl:
+                                image.imageUrl,
+                              imagePublicId:
+                                image.imagePublicId ||
+                                "",
+                            }}
+                            onChange={(
+                              value,
+                            ) =>
+                              updateGalleryImage(
+                                index,
+                                {
+                                  imageUrl:
+                                    value.imageUrl,
+                                  imagePublicId:
+                                    value.imagePublicId,
+                                },
+                              )
+                            }
+                          />
+
+                          <input
+                            value={
+                              image.alt ||
+                              ""
+                            }
+                            onChange={(
+                              event,
+                            ) =>
+                              updateGalleryImage(
+                                index,
+                                {
+                                  alt:
+                                    event
+                                      .target
+                                      .value,
+                                },
+                              )
+                            }
+                            className="input-admin mt-3"
+                            placeholder="Image alt text"
+                          />
                         </div>
-
-                        <ImageUploadField
-                          label={`Gallery image ${index + 1}`}
-                          folder="baura-bakers/products/gallery"
-                          value={{
-                            imageUrl: image.imageUrl,
-                            imagePublicId: image.imagePublicId || "",
-                          }}
-                          onChange={(value) =>
-                            updateGalleryImage(index, {
-                              imageUrl: value.imageUrl,
-                              imagePublicId: value.imagePublicId,
-                            })
-                          }
-                        />
-
-                        <input
-                          value={image.alt || ""}
-                          onChange={(event) =>
-                            updateGalleryImage(index, {
-                              alt: event.target.value,
-                            })
-                          }
-                          className="input-admin mt-3"
-                          placeholder="Image alt text"
-                        />
-                      </div>
-                    ))
+                      ),
+                    )
                   )}
                 </div>
               </section>
@@ -1027,66 +1658,157 @@ export default function AdminProducts() {
               <Field label="Tags comma separated">
                 <input
                   value={tagText}
-                  onChange={(event) => setTagText(event.target.value)}
+                  onChange={(event) =>
+                    setTagText(
+                      event.target.value,
+                    )
+                  }
                   className="input-admin"
                   placeholder="Best seller, Fresh, New"
                 />
               </Field>
 
               <section className="rounded-3xl border border-black/10 bg-white/50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-brand-ink/60">
-                  Sugar levels
-                </p>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-brand-ink/60">
+                      Sugar options
+                    </p>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {sugarLevels.map((level) => {
-                    const checked = productForm.sugarLevelIds.includes(
-                      level.id,
-                    );
+                    <p className="mt-1 text-sm leading-relaxed text-brand-ink/55">
+                      Optional. Select
+                      only the sugar
+                      choices available
+                      for this product.
+                      Leave everything
+                      unselected when
+                      sugar choice does
+                      not apply.
+                    </p>
+                  </div>
 
-                    return (
-                      <label
-                        key={level.id}
-                        className={[
-                          "cursor-pointer rounded-full border px-3 py-2 text-xs font-semibold transition",
-                          checked
-                            ? "border-brand-ink bg-brand-ink text-brand-bg"
-                            : "border-brand-ink/15 bg-white/70 text-brand-ink",
-                        ].join(" ")}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() =>
-                            setProductForm((prev) => ({
-                              ...prev,
-                              sugarLevelIds: checked
-                                ? prev.sugarLevelIds.filter(
-                                    (id) => id !== level.id,
-                                  )
-                                : [...prev.sugarLevelIds, level.id],
-                            }))
-                          }
-                          className="sr-only"
-                        />
-
-                        {level.name}
-                      </label>
-                    );
-                  })}
+                  <span className="mt-2 shrink-0 rounded-full border border-brand-ink/10 bg-white/70 px-3 py-1.5 text-xs font-semibold text-brand-ink/60 sm:mt-0">
+                    {
+                      productForm
+                        .sugarLevelIds
+                        .length
+                    }{" "}
+                    selected
+                  </span>
                 </div>
+
+                {sugarLevels.length ===
+                0 ? (
+                  <div className="mt-4 rounded-2xl border border-dashed border-brand-ink/20 bg-brand-bg/45 p-4">
+                    <p className="text-sm font-semibold text-brand-ink">
+                      No sugar options
+                      have been created.
+                    </p>
+
+                    <p className="mt-1 text-sm leading-relaxed text-brand-ink/55">
+                      This product can
+                      still be saved
+                      without a sugar
+                      option. Create
+                      options from the
+                      Sugar Levels tab
+                      when required.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {sugarLevels.map(
+                      (level) => {
+                        const checked =
+                          productForm.sugarLevelIds.includes(
+                            level.id,
+                          );
+
+                        return (
+                          <label
+                            key={
+                              level.id
+                            }
+                            className={[
+                              "cursor-pointer rounded-full border px-3 py-2 text-xs font-semibold transition",
+                              checked
+                                ? "border-brand-ink bg-brand-ink text-brand-bg"
+                                : "border-brand-ink/15 bg-white/70 text-brand-ink hover:border-brand-ink/30 hover:bg-white",
+                              !level.isActive
+                                ? "opacity-55"
+                                : "",
+                            ].join(
+                              " ",
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={
+                                checked
+                              }
+                              onChange={() =>
+                                toggleProductSugarLevel(
+                                  level.id,
+                                )
+                              }
+                              className="sr-only"
+                            />
+
+                            {
+                              level.name
+                            }
+
+                            {!level.isActive &&
+                              " · Inactive"}
+                          </label>
+                        );
+                      },
+                    )}
+                  </div>
+                )}
+
+                {productForm
+                  .sugarLevelIds
+                  .length === 0 &&
+                  sugarLevels.length >
+                    0 && (
+                    <div className="mt-4 rounded-2xl border border-green-200 bg-green-50/70 px-4 py-3">
+                      <p className="text-xs font-semibold text-green-800">
+                        No sugar
+                        selection
+                        required
+                      </p>
+
+                      <p className="mt-1 text-xs leading-relaxed text-green-700">
+                        Customers will
+                        not be shown a
+                        sugar selector
+                        for this product.
+                      </p>
+                    </div>
+                  )}
               </section>
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <Field label="Sort order">
                   <input
                     type="number"
-                    value={productForm.sortOrder}
+                    value={
+                      productForm.sortOrder
+                    }
                     onChange={(event) =>
-                      setProductForm((prev) => ({
-                        ...prev,
-                        sortOrder: Number(event.target.value || 0),
-                      }))
+                      setProductForm(
+                        (prev) => ({
+                          ...prev,
+                          sortOrder:
+                            Number(
+                              event
+                                .target
+                                .value ||
+                                0,
+                            ),
+                        }),
+                      )
                     }
                     className="input-admin"
                   />
@@ -1095,28 +1817,42 @@ export default function AdminProducts() {
                 <label className="flex items-center gap-2 rounded-2xl border border-black/10 bg-white/50 px-4 py-3 text-sm font-semibold text-brand-ink">
                   <input
                     type="checkbox"
-                    checked={productForm.isActive}
+                    checked={
+                      productForm.isActive
+                    }
                     onChange={(event) =>
-                      setProductForm((prev) => ({
-                        ...prev,
-                        isActive: event.target.checked,
-                      }))
+                      setProductForm(
+                        (prev) => ({
+                          ...prev,
+                          isActive:
+                            event.target
+                              .checked,
+                        }),
+                      )
                     }
                   />
+
                   Active
                 </label>
 
                 <label className="flex items-center gap-2 rounded-2xl border border-black/10 bg-white/50 px-4 py-3 text-sm font-semibold text-brand-ink">
                   <input
                     type="checkbox"
-                    checked={productForm.isCombo}
+                    checked={
+                      productForm.isCombo
+                    }
                     onChange={(event) =>
-                      setProductForm((prev) => ({
-                        ...prev,
-                        isCombo: event.target.checked,
-                      }))
+                      setProductForm(
+                        (prev) => ({
+                          ...prev,
+                          isCombo:
+                            event.target
+                              .checked,
+                        }),
+                      )
                     }
                   />
+
                   Combo
                 </label>
               </div>
@@ -1125,7 +1861,11 @@ export default function AdminProducts() {
                 <Field label="Combo notes">
                   <textarea
                     value={comboNotes}
-                    onChange={(event) => setComboNotes(event.target.value)}
+                    onChange={(event) =>
+                      setComboNotes(
+                        event.target.value,
+                      )
+                    }
                     className="input-admin min-h-[90px]"
                     placeholder="What is included in this combo?"
                   />
@@ -1134,7 +1874,11 @@ export default function AdminProducts() {
 
               <ModalActions
                 isSaving={isSaving}
-                onCancel={() => setProductModalOpen(false)}
+                onCancel={() =>
+                  setProductModalOpen(
+                    false,
+                  )
+                }
                 saveText="Save product"
               />
             </form>
@@ -1143,20 +1887,43 @@ export default function AdminProducts() {
 
         {categoryModalOpen && (
           <Modal
-            title={categoryForm.id ? "Edit category" : "Add category"}
-            onClose={() => setCategoryModalOpen(false)}
+            title={
+              categoryForm.id
+                ? "Edit category"
+                : "Add category"
+            }
+            onClose={() =>
+              setCategoryModalOpen(false)
+            }
           >
-            <form onSubmit={handleCategorySave} className="space-y-5">
+            <form
+              onSubmit={
+                handleCategorySave
+              }
+              className="space-y-5"
+            >
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Category name">
                   <input
-                    value={categoryForm.name}
+                    value={
+                      categoryForm.name
+                    }
                     onChange={(event) =>
-                      setCategoryForm((prev) => ({
-                        ...prev,
-                        name: event.target.value,
-                        slug: prev.id ? prev.slug : slugify(event.target.value),
-                      }))
+                      setCategoryForm(
+                        (prev) => ({
+                          ...prev,
+                          name:
+                            event.target
+                              .value,
+                          slug: prev.id
+                            ? prev.slug
+                            : slugify(
+                                event
+                                  .target
+                                  .value,
+                              ),
+                        }),
+                      )
                     }
                     className="input-admin"
                   />
@@ -1164,12 +1931,20 @@ export default function AdminProducts() {
 
                 <Field label="Slug">
                   <input
-                    value={categoryForm.slug}
+                    value={
+                      categoryForm.slug
+                    }
                     onChange={(event) =>
-                      setCategoryForm((prev) => ({
-                        ...prev,
-                        slug: slugify(event.target.value),
-                      }))
+                      setCategoryForm(
+                        (prev) => ({
+                          ...prev,
+                          slug: slugify(
+                            event
+                              .target
+                              .value,
+                          ),
+                        }),
+                      )
                     }
                     className="input-admin"
                   />
@@ -1181,26 +1956,38 @@ export default function AdminProducts() {
                 folder="baura-bakers/categories"
                 helperText="Upload a black stroke-style icon like your cupcake example."
                 value={{
-                  imageUrl: categoryForm.imageUrl,
-                  imagePublicId: categoryForm.imagePublicId,
+                  imageUrl:
+                    categoryForm.imageUrl,
+                  imagePublicId:
+                    categoryForm.imagePublicId,
                 }}
                 onChange={(value) =>
-                  setCategoryForm((prev) => ({
-                    ...prev,
-                    imageUrl: value.imageUrl,
-                    imagePublicId: value.imagePublicId,
-                  }))
+                  setCategoryForm(
+                    (prev) => ({
+                      ...prev,
+                      imageUrl:
+                        value.imageUrl,
+                      imagePublicId:
+                        value.imagePublicId,
+                    }),
+                  )
                 }
               />
 
               <Field label="Description">
                 <textarea
-                  value={categoryForm.description}
+                  value={
+                    categoryForm.description
+                  }
                   onChange={(event) =>
-                    setCategoryForm((prev) => ({
-                      ...prev,
-                      description: event.target.value,
-                    }))
+                    setCategoryForm(
+                      (prev) => ({
+                        ...prev,
+                        description:
+                          event.target
+                            .value,
+                      }),
+                    )
                   }
                   className="input-admin min-h-[90px]"
                 />
@@ -1210,12 +1997,22 @@ export default function AdminProducts() {
                 <Field label="Sort order">
                   <input
                     type="number"
-                    value={categoryForm.sortOrder}
+                    value={
+                      categoryForm.sortOrder
+                    }
                     onChange={(event) =>
-                      setCategoryForm((prev) => ({
-                        ...prev,
-                        sortOrder: Number(event.target.value || 0),
-                      }))
+                      setCategoryForm(
+                        (prev) => ({
+                          ...prev,
+                          sortOrder:
+                            Number(
+                              event
+                                .target
+                                .value ||
+                                0,
+                            ),
+                        }),
+                      )
                     }
                     className="input-admin"
                   />
@@ -1224,21 +2021,32 @@ export default function AdminProducts() {
                 <label className="flex items-center gap-2 rounded-2xl border border-black/10 bg-white/50 px-4 py-3 text-sm font-semibold text-brand-ink">
                   <input
                     type="checkbox"
-                    checked={categoryForm.isActive}
+                    checked={
+                      categoryForm.isActive
+                    }
                     onChange={(event) =>
-                      setCategoryForm((prev) => ({
-                        ...prev,
-                        isActive: event.target.checked,
-                      }))
+                      setCategoryForm(
+                        (prev) => ({
+                          ...prev,
+                          isActive:
+                            event.target
+                              .checked,
+                        }),
+                      )
                     }
                   />
+
                   Active
                 </label>
               </div>
 
               <ModalActions
                 isSaving={isSaving}
-                onCancel={() => setCategoryModalOpen(false)}
+                onCancel={() =>
+                  setCategoryModalOpen(
+                    false,
+                  )
+                }
                 saveText="Save category"
               />
             </form>
@@ -1247,39 +2055,77 @@ export default function AdminProducts() {
 
         {subcategoryModalOpen && (
           <Modal
-            title={subcategoryForm.id ? "Edit subcategory" : "Add subcategory"}
-            onClose={() => setSubcategoryModalOpen(false)}
+            title={
+              subcategoryForm.id
+                ? "Edit subcategory"
+                : "Add subcategory"
+            }
+            onClose={() =>
+              setSubcategoryModalOpen(
+                false,
+              )
+            }
           >
-            <form onSubmit={handleSubcategorySave} className="space-y-5">
+            <form
+              onSubmit={
+                handleSubcategorySave
+              }
+              className="space-y-5"
+            >
               <Field label="Parent category">
                 <select
-                  value={subcategoryForm.categoryId}
+                  value={
+                    subcategoryForm.categoryId
+                  }
                   onChange={(event) =>
-                    setSubcategoryForm((prev) => ({
-                      ...prev,
-                      categoryId: Number(event.target.value),
-                    }))
+                    setSubcategoryForm(
+                      (prev) => ({
+                        ...prev,
+                        categoryId:
+                          Number(
+                            event.target
+                              .value,
+                          ),
+                      }),
+                    )
                   }
                   className="input-admin"
                 >
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
+                  {categories.map(
+                    (category) => (
+                      <option
+                        key={category.id}
+                        value={category.id}
+                      >
+                        {category.name}
+                      </option>
+                    ),
+                  )}
                 </select>
               </Field>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Subcategory name">
                   <input
-                    value={subcategoryForm.name}
+                    value={
+                      subcategoryForm.name
+                    }
                     onChange={(event) =>
-                      setSubcategoryForm((prev) => ({
-                        ...prev,
-                        name: event.target.value,
-                        slug: prev.id ? prev.slug : slugify(event.target.value),
-                      }))
+                      setSubcategoryForm(
+                        (prev) => ({
+                          ...prev,
+                          name:
+                            event.target
+                              .value,
+                          slug: prev.id
+                            ? prev.slug
+                            : slugify(
+                                event
+                                  .target
+                                  .value,
+                              ),
+                        }),
+                      )
                     }
                     className="input-admin"
                   />
@@ -1287,12 +2133,20 @@ export default function AdminProducts() {
 
                 <Field label="Slug">
                   <input
-                    value={subcategoryForm.slug}
+                    value={
+                      subcategoryForm.slug
+                    }
                     onChange={(event) =>
-                      setSubcategoryForm((prev) => ({
-                        ...prev,
-                        slug: slugify(event.target.value),
-                      }))
+                      setSubcategoryForm(
+                        (prev) => ({
+                          ...prev,
+                          slug: slugify(
+                            event
+                              .target
+                              .value,
+                          ),
+                        }),
+                      )
                     }
                     className="input-admin"
                   />
@@ -1304,26 +2158,38 @@ export default function AdminProducts() {
                 folder="baura-bakers/subcategories"
                 helperText="Optional. If empty, the menu can use the parent category icon."
                 value={{
-                  imageUrl: subcategoryForm.imageUrl,
-                  imagePublicId: subcategoryForm.imagePublicId,
+                  imageUrl:
+                    subcategoryForm.imageUrl,
+                  imagePublicId:
+                    subcategoryForm.imagePublicId,
                 }}
                 onChange={(value) =>
-                  setSubcategoryForm((prev) => ({
-                    ...prev,
-                    imageUrl: value.imageUrl,
-                    imagePublicId: value.imagePublicId,
-                  }))
+                  setSubcategoryForm(
+                    (prev) => ({
+                      ...prev,
+                      imageUrl:
+                        value.imageUrl,
+                      imagePublicId:
+                        value.imagePublicId,
+                    }),
+                  )
                 }
               />
 
               <Field label="Description">
                 <textarea
-                  value={subcategoryForm.description}
+                  value={
+                    subcategoryForm.description
+                  }
                   onChange={(event) =>
-                    setSubcategoryForm((prev) => ({
-                      ...prev,
-                      description: event.target.value,
-                    }))
+                    setSubcategoryForm(
+                      (prev) => ({
+                        ...prev,
+                        description:
+                          event.target
+                            .value,
+                      }),
+                    )
                   }
                   className="input-admin min-h-[90px]"
                 />
@@ -1333,12 +2199,22 @@ export default function AdminProducts() {
                 <Field label="Sort order">
                   <input
                     type="number"
-                    value={subcategoryForm.sortOrder}
+                    value={
+                      subcategoryForm.sortOrder
+                    }
                     onChange={(event) =>
-                      setSubcategoryForm((prev) => ({
-                        ...prev,
-                        sortOrder: Number(event.target.value || 0),
-                      }))
+                      setSubcategoryForm(
+                        (prev) => ({
+                          ...prev,
+                          sortOrder:
+                            Number(
+                              event
+                                .target
+                                .value ||
+                                0,
+                            ),
+                        }),
+                      )
                     }
                     className="input-admin"
                   />
@@ -1347,22 +2223,149 @@ export default function AdminProducts() {
                 <label className="flex items-center gap-2 rounded-2xl border border-black/10 bg-white/50 px-4 py-3 text-sm font-semibold text-brand-ink">
                   <input
                     type="checkbox"
-                    checked={subcategoryForm.isActive}
+                    checked={
+                      subcategoryForm.isActive
+                    }
                     onChange={(event) =>
-                      setSubcategoryForm((prev) => ({
-                        ...prev,
-                        isActive: event.target.checked,
-                      }))
+                      setSubcategoryForm(
+                        (prev) => ({
+                          ...prev,
+                          isActive:
+                            event.target
+                              .checked,
+                        }),
+                      )
                     }
                   />
+
                   Active
                 </label>
               </div>
 
               <ModalActions
                 isSaving={isSaving}
-                onCancel={() => setSubcategoryModalOpen(false)}
+                onCancel={() =>
+                  setSubcategoryModalOpen(
+                    false,
+                  )
+                }
                 saveText="Save subcategory"
+              />
+            </form>
+          </Modal>
+        )}
+
+        {sugarLevelModalOpen && (
+          <Modal
+            title={
+              sugarLevelForm.id
+                ? "Edit sugar level"
+                : "Add sugar level"
+            }
+            onClose={() =>
+              setSugarLevelModalOpen(
+                false,
+              )
+            }
+          >
+            <form
+              onSubmit={
+                handleSugarLevelSave
+              }
+              className="space-y-5"
+            >
+              <div className="rounded-3xl border border-black/10 bg-white/50 p-4">
+                <p className="text-sm leading-relaxed text-brand-ink/65">
+                  Create only the sugar
+                  choices customers may
+                  actually select. These
+                  options are not
+                  automatically applied
+                  to products.
+                </p>
+              </div>
+
+              <Field label="Sugar level name">
+                <input
+                  value={
+                    sugarLevelForm.name
+                  }
+                  onChange={(event) =>
+                    setSugarLevelForm(
+                      (prev) => ({
+                        ...prev,
+                        name:
+                          event.target
+                            .value,
+                      }),
+                    )
+                  }
+                  className="input-admin"
+                  placeholder="Example: Less sugar"
+                  autoFocus
+                />
+              </Field>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Sort order">
+                  <input
+                    type="number"
+                    min={0}
+                    value={
+                      sugarLevelForm.sortOrder
+                    }
+                    onChange={(event) =>
+                      setSugarLevelForm(
+                        (prev) => ({
+                          ...prev,
+                          sortOrder:
+                            Number(
+                              event
+                                .target
+                                .value ||
+                                0,
+                            ),
+                        }),
+                      )
+                    }
+                    className="input-admin"
+                  />
+                </Field>
+
+                <label className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/50 px-4 py-3 text-sm font-semibold text-brand-ink">
+                  <input
+                    type="checkbox"
+                    checked={
+                      sugarLevelForm.isActive
+                    }
+                    onChange={(event) =>
+                      setSugarLevelForm(
+                        (prev) => ({
+                          ...prev,
+                          isActive:
+                            event.target
+                              .checked,
+                        }),
+                      )
+                    }
+                  />
+
+                  Active
+                </label>
+              </div>
+
+              <ModalActions
+                isSaving={isSaving}
+                onCancel={() =>
+                  setSugarLevelModalOpen(
+                    false,
+                  )
+                }
+                saveText={
+                  sugarLevelForm.id
+                    ? "Save changes"
+                    : "Add sugar level"
+                }
               />
             </form>
           </Modal>
@@ -1397,12 +2400,16 @@ function TabButton({
   );
 }
 
-function DataTable({ children }: { children: ReactNode }) {
+function DataTable({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
     <div className="overflow-hidden rounded-3xl border border-black/10 bg-white/60 shadow-sm backdrop-blur">
       <div className="max-h-[720px] overflow-y-auto">
         <div className="overflow-x-auto">
-          <table className="min-w-[850px] w-full text-left text-sm">
+          <table className="w-full min-w-[850px] text-left text-sm">
             {children}
           </table>
         </div>
@@ -1411,7 +2418,11 @@ function DataTable({ children }: { children: ReactNode }) {
   );
 }
 
-function Th({ children }: { children: ReactNode }) {
+function Th({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
     <th className="sticky top-0 z-10 bg-brand-bg px-5 py-4 text-xs font-semibold uppercase tracking-widest text-brand-ink/55">
       {children}
@@ -1419,11 +2430,23 @@ function Th({ children }: { children: ReactNode }) {
   );
 }
 
-function Td({ children }: { children: ReactNode }) {
-  return <td className="px-5 py-4 text-brand-ink/75">{children}</td>;
+function Td({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <td className="px-5 py-4 text-brand-ink/75">
+      {children}
+    </td>
+  );
 }
 
-function StatusBadge({ active }: { active: boolean }) {
+function StatusBadge({
+  active,
+}: {
+  active: boolean;
+}) {
   return (
     <span
       className={[
@@ -1456,13 +2479,21 @@ function IconPreview({
           decoding="async"
         />
       ) : (
-        <span className="text-xs text-brand-ink/40">No icon</span>
+        <span className="text-xs text-brand-ink/40">
+          No icon
+        </span>
       )}
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <label className="block space-y-1.5">
       <span className="text-xs font-semibold uppercase tracking-widest text-brand-ink/60">
@@ -1487,7 +2518,9 @@ function Modal({
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4 py-6 backdrop-blur-sm">
       <div className="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-[2rem] border border-black/10 bg-brand-bg shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-black/10 bg-white/55 px-5 py-4">
-          <h2 className="text-xl font-semibold text-brand-ink">{title}</h2>
+          <h2 className="text-xl font-semibold text-brand-ink">
+            {title}
+          </h2>
 
           <button
             type="button"
@@ -1531,7 +2564,9 @@ function ModalActions({
         disabled={isSaving}
         className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/45"
       >
-        {isSaving ? "Saving..." : saveText}
+        {isSaving
+          ? "Saving..."
+          : saveText}
       </button>
     </div>
   );

@@ -11,12 +11,12 @@ export type CartItem = {
   id: string;
   itemId: string;
   itemSizeId: string;
-  sugarLevelId: number;
+  sugarLevelId: number | null;
   productSlug: string;
   productName: string;
   image?: string;
   size: CartSize;
-  sugar: string;
+  sugar: string | null;
   quantity: number;
   unitPriceLkr: number;
 };
@@ -35,19 +35,33 @@ const CartContext = createContext<CartCtx | null>(null);
 const LS_KEY = "baura_cart_v1";
 
 function isValidCartItem(item: unknown): item is CartItem {
-  const x = item as CartItem;
+  if (!item || typeof item !== "object") {
+    return false;
+  }
+
+  const x = item as Partial<CartItem>;
+
+  const hasValidSugarLevelId =
+    x.sugarLevelId === null || typeof x.sugarLevelId === "number";
+
+  const hasValidSugar =
+    x.sugar === null || typeof x.sugar === "string";
 
   return Boolean(
-    x &&
+    typeof x.id === "string" &&
       typeof x.itemId === "string" &&
       typeof x.itemSizeId === "string" &&
-      typeof x.sugarLevelId === "number" &&
+      hasValidSugarLevelId &&
       typeof x.productSlug === "string" &&
       typeof x.productName === "string" &&
       typeof x.quantity === "number" &&
+      x.quantity > 0 &&
       typeof x.unitPriceLkr === "number" &&
       x.size &&
-      typeof x.size.id === "string",
+      typeof x.size.id === "string" &&
+      typeof x.size.label === "string" &&
+      typeof x.size.priceLkr === "number" &&
+      hasValidSugar,
   );
 }
 
@@ -56,11 +70,16 @@ function loadCartFromStorage(): CartItem[] {
 
   try {
     const raw = window.localStorage.getItem(LS_KEY);
-    if (!raw) return [];
 
-    const parsed = JSON.parse(raw);
+    if (!raw) {
+      return [];
+    }
 
-    if (!Array.isArray(parsed)) return [];
+    const parsed: unknown = JSON.parse(raw);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
 
     return parsed.filter(isValidCartItem);
   } catch (error) {
@@ -73,25 +92,47 @@ function saveCartToStorage(items: CartItem[]) {
   if (typeof window === "undefined") return;
 
   try {
-    window.localStorage.setItem(LS_KEY, JSON.stringify(items));
+    window.localStorage.setItem(
+      LS_KEY,
+      JSON.stringify(items),
+    );
   } catch (error) {
     console.error("Failed to save cart:", error);
   }
 }
 
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => loadCartFromStorage());
+export function CartProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [items, setItems] = useState<CartItem[]>(() =>
+    loadCartFromStorage(),
+  );
 
-  const updateCart = (updater: (prev: CartItem[]) => CartItem[]) => {
+  const updateCart = (
+    updater: (prev: CartItem[]) => CartItem[],
+  ) => {
     setItems((prev) => {
       const next = updater(prev);
+
       saveCartToStorage(next);
+
       return next;
     });
   };
 
   const addItem: CartCtx["addItem"] = (item) => {
-    const id = `${item.itemId}|${item.itemSizeId}|${item.sugarLevelId}`;
+    const sugarKey =
+      item.sugarLevelId === null
+        ? "no-sugar"
+        : String(item.sugarLevelId);
+
+    const id = [
+      item.itemId,
+      item.itemSizeId,
+      sugarKey,
+    ].join("|");
 
     updateCart((prev) => {
       const found = prev.find((x) => x.id === id);
@@ -99,27 +140,47 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (found) {
         return prev.map((x) =>
           x.id === id
-            ? { ...x, quantity: x.quantity + item.quantity }
+            ? {
+                ...x,
+                quantity:
+                  x.quantity + item.quantity,
+              }
             : x,
         );
       }
 
-      return [...prev, { ...item, id }];
+      return [
+        ...prev,
+        {
+          ...item,
+          id,
+        },
+      ];
     });
   };
 
-  const updateQty = (id: string, qty: number) => {
+  const updateQty = (
+    id: string,
+    qty: number,
+  ) => {
     updateCart((prev) =>
       prev
         .map((x) =>
-          x.id === id ? { ...x, quantity: Math.max(1, qty) } : x,
+          x.id === id
+            ? {
+                ...x,
+                quantity: Math.max(1, qty),
+              }
+            : x,
         )
         .filter((x) => x.quantity > 0),
     );
   };
 
   const removeItem = (id: string) => {
-    updateCart((prev) => prev.filter((x) => x.id !== id));
+    updateCart((prev) =>
+      prev.filter((x) => x.id !== id),
+    );
   };
 
   const clear = () => {
@@ -131,13 +192,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const subtotal = useMemo(
-    () => items.reduce((sum, x) => sum + x.unitPriceLkr * x.quantity, 0),
+    () =>
+      items.reduce(
+        (sum, item) =>
+          sum +
+          item.unitPriceLkr *
+            item.quantity,
+        0,
+      ),
     [items],
   );
 
   return (
     <CartContext.Provider
-      value={{ items, addItem, updateQty, removeItem, clear, subtotal }}
+      value={{
+        items,
+        addItem,
+        updateQty,
+        removeItem,
+        clear,
+        subtotal,
+      }}
     >
       {children}
     </CartContext.Provider>
@@ -148,7 +223,9 @@ export function useCart() {
   const ctx = useContext(CartContext);
 
   if (!ctx) {
-    throw new Error("useCart must be used inside CartProvider");
+    throw new Error(
+      "useCart must be used inside CartProvider",
+    );
   }
 
   return ctx;
