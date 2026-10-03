@@ -7,7 +7,21 @@ import {
   laravelPost,
 } from "./laravelApi";
 
-export type LaravelUserRole = "admin" | "customer";
+export type LaravelUserRole =
+  | "admin"
+  | "customer";
+
+export type LaravelUserRoleName =
+  | "Customer"
+  | "Admin"
+  | "Manager"
+  | "Cashier";
+
+export type LaravelUserRoleValue =
+  | 0
+  | 1
+  | 2
+  | 3;
 
 export type LaravelUser = {
   id: number;
@@ -16,7 +30,41 @@ export type LaravelUser = {
   email_verified: boolean;
   phone: string | null;
   default_delivery_address: string | null;
+
+  /**
+   * Legacy website role.
+   *
+   * Kept for compatibility with existing storefront/account code.
+   * Admin and Manager may still be represented through the
+   * richer role fields below when determining staff access.
+   */
   role: LaravelUserRole;
+
+  /**
+   * Full backend role information.
+   *
+   * 0 = Customer
+   * 1 = Admin
+   * 2 = Manager
+   * 3 = Cashier
+   */
+  role_value: LaravelUserRoleValue;
+  role_name: LaravelUserRoleName;
+  role_label: string;
+
+  /**
+   * Backend-calculated capabilities.
+   */
+  is_staff: boolean;
+  can_access_website_admin: boolean;
+  can_access_erp: boolean;
+
+  /**
+   * Effective permission keys after permission profiles
+   * and user-specific overrides have been resolved.
+   */
+  permissions: string[];
+
   is_active: boolean;
 };
 

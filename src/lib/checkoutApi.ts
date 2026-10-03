@@ -35,7 +35,7 @@ export type CheckoutQuote = {
 export type CheckoutOrderItemInput = {
   product_id: string;
   product_size_id: string;
-  sugar_level_id: number;
+  sugar_level_id: number | null;
   quantity: number;
 };
 
