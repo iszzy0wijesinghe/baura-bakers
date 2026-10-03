@@ -29,7 +29,10 @@ function renderModePage(mode: SiteModeRow) {
 
 export default function SiteAccessGate({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const { isAdmin, isLoading: isAuthLoading } = useAuthSession();
+  const {
+  canAccessWebsiteAdmin,
+  isLoading: isAuthLoading,
+} = useAuthSession();
 
   const [activeMode, setActiveMode] = useState<SiteModeRow | null>(null);
   const [isModeLoading, setIsModeLoading] = useState(true);
@@ -75,7 +78,9 @@ export default function SiteAccessGate({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const adminBypass = isAdmin && canAdminBypassPath(location.pathname);
+const adminBypass =
+  canAccessWebsiteAdmin &&
+  canAdminBypassPath(location.pathname);
 
   if (isModeLoading || isAuthLoading) {
     return <BakingLoader />;

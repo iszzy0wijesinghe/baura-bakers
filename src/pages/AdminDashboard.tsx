@@ -1,9 +1,12 @@
 /** @format */
 
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
 import Page from "../components/Page";
-import { getCurrentUser, logout } from "../lib/auth";
+
+import { logout } from "../lib/auth";
+import { useAuthSession } from "../lib/useAuthSession";
 import { getAdminDashboardStats } from "../lib/adminOrdersApi";
 
 type Stats = {
@@ -13,10 +16,88 @@ type Stats = {
   completedOrders: number;
 };
 
+type DashboardModule = {
+  to: string;
+  permission: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+};
+
+const storefrontModules: DashboardModule[] = [
+  {
+    to: "/admin/hero-slides",
+    permission: "website-admin.hero-slides.manage",
+    eyebrow: "HERO MANAGEMENT",
+    title: "Home hero slides",
+    description:
+      "Create, edit, reorder, activate, and deactivate home page hero slides with Cloudinary artwork and custom wording.",
+  },
+  {
+    to: "/admin/products",
+    permission: "website-admin.catalog.manage",
+    eyebrow: "PRODUCT MANAGEMENT",
+    title: "Products & categories",
+    description:
+      "Manage menu products, categories, subcategories, prices, availability, and product imagery.",
+  },
+  {
+    to: "/admin/promotions",
+    permission: "website-admin.promotions.manage",
+    eyebrow: "PROMOTION MANAGEMENT",
+    title: "Offers & coupons",
+    description:
+      "Manage coupon codes, QR offers, happy-hour offers, and category or product campaigns.",
+  },
+  {
+    to: "/admin/site-settings",
+    permission: "website-admin.site-mode.manage",
+    eyebrow: "SITE SETTINGS",
+    title: "Site switch modes",
+    description:
+      "Control Coming Soon, Maintenance, and Critical Break modes for the storefront.",
+  },
+];
+
+const operationsModules: DashboardModule[] = [
+  {
+    to: "/admin/orders",
+    permission: "website-admin.orders.manage",
+    eyebrow: "ORDER MANAGEMENT",
+    title: "Manage orders",
+    description:
+      "View customer orders, review payments, and update preparation and fulfilment status.",
+  },
+  {
+    to: "/admin/delivery",
+    permission: "website-admin.delivery.manage",
+    eyebrow: "DELIVERY MANAGEMENT",
+    title: "Delivery schedule",
+    description:
+      "Manage available delivery dates, morning and afternoon slots, pricing, and delivery settings.",
+  },
+];
+
+const administrationModules: DashboardModule[] = [
+  {
+    to: "/admin/users",
+    permission: "website-admin.users.manage",
+    eyebrow: "USER MANAGEMENT",
+    title: "Users & staff",
+    description:
+      "Create and manage customer and staff accounts, account access, roles, contact details, and account status.",
+  },
+];
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
 
-  const [adminName, setAdminName] = useState("Admin");
+  const {
+    user,
+    isLoading: isAuthLoading,
+    hasPermission,
+  } = useAuthSession();
+
   const [stats, setStats] = useState<Stats>({
     totalOrders: 0,
     pendingPayments: 0,
@@ -24,43 +105,113 @@ export default function AdminDashboard() {
     completedOrders: 0,
   });
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorText, setErrorText] = useState("");
+  const [isStatsLoading, setIsStatsLoading] =
+    useState(false);
+
+  const [errorText, setErrorText] =
+    useState("");
+
+  const canManageOrders = hasPermission(
+    "website-admin.orders.manage",
+  );
+
+  const visibleStorefrontModules =
+    useMemo(
+      () =>
+        storefrontModules.filter(
+          (module) =>
+            hasPermission(
+              module.permission,
+            ),
+        ),
+      [hasPermission],
+    );
+
+  const visibleOperationsModules =
+    useMemo(
+      () =>
+        operationsModules.filter(
+          (module) =>
+            hasPermission(
+              module.permission,
+            ),
+        ),
+      [hasPermission],
+    );
+
+  const visibleAdministrationModules =
+    useMemo(
+      () =>
+        administrationModules.filter(
+          (module) =>
+            hasPermission(
+              module.permission,
+            ),
+        ),
+      [hasPermission],
+    );
 
   useEffect(() => {
-    async function loadDashboard() {
+    if (
+      isAuthLoading ||
+      !user ||
+      !canManageOrders
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadStats() {
+      setIsStatsLoading(true);
+      setErrorText("");
+
       try {
-        const user = await getCurrentUser();
+        const nextStats =
+          await getAdminDashboardStats();
 
-        if (!user) {
-          navigate("/login");
-          return;
+        if (!cancelled) {
+          setStats(nextStats);
         }
-
-        if (user.role !== "admin") {
-          navigate("/account");
-          return;
-        }
-
-        setAdminName(user.name || "Admin");
-        setStats(await getAdminDashboardStats());
       } catch (error) {
-        setErrorText(
-          error instanceof Error
-            ? error.message
-            : "Could not load the admin dashboard.",
-        );
+        if (!cancelled) {
+          setErrorText(
+            error instanceof Error
+              ? error.message
+              : "Could not load order statistics.",
+          );
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsStatsLoading(false);
+        }
       }
     }
 
-    void loadDashboard();
-  }, [navigate]);
+    void loadStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user,
+    canManageOrders,
+    isAuthLoading,
+  ]);
 
   async function handleLogout() {
     await logout();
     navigate("/");
+  }
+
+  if (isAuthLoading) {
+    return (
+      <Page>
+        <div className="rounded-3xl border border-black/10 bg-white/55 p-8 text-sm text-brand-ink/70">
+          Loading dashboard...
+        </div>
+      </Page>
+    );
   }
 
   return (
@@ -73,19 +224,23 @@ export default function AdminDashboard() {
             </p>
 
             <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-brand-ink sm:text-4xl">
-              Welcome, {adminName}
+              Welcome,{" "}
+              {user?.name || "Staff"}
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/70">
-              Manage orders, storefront content, products, promotions, delivery,
-              and site controls from one place.
+              Access the website management
+              tools available to your account.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={() => void handleLogout()}
-            className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100">
+            onClick={() =>
+              void handleLogout()
+            }
+            className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+          >
             Logout
           </button>
         </header>
@@ -96,102 +251,160 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {isLoading ? (
-          <div className="rounded-3xl border border-black/10 bg-white/55 p-8 text-sm text-brand-ink/70">
-            Loading dashboard...
-          </div>
-        ) : (
-          <>
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Total orders" value={stats.totalOrders} />
+        {canManageOrders && (
+          <section>
+            <div className="mb-4">
+              <p className="text-xs font-semibold tracking-[0.18em] text-brand-ink/50">
+                ORDER OVERVIEW
+              </p>
 
-              <StatCard
-                label="Pending payments"
-                value={stats.pendingPayments}
-              />
+              <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em] text-brand-ink">
+                Current orders
+              </h2>
+            </div>
 
-              <StatCard label="Paid orders" value={stats.paidOrders} />
-
-              <StatCard label="Completed" value={stats.completedOrders} />
-            </section>
-
-            <section>
-              <div className="mb-4">
-                <p className="text-xs font-semibold tracking-[0.18em] text-brand-ink/50">
-                  STOREFRONT
-                </p>
-
-                <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em] text-brand-ink">
-                  Website content
-                </h2>
+            {isStatsLoading ? (
+              <div className="rounded-3xl border border-black/10 bg-white/55 p-8 text-sm text-brand-ink/70">
+                Loading order statistics...
               </div>
-
-              <div className="grid gap-4 lg:grid-cols-3">
-                <AdminLinkCard
-                  to="/admin/hero-slides"
-                  eyebrow="HERO MANAGEMENT"
-                  title="Home hero slides"
-                  description="Create, edit, reorder, activate, and deactivate home page hero slides with Cloudinary artwork and custom wording."
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  label="Total orders"
+                  value={
+                    stats.totalOrders
+                  }
                 />
 
-                <AdminLinkCard
-                  to="/admin/products"
-                  eyebrow="PRODUCT MANAGEMENT"
-                  title="Products & categories"
-                  description="Manage menu products, categories, subcategories, prices, availability, and product imagery."
+                <StatCard
+                  label="Pending payments"
+                  value={
+                    stats.pendingPayments
+                  }
                 />
 
-                <AdminLinkCard
-                  to="/admin/promotions"
-                  eyebrow="PROMOTION MANAGEMENT"
-                  title="Offers & coupons"
-                  description="Manage coupon codes, QR offers, happy-hour offers, and category or product campaigns."
+                <StatCard
+                  label="Paid orders"
+                  value={
+                    stats.paidOrders
+                  }
                 />
 
-                <AdminLinkCard
-                  to="/admin/site-settings"
-                  eyebrow="SITE SETTINGS"
-                  title="Site switch modes"
-                  description="Control Coming Soon, Maintenance, and Critical Break modes for the storefront."
+                <StatCard
+                  label="Completed"
+                  value={
+                    stats.completedOrders
+                  }
                 />
               </div>
-            </section>
-
-            <section>
-              <div className="mb-4">
-                <p className="text-xs font-semibold tracking-[0.18em] text-brand-ink/50">
-                  OPERATIONS
-                </p>
-
-                <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em] text-brand-ink">
-                  Orders & delivery
-                </h2>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-3">
-                <AdminLinkCard
-                  to="/admin/orders"
-                  eyebrow="ORDER MANAGEMENT"
-                  title="Manage orders"
-                  description="View customer orders, review payments, and update preparation and fulfilment status."
-                />
-
-                <AdminLinkCard
-                  to="/admin/delivery"
-                  eyebrow="DELIVERY MANAGEMENT"
-                  title="Delivery schedule"
-                  description="Manage available delivery dates, morning and afternoon slots, pricing, and delivery settings."
-                />
-              </div>
-            </section>
-          </>
+            )}
+          </section>
         )}
+
+        {visibleStorefrontModules.length >
+          0 && (
+          <DashboardSection
+            eyebrow="STOREFRONT"
+            title="Website content"
+            modules={
+              visibleStorefrontModules
+            }
+          />
+        )}
+
+        {visibleOperationsModules.length >
+          0 && (
+          <DashboardSection
+            eyebrow="OPERATIONS"
+            title="Orders & delivery"
+            modules={
+              visibleOperationsModules
+            }
+          />
+        )}
+
+        {visibleAdministrationModules.length >
+          0 && (
+          <DashboardSection
+            eyebrow="ADMINISTRATION"
+            title="Users & access"
+            modules={
+              visibleAdministrationModules
+            }
+          />
+        )}
+
+        {visibleStorefrontModules.length ===
+          0 &&
+          visibleOperationsModules.length ===
+            0 &&
+          visibleAdministrationModules.length ===
+            0 && (
+            <div className="rounded-3xl border border-black/10 bg-white/60 p-8">
+              <p className="text-sm font-semibold text-brand-ink">
+                No management tools are
+                currently available to this
+                account.
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-brand-ink/65">
+                Your account is signed in, but
+                it does not currently have
+                permission to manage any of the
+                available website modules.
+              </p>
+            </div>
+          )}
       </div>
     </Page>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function DashboardSection({
+  eyebrow,
+  title,
+  modules,
+}: {
+  eyebrow: string;
+  title: string;
+  modules: DashboardModule[];
+}) {
+  return (
+    <section>
+      <div className="mb-4">
+        <p className="text-xs font-semibold tracking-[0.18em] text-brand-ink/50">
+          {eyebrow}
+        </p>
+
+        <h2 className="mt-2 text-xl font-semibold tracking-[-0.015em] text-brand-ink">
+          {title}
+        </h2>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {modules.map((module) => (
+          <AdminLinkCard
+            key={module.to}
+            to={module.to}
+            eyebrow={module.eyebrow}
+            title={module.title}
+            description={
+              module.description
+            }
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
   return (
     <div className="rounded-3xl border border-black/10 bg-white/60 p-5 shadow-sm">
       <p className="text-xs font-semibold tracking-[0.14em] text-brand-ink/55">

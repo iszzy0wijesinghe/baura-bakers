@@ -1,3 +1,5 @@
+/** @format */
+
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronRight,
@@ -17,11 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import {
-  NavLink,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import logo from "../../images/logos/logo.webp";
 import { logout } from "../lib/auth";
@@ -63,16 +61,10 @@ export default function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(
     () =>
-      typeof window !== "undefined" &&
-      window.scrollY > HEADER_SCROLL_THRESHOLD,
+      typeof window !== "undefined" && window.scrollY > HEADER_SCROLL_THRESHOLD,
   );
 
-  const {
-    user,
-    profile,
-    isAdmin,
-    isLoading,
-  } = useAuthSession();
+  const { user, profile, canAccessWebsiteAdmin, isLoading } = useAuthSession();
 
   const isHome = location.pathname === "/";
   const isOverlay = isHome && !scrolled && !open;
@@ -89,51 +81,33 @@ export default function SiteHeader() {
 
   useEffect(() => {
     const handleScroll = () => {
-      const next =
-        window.scrollY > HEADER_SCROLL_THRESHOLD;
+      const next = window.scrollY > HEADER_SCROLL_THRESHOLD;
 
-      setScrolled((current) =>
-        current === next ? current : next,
-      );
+      setScrolled((current) => (current === next ? current : next));
     };
 
     handleScroll();
 
-    window.addEventListener(
-      "scroll",
-      handleScroll,
-      {
-        passive: true,
-      },
-    );
+    window.addEventListener("scroll", handleScroll, {
+      passive: true,
+    });
 
     return () => {
-      window.removeEventListener(
-        "scroll",
-        handleScroll,
-      );
+      window.removeEventListener("scroll", handleScroll);
     };
   }, []);
 
   useEffect(() => {
-    const handleKeyDown = (
-      event: KeyboardEvent,
-    ) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
       }
     };
 
-    window.addEventListener(
-      "keydown",
-      handleKeyDown,
-    );
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown,
-      );
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
 
@@ -143,14 +117,12 @@ export default function SiteHeader() {
       return;
     }
 
-    const previousOverflow =
-      document.body.style.overflow;
+    const previousOverflow = document.body.style.overflow;
 
     document.body.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow =
-        previousOverflow;
+      document.body.style.overflow = previousOverflow;
     };
   }, [open]);
 
@@ -160,9 +132,7 @@ export default function SiteHeader() {
         className={[
           "z-50 w-full",
           "transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300",
-          isHome
-            ? "fixed inset-x-0 top-0"
-            : "sticky top-0",
+          isHome ? "fixed inset-x-0 top-0" : "sticky top-0",
           isOverlay
             ? [
                 "border-b border-white/[0.12]",
@@ -176,8 +146,7 @@ export default function SiteHeader() {
                 "shadow-[0_10px_35px_rgba(55,38,25,0.045)]",
                 "backdrop-blur-xl",
               ].join(" "),
-        ].join(" ")}
-      >
+        ].join(" ")}>
         <div
           className={[
             "mx-auto flex w-full items-center justify-between",
@@ -186,8 +155,7 @@ export default function SiteHeader() {
             isOverlay
               ? "h-[84px] sm:h-[88px] lg:h-[92px]"
               : "h-[70px] sm:h-[72px] lg:h-[76px]",
-          ].join(" ")}
-        >
+          ].join(" ")}>
           {/* LOGO */}
           <NavLink
             to="/"
@@ -199,8 +167,7 @@ export default function SiteHeader() {
               isOverlay
                 ? "focus-visible:outline-white"
                 : "focus-visible:outline-brand-ink",
-            ].join(" ")}
-          >
+            ].join(" ")}>
             <img
               src={logo}
               alt="Baura Bakers"
@@ -217,11 +184,7 @@ export default function SiteHeader() {
                       "brightness-0 invert",
                       "drop-shadow-[0_2px_12px_rgba(0,0,0,0.18)]",
                     ].join(" ")
-                  : [
-                      "h-[44px]",
-                      "sm:h-[48px]",
-                      "lg:h-[50px]",
-                    ].join(" "),
+                  : ["h-[44px]", "sm:h-[48px]", "lg:h-[50px]"].join(" "),
               ].join(" ")}
             />
           </NavLink>
@@ -243,8 +206,7 @@ export default function SiteHeader() {
                     ].join(" ")
                   : "",
               ].join(" ")}
-              aria-label="Primary navigation"
-            >
+              aria-label="Primary navigation">
               {links.map((link) => (
                 <DesktopNavLink
                   key={link.to}
@@ -258,7 +220,7 @@ export default function SiteHeader() {
             <DesktopAccountMenu
               user={user}
               profile={profile}
-              isAdmin={isAdmin}
+              canAccessWebsiteAdmin={canAccessWebsiteAdmin}
               isLoading={isLoading}
               overlay={isOverlay}
               onLogout={handleLogout}
@@ -296,12 +258,8 @@ export default function SiteHeader() {
                     "hover:bg-white/70",
                     "focus-visible:outline-brand-ink",
                   ].join(" "),
-            ].join(" ")}
-          >
-            <MenuIcon
-              size={20}
-              strokeWidth={1.8}
-            />
+            ].join(" ")}>
+            <MenuIcon size={20} strokeWidth={1.8} />
           </button>
         </div>
       </header>
@@ -322,8 +280,7 @@ export default function SiteHeader() {
             }}
             transition={{
               duration: 0.2,
-            }}
-          >
+            }}>
             <button
               type="button"
               aria-label="Close menu overlay"
@@ -357,17 +314,13 @@ export default function SiteHeader() {
                 type: "spring",
                 stiffness: 300,
                 damping: 32,
-              }}
-            >
+              }}>
               <div className="flex items-center justify-between gap-4">
                 <NavLink
                   to="/"
-                  onClick={() =>
-                    setOpen(false)
-                  }
+                  onClick={() => setOpen(false)}
                   className="flex items-center"
-                  aria-label="Baura Bakers home"
-                >
+                  aria-label="Baura Bakers home">
                   <img
                     src={logo}
                     alt="Baura Bakers"
@@ -379,9 +332,7 @@ export default function SiteHeader() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setOpen(false)
-                  }
+                  onClick={() => setOpen(false)}
                   className={[
                     "grid h-11 w-11",
                     "place-items-center",
@@ -392,12 +343,8 @@ export default function SiteHeader() {
                     "transition-transform",
                     "hover:scale-[0.97]",
                   ].join(" ")}
-                  aria-label="Close menu"
-                >
-                  <X
-                    size={19}
-                    strokeWidth={1.8}
-                  />
+                  aria-label="Close menu">
+                  <X size={19} strokeWidth={1.8} />
                 </button>
               </div>
 
@@ -406,34 +353,24 @@ export default function SiteHeader() {
                   Explore Baura
                 </p>
 
-                <nav
-                  className="mt-3"
-                  aria-label="Mobile navigation"
-                >
-                  {links.map(
-                    (link, index) => (
-                      <MobileNavLink
-                        key={link.to}
-                        to={link.to}
-                        label={link.label}
-                        icon={link.icon}
-                        index={index}
-                        onClose={() =>
-                          setOpen(false)
-                        }
-                      />
-                    ),
-                  )}
+                <nav className="mt-3" aria-label="Mobile navigation">
+                  {links.map((link, index) => (
+                    <MobileNavLink
+                      key={link.to}
+                      to={link.to}
+                      label={link.label}
+                      icon={link.icon}
+                      index={index}
+                      onClose={() => setOpen(false)}
+                    />
+                  ))}
                 </nav>
               </div>
 
               <div className="mt-7 border-t border-brand-ink/10 pt-5">
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-ink/[0.06] text-brand-ink">
-                    <Sparkles
-                      size={15}
-                      strokeWidth={1.7}
-                    />
+                    <Sparkles size={15} strokeWidth={1.7} />
                   </span>
 
                   <div>
@@ -442,10 +379,8 @@ export default function SiteHeader() {
                     </p>
 
                     <p className="mt-1 max-w-[260px] text-[11px] leading-relaxed text-brand-ink/55">
-                      Orders are carefully
-                      prepared and can be
-                      arranged for collection
-                      or delivery.
+                      Orders are carefully prepared and can be arranged for
+                      collection or delivery.
                     </p>
                   </div>
                 </div>
@@ -454,18 +389,15 @@ export default function SiteHeader() {
               <MobileAccountMenu
                 user={user}
                 profile={profile}
-                isAdmin={isAdmin}
+                canAccessWebsiteAdmin={canAccessWebsiteAdmin}
                 isLoading={isLoading}
-                onClose={() =>
-                  setOpen(false)
-                }
+                onClose={() => setOpen(false)}
                 onLogout={handleLogout}
               />
 
               <div className="mt-auto border-t border-brand-ink/10 pt-5">
                 <p className="text-[10px] leading-relaxed text-brand-ink/40">
-                  Baura Bakers · Fresh baked
-                  moments
+                  Baura Bakers · Fresh baked moments
                 </p>
               </div>
             </motion.aside>
@@ -518,8 +450,7 @@ function DesktopNavLink({
                 "focus-visible:outline-brand-ink",
               ].join(" "),
         ].join(" ")
-      }
-    >
+      }>
       {label}
     </NavLink>
   );
@@ -532,14 +463,14 @@ function DesktopNavLink({
 function DesktopAccountMenu({
   user,
   profile,
-  isAdmin,
+  canAccessWebsiteAdmin,
   isLoading,
   overlay,
   onLogout,
 }: {
   user: any;
   profile: any;
-  isAdmin: boolean;
+  canAccessWebsiteAdmin: boolean;
   isLoading: boolean;
   overlay: boolean;
   onLogout: () => void;
@@ -550,9 +481,7 @@ function DesktopAccountMenu({
         className={[
           "ml-4 h-9 w-24",
           "animate-pulse rounded-full",
-          overlay
-            ? "bg-white/10"
-            : "bg-brand-ink/[0.06]",
+          overlay ? "bg-white/10" : "bg-brand-ink/[0.06]",
         ].join(" ")}
       />
     );
@@ -583,8 +512,7 @@ function DesktopAccountMenu({
                   "text-brand-ink",
                   "hover:bg-brand-ink/[0.05]",
                 ].join(" "),
-          ].join(" ")}
-        >
+          ].join(" ")}>
           Login
         </NavLink>
 
@@ -605,13 +533,10 @@ function DesktopAccountMenu({
                   "shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
                   "hover:bg-white",
                 ].join(" ")
-              : [
-                  "bg-brand-ink",
-                  "text-brand-bg",
-                  "hover:bg-brand-ink/90",
-                ].join(" "),
-          ].join(" ")}
-        >
+              : ["bg-brand-ink", "text-brand-bg", "hover:bg-brand-ink/90"].join(
+                  " ",
+                ),
+          ].join(" ")}>
           Register
         </NavLink>
       </div>
@@ -623,24 +548,17 @@ function DesktopAccountMenu({
       className={[
         "ml-4 flex items-center gap-2",
         "border-l pl-4",
-        overlay
-          ? "border-white/20"
-          : "border-brand-ink/10",
-      ].join(" ")}
-    >
+        overlay ? "border-white/20" : "border-brand-ink/10",
+      ].join(" ")}>
       {/* USER */}
       <div className="hidden max-w-[120px] xl:block">
         <p
           className={[
             "truncate text-[10px]",
             "font-semibold",
-            overlay
-              ? "text-white"
-              : "text-brand-ink",
-          ].join(" ")}
-        >
-          {profile?.full_name ||
-            user.email}
+            overlay ? "text-white" : "text-brand-ink",
+          ].join(" ")}>
+          {profile?.full_name || user.email}
         </p>
 
         <p
@@ -649,17 +567,14 @@ function DesktopAccountMenu({
             "text-[7px]",
             "font-bold uppercase",
             "tracking-[0.18em]",
-            overlay
-              ? "text-white/45"
-              : "text-brand-ink/40",
-          ].join(" ")}
-        >
+            overlay ? "text-white/45" : "text-brand-ink/40",
+          ].join(" ")}>
           {profile?.role || "customer"}
         </p>
       </div>
 
       {/* PRIMARY ACCOUNT ACTION */}
-      {isAdmin ? (
+      {canAccessWebsiteAdmin ? (
         <NavLink
           to="/admin/dashboard"
           className={[
@@ -679,17 +594,11 @@ function DesktopAccountMenu({
                   "shadow-[0_8px_25px_rgba(0,0,0,0.12)]",
                   "hover:bg-white",
                 ].join(" ")
-              : [
-                  "bg-brand-ink",
-                  "text-brand-bg",
-                  "hover:bg-brand-ink/90",
-                ].join(" "),
-          ].join(" ")}
-        >
-          <LayoutDashboard
-            size={13}
-            strokeWidth={1.8}
-          />
+              : ["bg-brand-ink", "text-brand-bg", "hover:bg-brand-ink/90"].join(
+                  " ",
+                ),
+          ].join(" ")}>
+          <LayoutDashboard size={13} strokeWidth={1.8} />
           Dashboard
         </NavLink>
       ) : (
@@ -706,27 +615,17 @@ function DesktopAccountMenu({
             "whitespace-nowrap",
             "transition-all",
             overlay
-              ? [
-                  "bg-brand-bg",
-                  "text-brand-ink",
-                  "hover:bg-white",
-                ].join(" ")
-              : [
-                  "bg-brand-ink",
-                  "text-brand-bg",
-                  "hover:bg-brand-ink/90",
-                ].join(" "),
-          ].join(" ")}
-        >
-          <User
-            size={13}
-            strokeWidth={1.8}
-          />
+              ? ["bg-brand-bg", "text-brand-ink", "hover:bg-white"].join(" ")
+              : ["bg-brand-ink", "text-brand-bg", "hover:bg-brand-ink/90"].join(
+                  " ",
+                ),
+          ].join(" ")}>
+          <User size={13} strokeWidth={1.8} />
           Account
         </NavLink>
       )}
 
-      {!isAdmin ? (
+      {!canAccessWebsiteAdmin ? (
         <NavLink
           to="/orders"
           aria-label="My orders"
@@ -749,12 +648,8 @@ function DesktopAccountMenu({
                   "hover:bg-brand-ink/[0.05]",
                   "hover:text-brand-ink",
                 ].join(" "),
-          ].join(" ")}
-        >
-          <ClipboardList
-            size={14}
-            strokeWidth={1.7}
-          />
+          ].join(" ")}>
+          <ClipboardList size={14} strokeWidth={1.7} />
         </NavLink>
       ) : null}
 
@@ -769,22 +664,16 @@ function DesktopAccountMenu({
           "rounded-full",
           "transition-all",
           overlay
-            ? [
-                "text-white/60",
-                "hover:bg-white/10",
-                "hover:text-white",
-              ].join(" ")
+            ? ["text-white/60", "hover:bg-white/10", "hover:text-white"].join(
+                " ",
+              )
             : [
                 "text-brand-ink/45",
                 "hover:bg-brand-ink/[0.05]",
                 "hover:text-brand-ink",
               ].join(" "),
-        ].join(" ")}
-      >
-        <LogOut
-          size={14}
-          strokeWidth={1.7}
-        />
+        ].join(" ")}>
+        <LogOut size={14} strokeWidth={1.7} />
       </button>
     </div>
   );
@@ -820,8 +709,7 @@ function MobileNavLink({
       transition={{
         duration: 0.3,
         delay: 0.04 + index * 0.035,
-      }}
-    >
+      }}>
       <NavLink
         to={to}
         onClick={onClose}
@@ -837,31 +725,21 @@ function MobileNavLink({
               ? "text-brand-ink"
               : "text-brand-ink/62 hover:text-brand-ink",
           ].join(" ")
-        }
-      >
+        }>
         {({ isActive }) => (
           <>
             <span className="flex items-center gap-3">
               <Icon
                 size={17}
-                strokeWidth={
-                  isActive ? 2 : 1.6
-                }
-                className={
-                  isActive
-                    ? "text-brand-ink"
-                    : "text-brand-ink/40"
-                }
+                strokeWidth={isActive ? 2 : 1.6}
+                className={isActive ? "text-brand-ink" : "text-brand-ink/40"}
               />
 
               <span
                 className={[
                   "text-[15px]",
-                  isActive
-                    ? "font-semibold"
-                    : "font-medium",
-                ].join(" ")}
-              >
+                  isActive ? "font-semibold" : "font-medium",
+                ].join(" ")}>
                 {label}
               </span>
             </span>
@@ -885,17 +763,17 @@ function MobileNavLink({
 function MobileAccountMenu({
   user,
   profile,
-  isAdmin,
+  canAccessWebsiteAdmin,
   isLoading,
   onClose,
   onLogout,
 }: {
   user: any;
   profile: any;
-  isAdmin: boolean;
+  canAccessWebsiteAdmin: boolean;
   isLoading: boolean;
   onClose: () => void;
-  onLogout: () => void;
+  onLogout: () => void | Promise<void>;
 }) {
   if (isLoading) {
     return (
@@ -919,29 +797,20 @@ function MobileAccountMenu({
         }}
         transition={{
           delay: 0.16,
-        }}
-      >
+        }}>
         <NavLink
           to="/login"
           onClick={onClose}
-          className="flex min-h-[48px] items-center justify-center gap-2 rounded-full border border-brand-ink/15 text-sm font-semibold text-brand-ink"
-        >
-          <LogIn
-            size={15}
-            strokeWidth={1.8}
-          />
+          className="flex min-h-[48px] items-center justify-center gap-2 rounded-full border border-brand-ink/15 text-sm font-semibold text-brand-ink">
+          <LogIn size={15} strokeWidth={1.8} />
           Login
         </NavLink>
 
         <NavLink
           to="/register"
           onClick={onClose}
-          className="flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-brand-ink text-sm font-semibold text-brand-bg"
-        >
-          <UserPlus
-            size={15}
-            strokeWidth={1.8}
-          />
+          className="flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-brand-ink text-sm font-semibold text-brand-bg">
+          <UserPlus size={15} strokeWidth={1.8} />
           Register
         </NavLink>
       </motion.div>
@@ -961,31 +830,25 @@ function MobileAccountMenu({
       }}
       transition={{
         delay: 0.16,
-      }}
-    >
+      }}>
       <div className="flex items-center gap-3 border-b border-brand-ink/10 pb-4">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-ink text-brand-bg">
-          <User
-            size={17}
-            strokeWidth={1.7}
-          />
+          <User size={17} strokeWidth={1.7} />
         </span>
 
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-brand-ink">
-            {profile?.full_name ||
-              user.email}
+            {profile?.full_name || user.email}
           </p>
 
           <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.18em] text-brand-ink/40">
-            {profile?.role ||
-              "customer"}
+            {profile?.role || "customer"}
           </p>
         </div>
       </div>
 
       <div className="mt-3 grid gap-1">
-        {isAdmin ? (
+        {canAccessWebsiteAdmin ? (
           <MobileSmallLink
             to="/admin/dashboard"
             label="Admin Dashboard"
@@ -1013,12 +876,8 @@ function MobileAccountMenu({
         <button
           type="button"
           onClick={onLogout}
-          className="flex min-h-[46px] items-center gap-3 rounded-xl px-2 text-left text-sm font-medium text-brand-ink/55 transition hover:bg-brand-ink/[0.05] hover:text-brand-ink"
-        >
-          <LogOut
-            size={16}
-            strokeWidth={1.6}
-          />
+          className="flex min-h-[46px] items-center gap-3 rounded-xl px-2 text-left text-sm font-medium text-brand-ink/55 transition hover:bg-brand-ink/[0.05] hover:text-brand-ink">
+          <LogOut size={16} strokeWidth={1.6} />
           Logout
         </button>
       </div>
@@ -1045,12 +904,8 @@ function MobileSmallLink({
     <NavLink
       to={to}
       onClick={onClose}
-      className="flex min-h-[46px] items-center gap-3 rounded-xl px-2 text-sm font-medium text-brand-ink/65 transition hover:bg-brand-ink/[0.05] hover:text-brand-ink"
-    >
-      <Icon
-        size={16}
-        strokeWidth={1.6}
-      />
+      className="flex min-h-[46px] items-center gap-3 rounded-xl px-2 text-sm font-medium text-brand-ink/65 transition hover:bg-brand-ink/[0.05] hover:text-brand-ink">
+      <Icon size={16} strokeWidth={1.6} />
 
       {label}
     </NavLink>

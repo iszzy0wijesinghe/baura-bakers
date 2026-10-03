@@ -11,57 +11,45 @@ export type LaravelUserRole =
   | "admin"
   | "customer";
 
-export type LaravelUserRoleName =
-  | "Customer"
-  | "Admin"
-  | "Manager"
-  | "Cashier";
-
-export type LaravelUserRoleValue =
-  | 0
-  | 1
-  | 2
-  | 3;
-
 export type LaravelUser = {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   email_verified: boolean;
   phone: string | null;
   default_delivery_address: string | null;
 
   /**
-   * Legacy website role.
+   * Legacy website role returned by Laravel.
    *
-   * Kept for compatibility with existing storefront/account code.
-   * Admin and Manager may still be represented through the
-   * richer role fields below when determining staff access.
+   * Existing storefront/account code still depends on this.
+   * Do not use this field for new permission decisions.
    */
   role: LaravelUserRole;
 
   /**
-   * Full backend role information.
+   * Canonical role information comes from Laravel.
    *
-   * 0 = Customer
-   * 1 = Admin
-   * 2 = Manager
-   * 3 = Cashier
+   * Role values/names are intentionally not duplicated
+   * as frontend enums or unions.
    */
-  role_value: LaravelUserRoleValue;
-  role_name: LaravelUserRoleName;
+  role_value: number;
+  role_name: string;
   role_label: string;
 
   /**
-   * Backend-calculated capabilities.
+   * Backend-calculated account capabilities.
    */
   is_staff: boolean;
   can_access_website_admin: boolean;
   can_access_erp: boolean;
 
   /**
-   * Effective permission keys after permission profiles
-   * and user-specific overrides have been resolved.
+   * Effective permissions calculated by Laravel after
+   * permission profiles and user overrides are applied.
+   *
+   * Frontend uses these for visibility/navigation only.
+   * Laravel middleware remains authoritative.
    */
   permissions: string[];
 
@@ -96,7 +84,9 @@ export type AccountOrder = {
   customer_address: string;
   is_gift: boolean;
   has_different_receiver: boolean;
-  delivery_target: "SENDER" | "RECEIVER";
+  delivery_target:
+    | "SENDER"
+    | "RECEIVER";
   receiver_name: string | null;
   receiver_contact_number: string | null;
   receiver_address: string | null;
@@ -134,15 +124,26 @@ export type AccountOrder = {
 
 const AUTH_CACHE_MS = 30_000;
 
-let authenticatedUserCache: LaravelUser | null = null;
-let authenticatedUserCacheKnown = false;
-let authenticatedUserCacheExpiresAt = 0;
-let authenticatedUserRequest: Promise<LaravelUser | null> | null = null;
+let authenticatedUserCache:
+  | LaravelUser
+  | null = null;
 
-function cacheAuthenticatedUser(user: LaravelUser | null) {
+let authenticatedUserCacheKnown = false;
+
+let authenticatedUserCacheExpiresAt = 0;
+
+let authenticatedUserRequest:
+  | Promise<LaravelUser | null>
+  | null = null;
+
+function cacheAuthenticatedUser(
+  user: LaravelUser | null,
+) {
   authenticatedUserCache = user;
   authenticatedUserCacheKnown = true;
-  authenticatedUserCacheExpiresAt = Date.now() + AUTH_CACHE_MS;
+
+  authenticatedUserCacheExpiresAt =
+    Date.now() + AUTH_CACHE_MS;
 }
 
 export function clearAuthenticatedUserCache() {
@@ -169,6 +170,7 @@ type OrdersResponse = {
   data: {
     orders: AccountOrder[];
   };
+
   meta: {
     current_page: number;
     last_page: number;
@@ -188,135 +190,200 @@ export async function loginAccount(
   password: string,
   remember = false,
 ) {
-  const response = await laravelPost<UserResponse>(
-    "/api/v1/auth/login",
-    {
-      email,
-      password,
-      remember,
-    },
-  );
+  const response =
+    await laravelPost<UserResponse>(
+      "/api/v1/auth/login",
+      {
+        email,
+        password,
+        remember,
+      },
+    );
 
-  cacheAuthenticatedUser(response.data.user);
+  cacheAuthenticatedUser(
+    response.data.user,
+  );
 
   return response.data.user;
 }
 
-export async function registerAccount(input: {
-  name: string;
-  email: string;
-  password: string;
-  phone?: string | null;
-}) {
-  const response = await laravelPost<UserResponse>(
-    "/api/v1/auth/register",
-    input,
-  );
+export async function registerAccount(
+  input: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string | null;
+  },
+) {
+  const response =
+    await laravelPost<UserResponse>(
+      "/api/v1/auth/register",
+      input,
+    );
 
-  cacheAuthenticatedUser(response.data.user);
+  cacheAuthenticatedUser(
+    response.data.user,
+  );
 
   return response.data.user;
 }
 
 export async function logoutAccount() {
   try {
-    await laravelPost<{ message: string }>("/api/v1/auth/logout");
+    await laravelPost<{
+      message: string;
+    }>("/api/v1/auth/logout");
   } finally {
     clearAuthenticatedUserCache();
   }
 }
 
-export async function getAuthenticatedUser(forceRefresh = false) {
+export async function getAuthenticatedUser(
+  forceRefresh = false,
+) {
   if (
     !forceRefresh &&
     authenticatedUserCacheKnown &&
-    authenticatedUserCacheExpiresAt > Date.now()
+    authenticatedUserCacheExpiresAt >
+      Date.now()
   ) {
     return authenticatedUserCache;
   }
 
-  if (!forceRefresh && authenticatedUserRequest) {
+  if (
+    !forceRefresh &&
+    authenticatedUserRequest
+  ) {
     return authenticatedUserRequest;
   }
 
-  authenticatedUserRequest = laravelGet<UserResponse>(
-    "/api/v1/auth/user",
-  )
-    .then((response) => {
-      cacheAuthenticatedUser(response.data.user);
-      return response.data.user;
-    })
-    .catch((error) => {
-      if (error instanceof LaravelApiError && error.status === 401) {
-        cacheAuthenticatedUser(null);
-        return null;
-      }
+  authenticatedUserRequest =
+    laravelGet<UserResponse>(
+      "/api/v1/auth/user",
+    )
+      .then((response) => {
+        cacheAuthenticatedUser(
+          response.data.user,
+        );
 
-      throw error;
-    })
-    .finally(() => {
-      authenticatedUserRequest = null;
-    });
+        return response.data.user;
+      })
+      .catch((error) => {
+        if (
+          error instanceof
+            LaravelApiError &&
+          error.status === 401
+        ) {
+          cacheAuthenticatedUser(null);
+
+          return null;
+        }
+
+        throw error;
+      })
+      .finally(() => {
+        authenticatedUserRequest =
+          null;
+      });
 
   return authenticatedUserRequest;
 }
 
 export async function getAccountSummary() {
-  const response = await laravelGet<AccountResponse>("/api/v1/account");
+  const response =
+    await laravelGet<AccountResponse>(
+      "/api/v1/account",
+    );
 
   return response.data;
 }
 
-export async function updateAccountProfile(input: {
-  name: string;
-  phone: string | null;
-  default_delivery_address: string | null;
-}) {
-  const response = await laravelPatch<UserResponse>(
-    "/api/v1/account/profile",
-    input,
-  );
+export async function updateAccountProfile(
+  input: {
+    name: string;
+    phone: string | null;
+    default_delivery_address:
+      | string
+      | null;
+  },
+) {
+  const response =
+    await laravelPatch<UserResponse>(
+      "/api/v1/account/profile",
+      input,
+    );
 
-  cacheAuthenticatedUser(response.data.user);
+  cacheAuthenticatedUser(
+    response.data.user,
+  );
 
   return response.data.user;
 }
 
-export async function claimAccountOrders(deviceId: string | null) {
-  const response = await laravelPost<{
-    data: {
-      claimed: number;
-      stats: AccountStats;
-    };
-  }>("/api/v1/account/orders/claim", {
-    device_id: deviceId,
-  });
+export async function claimAccountOrders(
+  deviceId: string | null,
+) {
+  const response =
+    await laravelPost<{
+      data: {
+        claimed: number;
+        stats: AccountStats;
+      };
+    }>(
+      "/api/v1/account/orders/claim",
+      {
+        device_id: deviceId,
+      },
+    );
 
   return response.data;
 }
 
-export async function getAccountOrders(page = 1, perPage = 50) {
+export async function getAccountOrders(
+  page = 1,
+  perPage = 50,
+) {
   return laravelGet<OrdersResponse>(
     `/api/v1/account/orders?page=${page}&per_page=${perPage}`,
   );
 }
 
 export async function getAllAccountOrders() {
-  const firstPage = await getAccountOrders(1, 50);
-  const orders = [...firstPage.data.orders];
+  const firstPage =
+    await getAccountOrders(1, 50);
 
-  for (let page = 2; page <= firstPage.meta.last_page; page += 1) {
-    const response = await getAccountOrders(page, 50);
-    orders.push(...response.data.orders);
+  const orders = [
+    ...firstPage.data.orders,
+  ];
+
+  for (
+    let page = 2;
+    page <= firstPage.meta.last_page;
+    page += 1
+  ) {
+    const response =
+      await getAccountOrders(
+        page,
+        50,
+      );
+
+    orders.push(
+      ...response.data.orders,
+    );
   }
 
   return orders;
 }
 
-export async function getAccountOrder(orderNo: string) {
-  const response = await laravelGet<OrderResponse>(
-    `/api/v1/account/orders/${encodeURIComponent(orderNo)}`,
-  );
+export async function getAccountOrder(
+  orderNo: string,
+) {
+  const response =
+    await laravelGet<OrderResponse>(
+      `/api/v1/account/orders/${encodeURIComponent(
+        orderNo,
+      )}`,
+    );
 
   return response.data.order;
 }
