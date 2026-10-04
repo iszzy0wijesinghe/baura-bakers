@@ -6,12 +6,10 @@ import {
   laravelPost,
 } from "./laravelApi";
 
-export type AdminUserRole = {
-  value: number;
-  name: string;
-  label: string;
-  is_staff: boolean;
-};
+export type AdminPermissionOverrideState =
+  | "inherit"
+  | "allow"
+  | "deny";
 
 export type AdminPermission = {
   id: number;
@@ -24,21 +22,50 @@ export type AdminPermission = {
 export type AdminPermissionProfile = {
   id: number;
   name: string;
+  code?: string;
   description: string | null;
   is_system: boolean;
-  is_active: boolean;
   permissions: string[];
 };
 
-export type AdminPermissionOverrideState =
-  | "inherit"
-  | "allow"
-  | "deny";
-
 export type AdminPermissionOverride = {
   permission_id: number;
-  permission_key: string;
   allowed: boolean;
+};
+
+export type AdminUserRole = {
+  id: number;
+  name: string;
+  code: string;
+  description: string | null;
+  is_system: boolean;
+  is_active: boolean;
+  is_staff?: boolean;
+
+  /*
+   * Compatibility fields used by the admin UI.
+   *
+   * The backend currently returns id/name, while some of the
+   * frontend components use value/label.
+   */
+  value?: number;
+  label?: string;
+};
+
+export type AdminManagedUserRole = {
+  id: number;
+  name: string;
+  code: string;
+  is_system: boolean;
+  is_active: boolean;
+};
+
+export type AdminManagedPermissionProfile = {
+  id: number;
+  name: string;
+  code?: string;
+  description?: string | null;
+  is_system?: boolean;
 };
 
 export type AdminManagedUser = {
@@ -49,19 +76,26 @@ export type AdminManagedUser = {
   phone_normalized: string | null;
   default_delivery_address: string | null;
 
-  role: number;
-  role_name: string;
-  role_label: string;
+  role_id: number | null;
+  role: AdminManagedUserRole | number | null;
+
+  /*
+   * Convenience label returned by some versions of the API.
+   * It is also normalized client-side when absent.
+   */
+  role_label?: string;
 
   is_staff: boolean;
+  is_administrator: boolean;
   is_active: boolean;
   has_password: boolean;
   email_verified: boolean;
 
-  permission_profile_ids?: number[];
-  permission_profiles?: AdminPermissionProfile[];
-  permission_overrides?: AdminPermissionOverride[];
   effective_permissions?: string[];
+
+  permission_profile_ids?: number[];
+  permission_profiles?: AdminManagedPermissionProfile[];
+  permission_overrides?: AdminPermissionOverride[];
 
   created_at: string | null;
   updated_at: string | null;
@@ -78,14 +112,10 @@ export type AdminUsersPagination = {
 export type AdminUsersFilters = {
   search?: string;
   role?: number | null;
+  role_id?: number | null;
   status?: "active" | "inactive" | "";
   page?: number;
   perPage?: number;
-};
-
-export type PermissionOverridePayload = {
-  permission_id: number;
-  allowed: boolean;
 };
 
 export type CreateAdminUserPayload = {
@@ -93,12 +123,15 @@ export type CreateAdminUserPayload = {
   email: string;
   phone: string;
   default_delivery_address: string;
-  role: number;
+
+  role_id: number;
+
   is_active: boolean;
+
   password?: string;
 
   permission_profile_ids?: number[];
-  permission_overrides?: PermissionOverridePayload[];
+  permission_overrides?: AdminPermissionOverride[];
 };
 
 export type UpdateAdminUserPayload = {
@@ -106,12 +139,15 @@ export type UpdateAdminUserPayload = {
   email?: string;
   phone?: string;
   default_delivery_address?: string;
-  role?: number;
+
+  role_id?: number;
+
   is_active?: boolean;
+
   password?: string;
 
   permission_profile_ids?: number[];
-  permission_overrides?: PermissionOverridePayload[];
+  permission_overrides?: AdminPermissionOverride[];
 };
 
 export type AdminUsersResult = {
@@ -128,16 +164,16 @@ export type AdminUserResult = {
 };
 
 type AdminUsersResponse = {
-  users: AdminManagedUser[];
-  roles: AdminUserRole[];
+  users?: AdminManagedUser[];
+  roles?: AdminUserRole[];
   pagination: AdminUsersPagination;
 };
 
 type AdminUserShowResponse = {
   user: AdminManagedUser;
-  roles: AdminUserRole[];
-  permission_profiles: AdminPermissionProfile[];
-  permissions: AdminPermission[];
+  roles?: AdminUserRole[];
+  permission_profiles?: AdminPermissionProfile[];
+  permissions?: AdminPermission[];
 };
 
 type AdminUserMutationResponse = {
@@ -147,12 +183,10 @@ type AdminUserMutationResponse = {
 
 function buildQuery(
   filters: AdminUsersFilters,
-) {
-  const params =
-    new URLSearchParams();
+): string {
+  const params = new URLSearchParams();
 
-  const search =
-    filters.search?.trim();
+  const search = filters.search?.trim();
 
   if (search) {
     params.set(
@@ -161,13 +195,17 @@ function buildQuery(
     );
   }
 
+  const roleId =
+    filters.role_id ??
+    filters.role;
+
   if (
-    filters.role !== undefined &&
-    filters.role !== null
+    roleId !== undefined &&
+    roleId !== null
   ) {
     params.set(
-      "role",
-      String(filters.role),
+      "role_id",
+      String(roleId),
     );
   }
 
@@ -196,8 +234,7 @@ function buildQuery(
     );
   }
 
-  const query =
-    params.toString();
+  const query = params.toString();
 
   return query
     ? `?${query}`
@@ -206,89 +243,100 @@ function buildQuery(
 
 function nullableText(
   value: string,
-) {
-  const trimmed =
-    value.trim();
+): string | null {
+  const trimmed = value.trim();
 
   return trimmed || null;
 }
 
-function normalizeProfileIds(
-  values?: number[],
-) {
-  if (!values) {
-    return undefined;
-  }
+function normalizeRoleId(
+  value: number,
+): number {
+  const roleId = Number(value);
 
-  return Array.from(
-    new Set(
-      values
-        .map(Number)
-        .filter(
-          (value) =>
-            Number.isInteger(value) &&
-            value > 0,
-        ),
-    ),
+  return Number.isInteger(roleId) &&
+    roleId > 0
+    ? roleId
+    : value;
+}
+
+function normalizeRole(
+  role: AdminUserRole,
+): AdminUserRole {
+  return {
+    ...role,
+    value:
+      typeof role.value === "number"
+        ? role.value
+        : role.id,
+    label:
+      typeof role.label === "string" &&
+      role.label.trim()
+        ? role.label
+        : role.name,
+  };
+}
+
+function normalizeRoles(
+  roles: AdminUserRole[] | undefined,
+): AdminUserRole[] {
+  return (roles ?? []).map(
+    normalizeRole,
   );
 }
 
-function normalizePermissionOverrides(
-  values?: PermissionOverridePayload[],
-) {
-  if (!values) {
-    return undefined;
+function getRoleLabelFromUser(
+  user: AdminManagedUser,
+): string {
+  if (
+    user.role_label &&
+    user.role_label.trim()
+  ) {
+    return user.role_label;
   }
 
-  const overrides =
-    new Map<
-      number,
-      PermissionOverridePayload
-    >();
-
-  for (const value of values) {
-    const permissionId =
-      Number(value.permission_id);
-
-    if (
-      !Number.isInteger(permissionId) ||
-      permissionId <= 0
-    ) {
-      continue;
-    }
-
-    overrides.set(
-      permissionId,
-      {
-        permission_id:
-          permissionId,
-
-        allowed:
-          Boolean(value.allowed),
-      },
-    );
+  if (
+    user.role &&
+    typeof user.role === "object"
+  ) {
+    return user.role.name;
   }
 
-  return Array.from(
-    overrides.values(),
-  );
+  return "Unassigned";
+}
+
+function normalizeUser(
+  user: AdminManagedUser,
+): AdminManagedUser {
+  return {
+    ...user,
+
+    role_label:
+      getRoleLabelFromUser(user),
+
+    permission_profile_ids:
+      user.permission_profile_ids ??
+      user.permission_profiles?.map(
+        (profile) => profile.id,
+      ) ??
+      [],
+
+    permission_profiles:
+      user.permission_profiles ?? [],
+
+    permission_overrides:
+      user.permission_overrides ?? [],
+
+    effective_permissions:
+      user.effective_permissions ?? [],
+  };
 }
 
 function createPayload(
   payload: CreateAdminUserPayload,
-) {
+): Record<string, unknown> {
   const password =
     payload.password?.trim();
-
-  const profileIds =
-    normalizeProfileIds(
-      payload.permission_profile_ids,
-    );
-
-  const permissionOverrides =
-    normalizePermissionOverrides(
-      payload.permission_overrides,
-    );
 
   return {
     name:
@@ -309,30 +357,25 @@ function createPayload(
         payload.default_delivery_address,
       ),
 
-    role:
-      Number(payload.role),
+    role_id:
+      normalizeRoleId(
+        payload.role_id,
+      ),
 
     is_active:
       payload.is_active,
 
+    permission_profile_ids:
+      payload.permission_profile_ids ??
+      [],
+
+    permission_overrides:
+      payload.permission_overrides ??
+      [],
+
     ...(password
       ? {
           password,
-        }
-      : {}),
-
-    ...(profileIds !== undefined
-      ? {
-          permission_profile_ids:
-            profileIds,
-        }
-      : {}),
-
-    ...(permissionOverrides !==
-    undefined
-      ? {
-          permission_overrides:
-            permissionOverrides,
         }
       : {}),
   };
@@ -340,7 +383,7 @@ function createPayload(
 
 function updatePayload(
   payload: UpdateAdminUserPayload,
-) {
+): Record<string, unknown> {
   const body: Record<
     string,
     unknown
@@ -382,15 +425,16 @@ function updatePayload(
   }
 
   if (
-    payload.role !== undefined
+    payload.role_id !== undefined
   ) {
-    body.role =
-      Number(payload.role);
+    body.role_id =
+      normalizeRoleId(
+        payload.role_id,
+      );
   }
 
   if (
-    payload.is_active !==
-    undefined
+    payload.is_active !== undefined
   ) {
     body.is_active =
       payload.is_active;
@@ -413,9 +457,7 @@ function updatePayload(
     undefined
   ) {
     body.permission_profile_ids =
-      normalizeProfileIds(
-        payload.permission_profile_ids,
-      ) ?? [];
+      payload.permission_profile_ids;
   }
 
   if (
@@ -423,9 +465,7 @@ function updatePayload(
     undefined
   ) {
     body.permission_overrides =
-      normalizePermissionOverrides(
-        payload.permission_overrides,
-      ) ?? [];
+      payload.permission_overrides;
   }
 
   return body;
@@ -443,10 +483,14 @@ export async function getAdminUsers(
 
   return {
     users:
-      response.users,
+      (response.users ?? []).map(
+        normalizeUser,
+      ),
 
     roles:
-      response.roles,
+      normalizeRoles(
+        response.roles,
+      ),
 
     pagination:
       response.pagination,
@@ -463,40 +507,54 @@ export async function getAdminUser(
 
   return {
     user:
-      response.user,
+      normalizeUser(
+        response.user,
+      ),
 
     roles:
-      response.roles,
+      normalizeRoles(
+        response.roles,
+      ),
 
     permission_profiles:
-      response.permission_profiles ?? [],
+      response.permission_profiles ??
+      [],
 
     permissions:
-      response.permissions ?? [],
+      response.permissions ??
+      [],
   };
 }
 
 export async function createAdminUser(
   payload: CreateAdminUserPayload,
-) {
+): Promise<AdminManagedUser> {
   const response =
     await laravelPost<AdminUserMutationResponse>(
       "/api/v1/admin/users",
-      createPayload(payload),
+      createPayload(
+        payload,
+      ),
     );
 
-  return response.user;
+  return normalizeUser(
+    response.user,
+  );
 }
 
 export async function updateAdminUser(
   userId: number,
   payload: UpdateAdminUserPayload,
-) {
+): Promise<AdminManagedUser> {
   const response =
     await laravelPatch<AdminUserMutationResponse>(
       `/api/v1/admin/users/${userId}`,
-      updatePayload(payload),
+      updatePayload(
+        payload,
+      ),
     );
 
-  return response.user;
+  return normalizeUser(
+    response.user,
+  );
 }

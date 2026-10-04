@@ -1,6 +1,7 @@
 /** @format */
 
 import {
+  useCallback,
   useEffect,
   useState,
 } from "react";
@@ -21,16 +22,20 @@ export type AuthProfile = {
   phone: string | null;
 
   /**
-   * Legacy role retained only for old
-   * storefront compatibility.
+   * Legacy storefront compatibility only.
+   *
+   * Never use this value for new authorization
+   * decisions.
    */
   legacyRole:
     | "customer"
     | "admin";
 
   /**
-   * Canonical role metadata supplied
-   * entirely by Laravel.
+   * Legacy role metadata retained while the
+   * backend transition is completed.
+   *
+   * Authorization is permission-driven.
    */
   roleValue: number;
   roleName: string;
@@ -51,7 +56,8 @@ type SessionSnapshot = {
   isLoading: boolean;
 };
 
-const SESSION_REFRESH_MS = 60_000;
+const SESSION_REFRESH_MS =
+  60_000;
 
 let snapshot: SessionSnapshot = {
   user: null,
@@ -76,7 +82,7 @@ const listeners = new Set<
 
 function normalizePermissions(
   permissions: unknown,
-) {
+): string[] {
   if (
     !Array.isArray(
       permissions,
@@ -85,13 +91,18 @@ function normalizePermissions(
     return [];
   }
 
-  return permissions.filter(
-    (
-      permission,
-    ): permission is string =>
-      typeof permission ===
-        "string" &&
-      permission.length > 0,
+  return Array.from(
+    new Set(
+      permissions.filter(
+        (
+          permission,
+        ): permission is string =>
+          typeof permission ===
+            "string" &&
+          permission.trim()
+            .length > 0,
+      ),
+    ),
   );
 }
 
@@ -103,7 +114,8 @@ function profileFromUser(
   }
 
   return {
-    id: String(user.id),
+    id:
+      String(user.id),
 
     fullName:
       user.name || null,
@@ -127,16 +139,19 @@ function profileFromUser(
       user.role_label,
 
     isStaff:
-      user.is_staff,
+      user.is_staff === true,
 
     isActive:
-      user.is_active,
+      user.is_active === true,
 
     canAccessWebsiteAdmin:
-      user.can_access_website_admin,
+      user
+        .can_access_website_admin ===
+      true,
 
     canAccessErp:
-      user.can_access_erp,
+      user.can_access_erp ===
+      true,
 
     permissions:
       normalizePermissions(
@@ -147,7 +162,7 @@ function profileFromUser(
 
 function publish(
   next: SessionSnapshot,
-) {
+): void {
   snapshot = next;
 
   for (
@@ -160,7 +175,7 @@ function publish(
 
 async function loadSharedSession(
   forceRefresh = false,
-) {
+): Promise<void> {
   if (
     !forceRefresh &&
     sessionRequest
@@ -209,13 +224,14 @@ async function loadSharedSession(
         });
       })
       .catch(() => {
-        if (initialLoad) {
-          publish({
-            user: null,
-            profile: null,
-            isLoading: false,
-          });
-        }
+        lastLoadedAt =
+          Date.now();
+
+        publish({
+          user: null,
+          profile: null,
+          isLoading: false,
+        });
       })
       .finally(() => {
         sessionRequest =
@@ -225,7 +241,7 @@ async function loadSharedSession(
   return sessionRequest;
 }
 
-function attachGlobalListeners() {
+function attachGlobalListeners(): void {
   if (
     globalListenersAttached ||
     typeof window ===
@@ -240,6 +256,8 @@ function attachGlobalListeners() {
   window.addEventListener(
     AUTH_CHANGED_EVENT,
     () => {
+      lastLoadedAt = 0;
+
       void loadSharedSession(
         true,
       );
@@ -267,7 +285,7 @@ function profileHasPermission(
     | AuthProfile
     | null,
   permission: string,
-) {
+): boolean {
   if (
     !profile ||
     !profile.isActive
@@ -275,10 +293,8 @@ function profileHasPermission(
     return false;
   }
 
-  return (
-    profile.permissions.includes(
-      permission,
-    )
+  return profile.permissions.includes(
+    permission,
   );
 }
 
@@ -287,7 +303,7 @@ function profileHasAnyPermission(
     | AuthProfile
     | null,
   permissions: string[],
-) {
+): boolean {
   if (
     !profile ||
     !profile.isActive
@@ -308,7 +324,7 @@ function profileHasAllPermissions(
     | AuthProfile
     | null,
   permissions: string[],
-) {
+): boolean {
   if (
     !profile ||
     !profile.isActive
@@ -354,11 +370,59 @@ export function useAuthSession() {
   const profile =
     state.profile;
 
+  const hasPermission =
+    useCallback(
+      (
+        permission: string,
+      ): boolean =>
+        profileHasPermission(
+          profile,
+          permission,
+        ),
+      [profile],
+    );
+
+  const hasAnyPermission =
+    useCallback(
+      (
+        permissions: string[],
+      ): boolean =>
+        profileHasAnyPermission(
+          profile,
+          permissions,
+        ),
+      [profile],
+    );
+
+  const hasAllPermissions =
+    useCallback(
+      (
+        permissions: string[],
+      ): boolean =>
+        profileHasAllPermissions(
+          profile,
+          permissions,
+        ),
+      [profile],
+    );
+
+  const refresh =
+    useCallback(
+      () =>
+        loadSharedSession(
+          true,
+        ),
+      [],
+    );
+
   return {
     user:
       state.user,
 
     profile,
+
+    permissions:
+      profile?.permissions ?? [],
 
     isLoading:
       state.isLoading,
@@ -384,33 +448,9 @@ export function useAuthSession() {
         ?.canAccessErp ===
       true,
 
-    hasPermission: (
-      permission: string,
-    ) =>
-      profileHasPermission(
-        profile,
-        permission,
-      ),
-
-    hasAnyPermission: (
-      permissions: string[],
-    ) =>
-      profileHasAnyPermission(
-        profile,
-        permissions,
-      ),
-
-    hasAllPermissions: (
-      permissions: string[],
-    ) =>
-      profileHasAllPermissions(
-        profile,
-        permissions,
-      ),
-
-    refresh: () =>
-      loadSharedSession(
-        true,
-      ),
+    hasPermission,
+    hasAnyPermission,
+    hasAllPermissions,
+    refresh,
   };
 }

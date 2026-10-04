@@ -11,14 +11,6 @@ import { useAuthSession } from "../lib/useAuthSession";
 
 type AdminRouteProps = {
   children: ReactNode;
-
-  /**
-   * Optional permission required by this
-   * specific admin feature.
-   *
-   * Permission names come from Laravel.
-   * This component contains no role mapping.
-   */
   permission?: string;
 };
 
@@ -46,7 +38,9 @@ export default function AdminRoute({
         to="/login"
         replace
         state={{
-          from: location.pathname,
+          from:
+            location.pathname +
+            location.search,
         }}
       />
     );

@@ -38,10 +38,10 @@ import MaintenancePage from "../pages/system/MaintenancePage";
 
 export const router = createBrowserRouter([
   /*
-    |--------------------------------------------------------------------------
-    | Isolated system pages
-    |--------------------------------------------------------------------------
-    */
+  |--------------------------------------------------------------------------
+  | Isolated system pages
+  |--------------------------------------------------------------------------
+  */
 
   {
     path: "/coming-soon",
@@ -64,10 +64,10 @@ export const router = createBrowserRouter([
   },
 
   /*
-    |--------------------------------------------------------------------------
-    | Isolated error pages
-    |--------------------------------------------------------------------------
-    */
+  |--------------------------------------------------------------------------
+  | Isolated error pages
+  |--------------------------------------------------------------------------
+  */
 
   {
     path: "/400",
@@ -100,10 +100,10 @@ export const router = createBrowserRouter([
   },
 
   /*
-    |--------------------------------------------------------------------------
-    | Website
-    |--------------------------------------------------------------------------
-    */
+  |--------------------------------------------------------------------------
+  | Website
+  |--------------------------------------------------------------------------
+  */
 
   {
     element: <AppLayout />,
@@ -182,22 +182,22 @@ export const router = createBrowserRouter([
       },
 
       /*
-        |--------------------------------------------------------------------------
-        | Website administration
-        |--------------------------------------------------------------------------
-        |
-        | These checks control frontend routing/navigation.
-        |
-        | Laravel permission middleware remains the authoritative
-        | security boundary for every protected API operation.
-        |
-        */
+      |--------------------------------------------------------------------------
+      | Website administration
+      |--------------------------------------------------------------------------
+      |
+      | Frontend route visibility follows Laravel's canonical RBAC permissions.
+      |
+      | These checks are for frontend navigation and UX.
+      | Laravel remains the authoritative authorization boundary.
+      |
+      */
 
       {
         path: "/admin/dashboard",
 
         element: (
-          <AdminRoute>
+          <AdminRoute permission="website-admin.dashboard.read">
             <AdminDashboard />
           </AdminRoute>
         ),
@@ -207,7 +207,7 @@ export const router = createBrowserRouter([
         path: "/admin/orders",
 
         element: (
-          <AdminRoute permission="website-admin.orders.manage">
+          <AdminRoute permission="website-admin.orders.read">
             <AdminOrders />
           </AdminRoute>
         ),
@@ -217,7 +217,7 @@ export const router = createBrowserRouter([
         path: "/admin/products",
 
         element: (
-          <AdminRoute permission="website-admin.catalog.manage">
+          <AdminRoute permission="website-admin.catalog.read">
             <AdminProducts />
           </AdminRoute>
         ),
@@ -227,7 +227,7 @@ export const router = createBrowserRouter([
         path: "/admin/promotions",
 
         element: (
-          <AdminRoute permission="website-admin.promotions.manage">
+          <AdminRoute permission="website-admin.promotions.read">
             <AdminPromotions />
           </AdminRoute>
         ),
@@ -237,7 +237,7 @@ export const router = createBrowserRouter([
         path: "/admin/delivery",
 
         element: (
-          <AdminRoute permission="website-admin.delivery.manage">
+          <AdminRoute permission="website-admin.delivery.read">
             <AdminDeliveryManagement />
           </AdminRoute>
         ),
@@ -247,7 +247,7 @@ export const router = createBrowserRouter([
         path: "/admin/site-settings",
 
         element: (
-          <AdminRoute permission="website-admin.site-mode.manage">
+          <AdminRoute permission="website-admin.site-mode.read">
             <AdminSiteSettings />
           </AdminRoute>
         ),
@@ -257,7 +257,7 @@ export const router = createBrowserRouter([
         path: "/admin/hero-slides",
 
         element: (
-          <AdminRoute permission="website-admin.hero-slides.manage">
+          <AdminRoute permission="website-admin.hero-slides.read">
             <AdminHeroSlides />
           </AdminRoute>
         ),
@@ -267,7 +267,7 @@ export const router = createBrowserRouter([
         path: "/admin/users",
 
         element: (
-          <AdminRoute permission="website-admin.users.manage">
+          <AdminRoute permission="website-admin.users.read">
             <AdminUsers />
           </AdminRoute>
         ),
@@ -277,7 +277,7 @@ export const router = createBrowserRouter([
         path: "/admin/access",
 
         element: (
-          <AdminRoute permission="website-admin.permission-profiles.manage">
+          <AdminRoute permission="website-admin.roles.read">
             <AdminAccessManagement />
           </AdminRoute>
         ),
@@ -286,14 +286,13 @@ export const router = createBrowserRouter([
   },
 
   /*
-    |--------------------------------------------------------------------------
-    | Unknown routes
-    |--------------------------------------------------------------------------
-    */
+  |--------------------------------------------------------------------------
+  | Unknown routes
+  |--------------------------------------------------------------------------
+  */
 
   {
     path: "*",
-
     element: <ErrorStatusPage statusCode={404} />,
   },
 ]);

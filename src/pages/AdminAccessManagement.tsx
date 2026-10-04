@@ -25,7 +25,7 @@ import {
   Search,
   Shield,
   ShieldCheck,
-  Sparkles,
+  Trash2,
   UsersRound,
   X,
   XCircle,
@@ -43,37 +43,54 @@ import {
 } from "../lib/laravelApi";
 
 import {
-  createAdminPermissionProfile,
-  getAdminPermissionProfile,
-  getAdminPermissionProfiles,
-  updateAdminPermissionProfile,
-  type AdminPermission,
-  type AdminPermissionProfile,
-} from "../lib/adminPermissionProfilesApi";
+  activateAdminRole,
+  createAdminRole,
+  deactivateAdminRole,
+  deleteAdminRole,
+  getAdminRole,
+  getAdminRoles,
+  updateAdminRole,
+  type AdminRole,
+  type AdminRolePermission,
+  type AdminRolePermissionGroup,
+} from "../lib/adminRolesApi";
 
 import {
   useAuthSession,
 } from "../lib/useAuthSession";
 
-const ACCESS_PERMISSION =
-  "website-admin.permission-profiles.manage";
+const READ_PERMISSION =
+  "website-admin.roles.read";
 
-type ProfileForm = {
+const CREATE_PERMISSION =
+  "website-admin.roles.create";
+
+const UPDATE_PERMISSION =
+  "website-admin.roles.update";
+
+const DELETE_PERMISSION =
+  "website-admin.roles.delete";
+
+type RoleForm = {
   id: number | null;
   name: string;
+  code: string;
   description: string;
   isActive: boolean;
   isSystem: boolean;
-  permissions: string[];
+  isAdministrator: boolean;
+  permissionIds: number[];
 };
 
-const EMPTY_FORM: ProfileForm = {
+const EMPTY_FORM: RoleForm = {
   id: null,
   name: "",
+  code: "",
   description: "",
   isActive: true,
   isSystem: false,
-  permissions: [],
+  isAdministrator: false,
+  permissionIds: [],
 };
 
 export default function AdminAccessManagement() {
@@ -87,28 +104,43 @@ export default function AdminAccessManagement() {
     hasPermission,
   } = useAuthSession();
 
-  const canManageAccess =
+  const canRead =
     hasPermission(
-      ACCESS_PERMISSION,
+      READ_PERMISSION,
+    );
+
+  const canCreate =
+    hasPermission(
+      CREATE_PERMISSION,
+    );
+
+  const canUpdate =
+    hasPermission(
+      UPDATE_PERMISSION,
+    );
+
+  const canDelete =
+    hasPermission(
+      DELETE_PERMISSION,
     );
 
   const [
-    profiles,
-    setProfiles,
+    roles,
+    setRoles,
   ] = useState<
-    AdminPermissionProfile[]
+    AdminRole[]
   >([]);
 
   const [
-    permissions,
-    setPermissions,
+    permissionGroups,
+    setPermissionGroups,
   ] = useState<
-    AdminPermission[]
+    AdminRolePermissionGroup[]
   >([]);
 
   const [
-    selectedProfileId,
-    setSelectedProfileId,
+    selectedRoleId,
+    setSelectedRoleId,
   ] = useState<
     number | null
   >(null);
@@ -116,7 +148,7 @@ export default function AdminAccessManagement() {
   const [
     form,
     setForm,
-  ] = useState<ProfileForm>(
+  ] = useState<RoleForm>(
     EMPTY_FORM,
   );
 
@@ -124,6 +156,13 @@ export default function AdminAccessManagement() {
     search,
     setSearch,
   ] = useState("");
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState<
+    "all" | "active" | "inactive"
+  >("all");
 
   const [
     isLoading,
@@ -136,13 +175,23 @@ export default function AdminAccessManagement() {
   ] = useState(false);
 
   const [
-    isLoadingProfile,
-    setIsLoadingProfile,
+    isLoadingRole,
+    setIsLoadingRole,
   ] = useState(false);
 
   const [
     isSaving,
     setIsSaving,
+  ] = useState(false);
+
+  const [
+    isChangingStatus,
+    setIsChangingStatus,
+  ] = useState(false);
+
+  const [
+    isDeleting,
+    setIsDeleting,
   ] = useState(false);
 
   const [
@@ -160,54 +209,66 @@ export default function AdminAccessManagement() {
     setOriginalSnapshot,
   ] = useState("");
 
-  /*
-   * Every profile request receives an incrementing ID.
-   *
-   * This prevents an older request from overwriting a newer
-   * profile selection if the user changes profiles quickly.
-   */
-  const profileRequestIdRef =
+  const roleRequestIdRef =
     useRef(0);
 
-  const selectedProfile =
+  const selectedRole =
     useMemo(
       () =>
-        profiles.find(
-          (profile) =>
-            profile.id ===
-            selectedProfileId,
+        roles.find(
+          (role) =>
+            role.id ===
+            selectedRoleId,
         ) ?? null,
       [
-        profiles,
-        selectedProfileId,
+        roles,
+        selectedRoleId,
       ],
     );
 
-  const groupedPermissions =
+  const allPermissions =
     useMemo(
       () =>
-        groupPermissions(
-          permissions,
+        permissionGroups.flatMap(
+          (group) =>
+            group.permissions,
         ),
-      [permissions],
+      [permissionGroups],
     );
 
-  const filteredProfiles =
+  const filteredRoles =
     useMemo(() => {
       const query =
         search
           .trim()
           .toLowerCase();
 
-      if (!query) {
-        return profiles;
-      }
+      return roles.filter(
+        (role) => {
+          if (
+            statusFilter ===
+              "active" &&
+            !role.is_active
+          ) {
+            return false;
+          }
 
-      return profiles.filter(
-        (profile) => {
+          if (
+            statusFilter ===
+              "inactive" &&
+            role.is_active
+          ) {
+            return false;
+          }
+
+          if (!query) {
+            return true;
+          }
+
           return [
-            profile.name,
-            profile.description ?? "",
+            role.name,
+            role.code,
+            role.description ?? "",
           ].some((value) =>
             value
               .toLowerCase()
@@ -216,8 +277,9 @@ export default function AdminAccessManagement() {
         },
       );
     }, [
-      profiles,
+      roles,
       search,
+      statusFilter,
     ]);
 
   const isCreating =
@@ -229,39 +291,38 @@ export default function AdminAccessManagement() {
       originalSnapshot;
 
   const enabledPermissionCount =
-    form.permissions.length;
+    form.permissionIds.length;
 
-  const activeProfileCount =
+  const activeRoleCount =
     useMemo(
       () =>
-        profiles.filter(
-          (profile) =>
-            profile.is_active,
+        roles.filter(
+          (role) =>
+            role.is_active,
         ).length,
-      [profiles],
+      [roles],
     );
 
-  const systemProfileCount =
+  const systemRoleCount =
     useMemo(
       () =>
-        profiles.filter(
-          (profile) =>
-            profile.is_system,
+        roles.filter(
+          (role) =>
+            role.is_system,
         ).length,
-      [profiles],
+      [roles],
     );
 
-  /*
-   * IMPORTANT:
-   *
-   * selectedProfileId is deliberately NOT a dependency of this
-   * callback.
-   *
-   * Previously changing selectedProfileId recreated loadProfiles(),
-   * which retriggered the loading useEffect and selected the first
-   * profile again.
-   */
-  const loadProfiles =
+  const canEditCurrentRole =
+    isCreating
+      ? canCreate
+      : canUpdate;
+
+  const permissionsLocked =
+    !canEditCurrentRole ||
+    form.isAdministrator;
+
+  const loadRoles =
     useCallback(
       async (
         options?: {
@@ -270,7 +331,7 @@ export default function AdminAccessManagement() {
           selectedId?: number | null;
         },
       ) => {
-        if (!canManageAccess) {
+        if (!canRead) {
           return;
         }
 
@@ -290,14 +351,21 @@ export default function AdminAccessManagement() {
 
         try {
           const result =
-            await getAdminPermissionProfiles();
+            await getAdminRoles({
+              status: "all",
+            });
 
-          setProfiles(
-            result.profiles,
+          const sortedRoles =
+            [...result.roles].sort(
+              sortRoles,
+            );
+
+          setRoles(
+            sortedRoles,
           );
 
-          setPermissions(
-            result.permissions,
+          setPermissionGroups(
+            result.permissions ?? [],
           );
 
           const requestedSelectedId =
@@ -310,66 +378,39 @@ export default function AdminAccessManagement() {
               null
           ) {
             const current =
-              result.profiles.find(
-                (profile) =>
-                  profile.id ===
+              sortedRoles.find(
+                (role) =>
+                  role.id ===
                   requestedSelectedId,
               );
 
             if (current) {
-              const nextForm =
-                profileToForm(
-                  current,
-                );
-
-              setSelectedProfileId(
-                current.id,
-              );
-
-              setForm(
-                nextForm,
-              );
-
-              setOriginalSnapshot(
-                snapshotForm(
-                  nextForm,
-                ),
+              await loadRole(
+                current,
+                result.permissions ??
+                  [],
               );
 
               return;
             }
           }
 
-          const firstProfile =
-            result.profiles[0];
+          const firstRole =
+            sortedRoles[0];
 
-          if (firstProfile) {
-            setSelectedProfileId(
-              firstProfile.id,
-            );
-
-            const nextForm =
-              profileToForm(
-                firstProfile,
-              );
-
-            setForm(
-              nextForm,
-            );
-
-            setOriginalSnapshot(
-              snapshotForm(
-                nextForm,
-              ),
+          if (firstRole) {
+            await loadRole(
+              firstRole,
+              result.permissions ??
+                [],
             );
           } else {
-            const nextForm: ProfileForm =
-              {
-                ...EMPTY_FORM,
-                permissions: [],
-              };
+            const nextForm = {
+              ...EMPTY_FORM,
+              permissionIds: [],
+            };
 
-            setSelectedProfileId(
+            setSelectedRoleId(
               null,
             );
 
@@ -387,7 +428,7 @@ export default function AdminAccessManagement() {
           setErrorText(
             getErrorMessage(
               error,
-              "Could not load access management.",
+              "Could not load role management.",
             ),
           );
         } finally {
@@ -400,9 +441,123 @@ export default function AdminAccessManagement() {
           );
         }
       },
-      [
-        canManageAccess,
-      ],
+      [canRead],
+    );
+
+  const loadRole =
+    useCallback(
+      async (
+        role: AdminRole,
+        fallbackGroups?:
+          AdminRolePermissionGroup[],
+      ) => {
+        const requestId =
+          ++roleRequestIdRef.current;
+
+        setSelectedRoleId(
+          role.id,
+        );
+
+        setErrorText("");
+        setSuccessText("");
+
+        setIsLoadingRole(
+          true,
+        );
+
+        const immediateForm =
+          roleToForm(
+            role,
+          );
+
+        setForm(
+          immediateForm,
+        );
+
+        setOriginalSnapshot(
+          snapshotForm(
+            immediateForm,
+          ),
+        );
+
+        try {
+          const result =
+            await getAdminRole(
+              role.id,
+            );
+
+          if (
+            requestId !==
+            roleRequestIdRef.current
+          ) {
+            return;
+          }
+
+          setPermissionGroups(
+            result.permissions ??
+              fallbackGroups ??
+              [],
+          );
+
+          setRoles(
+            (current) =>
+              current
+                .map(
+                  (item) =>
+                    item.id ===
+                    result.role.id
+                      ? result.role
+                      : item,
+                )
+                .sort(
+                  sortRoles,
+                ),
+          );
+
+          const nextForm =
+            roleToForm(
+              result.role,
+            );
+
+          setSelectedRoleId(
+            result.role.id,
+          );
+
+          setForm(
+            nextForm,
+          );
+
+          setOriginalSnapshot(
+            snapshotForm(
+              nextForm,
+            ),
+          );
+        } catch (error) {
+          if (
+            requestId !==
+            roleRequestIdRef.current
+          ) {
+            return;
+          }
+
+          setErrorText(
+            getErrorMessage(
+              error,
+              "Could not load this role.",
+            ),
+          );
+        } finally {
+          if (
+            requestId ===
+            roleRequestIdRef.current
+          ) {
+            setIsLoadingRole(
+              false,
+            );
+          }
+        }
+      },
+      [],
     );
 
   useEffect(() => {
@@ -434,7 +589,7 @@ export default function AdminAccessManagement() {
       return;
     }
 
-    if (!canManageAccess) {
+    if (!canRead) {
       navigate(
         "/admin/dashboard",
         {
@@ -446,7 +601,7 @@ export default function AdminAccessManagement() {
     isAuthLoading,
     isAuthenticated,
     canAccessWebsiteAdmin,
-    canManageAccess,
+    canRead,
     navigate,
   ]);
 
@@ -455,18 +610,18 @@ export default function AdminAccessManagement() {
       isAuthLoading ||
       !isAuthenticated ||
       !canAccessWebsiteAdmin ||
-      !canManageAccess
+      !canRead
     ) {
       return;
     }
 
-    void loadProfiles();
+    void loadRoles();
   }, [
     isAuthLoading,
     isAuthenticated,
     canAccessWebsiteAdmin,
-    canManageAccess,
-    loadProfiles,
+    canRead,
+    loadRoles,
   ]);
 
   useEffect(() => {
@@ -501,17 +656,16 @@ export default function AdminAccessManagement() {
     }
 
     return window.confirm(
-      "You have unsaved access changes. Discard them?",
+      "You have unsaved role changes. Discard them?",
     );
   }
 
-  async function selectProfile(
-    profile:
-      AdminPermissionProfile,
+  async function selectRole(
+    role: AdminRole,
   ) {
     if (
-      profile.id ===
-      selectedProfileId
+      role.id ===
+      selectedRoleId
     ) {
       return;
     }
@@ -520,133 +674,33 @@ export default function AdminAccessManagement() {
       return;
     }
 
-    const requestId =
-      ++profileRequestIdRef.current;
-
-    setSelectedProfileId(
-      profile.id,
+    await loadRole(
+      role,
     );
-
-    setErrorText("");
-    setSuccessText("");
-
-    setIsLoadingProfile(
-      true,
-    );
-
-    const immediateForm =
-      profileToForm(
-        profile,
-      );
-
-    setForm(
-      immediateForm,
-    );
-
-    setOriginalSnapshot(
-      snapshotForm(
-        immediateForm,
-      ),
-    );
-
-    try {
-      const result =
-        await getAdminPermissionProfile(
-          profile.id,
-        );
-
-      /*
-       * Ignore this response when another profile request
-       * has been started after it.
-       */
-      if (
-        requestId !==
-        profileRequestIdRef.current
-      ) {
-        return;
-      }
-
-      setPermissions(
-        result.permissions,
-      );
-
-      setProfiles(
-        (current) =>
-          current.map(
-            (item) =>
-              item.id ===
-              result.profile.id
-                ? result.profile
-                : item,
-          ),
-      );
-
-      const nextForm =
-        profileToForm(
-          result.profile,
-        );
-
-      setSelectedProfileId(
-        result.profile.id,
-      );
-
-      setForm(
-        nextForm,
-      );
-
-      setOriginalSnapshot(
-        snapshotForm(
-          nextForm,
-        ),
-      );
-    } catch (error) {
-      if (
-        requestId !==
-        profileRequestIdRef.current
-      ) {
-        return;
-      }
-
-      setErrorText(
-        getErrorMessage(
-          error,
-          "Could not load this permission profile.",
-        ),
-      );
-    } finally {
-      if (
-        requestId ===
-        profileRequestIdRef.current
-      ) {
-        setIsLoadingProfile(
-          false,
-        );
-      }
-    }
   }
 
   function startCreate() {
+    if (!canCreate) {
+      return;
+    }
+
     if (!confirmDiscard()) {
       return;
     }
 
-    /*
-     * Invalidate any currently running profile request so an old
-     * response cannot replace the new-profile form.
-     */
-    ++profileRequestIdRef.current;
+    ++roleRequestIdRef.current;
 
-    setIsLoadingProfile(
+    setIsLoadingRole(
       false,
     );
 
-    const nextForm: ProfileForm =
+    const nextForm: RoleForm =
       {
         ...EMPTY_FORM,
-        permissions: [],
+        permissionIds: [],
       };
 
-    setSelectedProfileId(
+    setSelectedRoleId(
       null,
     );
 
@@ -664,9 +718,10 @@ export default function AdminAccessManagement() {
     setSuccessText("");
   }
 
-  function duplicateProfile() {
+  function duplicateRole() {
     if (
-      !selectedProfile
+      !selectedRole ||
+      !canCreate
     ) {
       return;
     }
@@ -675,33 +730,44 @@ export default function AdminAccessManagement() {
       return;
     }
 
-    ++profileRequestIdRef.current;
+    ++roleRequestIdRef.current;
 
-    setIsLoadingProfile(
+    setIsLoadingRole(
       false,
     );
 
-    const nextForm: ProfileForm =
+    const nextForm: RoleForm =
       {
         id: null,
 
         name:
-          `${selectedProfile.name} Copy`,
+          `${selectedRole.name} Copy`,
+
+        code: "",
 
         description:
-          selectedProfile.description ??
+          selectedRole.description ??
           "",
 
         isActive: true,
         isSystem: false,
+        isAdministrator: false,
 
-        permissions:
+        permissionIds:
           [
-            ...selectedProfile.permissions,
-          ],
+            ...(selectedRole.permission_ids ??
+              []),
+          ].sort(
+            (
+              first,
+              second,
+            ) =>
+              first -
+              second,
+          ),
       };
 
-    setSelectedProfileId(
+    setSelectedRoleId(
       null,
     );
 
@@ -709,10 +775,6 @@ export default function AdminAccessManagement() {
       nextForm,
     );
 
-    /*
-     * Intentionally compare the duplicate against EMPTY_FORM so
-     * the duplicated profile is immediately considered unsaved.
-     */
     setOriginalSnapshot(
       snapshotForm(
         EMPTY_FORM,
@@ -724,29 +786,42 @@ export default function AdminAccessManagement() {
   }
 
   function togglePermission(
-    permissionKey: string,
+    permissionId: number,
   ) {
+    if (
+      permissionsLocked
+    ) {
+      return;
+    }
+
     setForm(
       (current) => {
         const exists =
-          current.permissions.includes(
-            permissionKey,
+          current.permissionIds.includes(
+            permissionId,
           );
 
         return {
           ...current,
 
-          permissions:
+          permissionIds:
             exists
-              ? current.permissions.filter(
-                  (key) =>
-                    key !==
-                    permissionKey,
+              ? current.permissionIds.filter(
+                  (id) =>
+                    id !==
+                    permissionId,
                 )
               : [
-                  ...current.permissions,
-                  permissionKey,
-                ].sort(),
+                  ...current.permissionIds,
+                  permissionId,
+                ].sort(
+                  (
+                    first,
+                    second,
+                  ) =>
+                    first -
+                    second,
+                ),
         };
       },
     );
@@ -754,14 +829,20 @@ export default function AdminAccessManagement() {
 
   function setGroupPermissions(
     group:
-      PermissionGroup,
+      AdminRolePermissionGroup,
     enabled: boolean,
   ) {
+    if (
+      permissionsLocked
+    ) {
+      return;
+    }
+
     setForm(
       (current) => {
         const currentSet =
           new Set(
-            current.permissions,
+            current.permissionIds,
           );
 
         for (
@@ -770,11 +851,11 @@ export default function AdminAccessManagement() {
         ) {
           if (enabled) {
             currentSet.add(
-              permission.key,
+              permission.id,
             );
           } else {
             currentSet.delete(
-              permission.key,
+              permission.id,
             );
           }
         }
@@ -782,10 +863,17 @@ export default function AdminAccessManagement() {
         return {
           ...current,
 
-          permissions:
+          permissionIds:
             Array.from(
               currentSet,
-            ).sort(),
+            ).sort(
+              (
+                first,
+                second,
+              ) =>
+                first -
+                second,
+            ),
         };
       },
     );
@@ -794,18 +882,31 @@ export default function AdminAccessManagement() {
   function setAllPermissions(
     enabled: boolean,
   ) {
+    if (
+      permissionsLocked
+    ) {
+      return;
+    }
+
     setForm(
       (current) => ({
         ...current,
 
-        permissions:
+        permissionIds:
           enabled
-            ? permissions
+            ? allPermissions
                 .map(
                   (permission) =>
-                    permission.key,
+                    permission.id,
                 )
-                .sort()
+                .sort(
+                  (
+                    first,
+                    second,
+                  ) =>
+                    first -
+                    second,
+                )
             : [],
       }),
     );
@@ -815,10 +916,10 @@ export default function AdminAccessManagement() {
     if (
       form.id === null
     ) {
-      const nextForm: ProfileForm =
+      const nextForm: RoleForm =
         {
           ...EMPTY_FORM,
-          permissions: [],
+          permissionIds: [],
         };
 
       setForm(
@@ -834,20 +935,20 @@ export default function AdminAccessManagement() {
       return;
     }
 
-    const profile =
-      profiles.find(
+    const role =
+      roles.find(
         (item) =>
           item.id ===
           form.id,
       );
 
-    if (!profile) {
+    if (!role) {
       return;
     }
 
     const nextForm =
-      profileToForm(
-        profile,
+      roleToForm(
+        role,
       );
 
     setForm(
@@ -866,6 +967,20 @@ export default function AdminAccessManagement() {
   ) {
     event.preventDefault();
 
+    if (
+      isCreating &&
+      !canCreate
+    ) {
+      return;
+    }
+
+    if (
+      !isCreating &&
+      !canUpdate
+    ) {
+      return;
+    }
+
     setErrorText("");
     setSuccessText("");
 
@@ -874,7 +989,7 @@ export default function AdminAccessManagement() {
 
     if (!name) {
       setErrorText(
-        "Enter a profile name.",
+        "Enter a role name.",
       );
 
       return;
@@ -885,14 +1000,14 @@ export default function AdminAccessManagement() {
     );
 
     try {
-      let savedProfile:
-        AdminPermissionProfile;
+      let savedRole:
+        AdminRole;
 
       if (
         form.id === null
       ) {
-        savedProfile =
-          await createAdminPermissionProfile(
+        savedRole =
+          await createAdminRole(
             {
               name,
 
@@ -902,17 +1017,17 @@ export default function AdminAccessManagement() {
               is_active:
                 form.isActive,
 
-              permissions:
-                form.permissions,
+              permission_ids:
+                form.permissionIds,
             },
           );
 
         setSuccessText(
-          "Permission profile created successfully.",
+          "Role created successfully.",
         );
       } else {
-        savedProfile =
-          await updateAdminPermissionProfile(
+        savedRole =
+          await updateAdminRole(
             form.id,
             {
               name,
@@ -920,55 +1035,52 @@ export default function AdminAccessManagement() {
               description:
                 form.description,
 
-              is_active:
-                form.isActive,
-
-              permissions:
-                form.permissions,
+              permission_ids:
+                form.permissionIds,
             },
           );
 
         setSuccessText(
-          "Access permissions saved successfully.",
+          "Role permissions saved successfully.",
         );
       }
 
-      setProfiles(
+      setRoles(
         (current) => {
           const exists =
             current.some(
-              (profile) =>
-                profile.id ===
-                savedProfile.id,
+              (role) =>
+                role.id ===
+                savedRole.id,
             );
 
           const next =
             exists
               ? current.map(
-                  (profile) =>
-                    profile.id ===
-                    savedProfile.id
-                      ? savedProfile
-                      : profile,
+                  (role) =>
+                    role.id ===
+                    savedRole.id
+                      ? savedRole
+                      : role,
                 )
               : [
                   ...current,
-                  savedProfile,
+                  savedRole,
                 ];
 
           return next.sort(
-            sortProfiles,
+            sortRoles,
           );
         },
       );
 
-      setSelectedProfileId(
-        savedProfile.id,
+      setSelectedRoleId(
+        savedRole.id,
       );
 
       const nextForm =
-        profileToForm(
-          savedProfile,
+        roleToForm(
+          savedRole,
         );
 
       setForm(
@@ -984,11 +1096,216 @@ export default function AdminAccessManagement() {
       setErrorText(
         getErrorMessage(
           error,
-          "Could not save this permission profile.",
+          "Could not save this role.",
         ),
       );
     } finally {
       setIsSaving(
+        false,
+      );
+    }
+  }
+
+  async function handleStatusChange() {
+    if (
+      !selectedRole ||
+      !canUpdate ||
+      isChangingStatus
+    ) {
+      return;
+    }
+
+    if (
+      selectedRole.is_administrator
+    ) {
+      return;
+    }
+
+    if (
+      selectedRole.code ===
+      "customer"
+    ) {
+      return;
+    }
+
+    if (!confirmDiscard()) {
+      return;
+    }
+
+    const action =
+      selectedRole.is_active
+        ? "deactivate"
+        : "activate";
+
+    const confirmed =
+      window.confirm(
+        `Are you sure you want to ${action} the "${selectedRole.name}" role?`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setErrorText("");
+    setSuccessText("");
+
+    setIsChangingStatus(
+      true,
+    );
+
+    try {
+      const updated =
+        selectedRole.is_active
+          ? await deactivateAdminRole(
+              selectedRole.id,
+            )
+          : await activateAdminRole(
+              selectedRole.id,
+            );
+
+      setRoles(
+        (current) =>
+          current
+            .map(
+              (role) =>
+                role.id ===
+                updated.id
+                  ? {
+                      ...role,
+                      ...updated,
+                    }
+                  : role,
+            )
+            .sort(
+              sortRoles,
+            ),
+      );
+
+      const nextForm =
+        roleToForm({
+          ...selectedRole,
+          ...updated,
+        });
+
+      setForm(
+        nextForm,
+      );
+
+      setOriginalSnapshot(
+        snapshotForm(
+          nextForm,
+        ),
+      );
+
+      setSuccessText(
+        updated.is_active
+          ? "Role activated successfully."
+          : "Role deactivated successfully.",
+      );
+    } catch (error) {
+      setErrorText(
+        getErrorMessage(
+          error,
+          `Could not ${action} this role.`,
+        ),
+      );
+    } finally {
+      setIsChangingStatus(
+        false,
+      );
+    }
+  }
+
+  async function handleDelete() {
+    if (
+      !selectedRole ||
+      !canDelete ||
+      selectedRole.is_system ||
+      isDeleting
+    ) {
+      return;
+    }
+
+    if (!confirmDiscard()) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Delete the "${selectedRole.name}" role?\n\nThis cannot be undone.`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setErrorText("");
+    setSuccessText("");
+
+    setIsDeleting(
+      true,
+    );
+
+    try {
+      await deleteAdminRole(
+        selectedRole.id,
+      );
+
+      const remainingRoles =
+        roles
+          .filter(
+            (role) =>
+              role.id !==
+              selectedRole.id,
+          )
+          .sort(
+            sortRoles,
+          );
+
+      setRoles(
+        remainingRoles,
+      );
+
+      setSuccessText(
+        "Role deleted successfully.",
+      );
+
+      const nextRole =
+        remainingRoles[0];
+
+      if (nextRole) {
+        await loadRole(
+          nextRole,
+        );
+      } else {
+        const nextForm = {
+          ...EMPTY_FORM,
+          permissionIds: [],
+        };
+
+        setSelectedRoleId(
+          null,
+        );
+
+        setForm(
+          nextForm,
+        );
+
+        setOriginalSnapshot(
+          snapshotForm(
+            nextForm,
+          ),
+        );
+      }
+    } catch (error) {
+      setErrorText(
+        getErrorMessage(
+          error,
+          "Could not delete this role.",
+        ),
+      );
+    } finally {
+      setIsDeleting(
         false,
       );
     }
@@ -1007,7 +1324,7 @@ export default function AdminAccessManagement() {
   if (
     !isAuthenticated ||
     !canAccessWebsiteAdmin ||
-    !canManageAccess
+    !canRead
   ) {
     return null;
   }
@@ -1035,13 +1352,15 @@ export default function AdminAccessManagement() {
               </p>
 
               <h1 className="mt-2 text-4xl font-semibold tracking-[-0.045em] text-brand-ink sm:text-5xl">
-                Access management
+                Role management
               </h1>
 
               <p className="mt-2.5 max-w-2xl text-sm leading-6 text-brand-ink/58 sm:text-[15px]">
-                Configure reusable permission
-                profiles for website administration,
-                ERP and POS access.
+                Create staff roles and
+                control the exact website
+                administration, ERP and POS
+                permissions granted to each
+                role.
               </p>
             </div>
 
@@ -1049,12 +1368,12 @@ export default function AdminAccessManagement() {
               <button
                 type="button"
                 onClick={() =>
-                  void loadProfiles({
+                  void loadRoles({
                     refreshing: true,
                     preserveSelection:
                       true,
                     selectedId:
-                      selectedProfileId,
+                      selectedRoleId,
                   })
                 }
                 disabled={
@@ -1077,19 +1396,23 @@ export default function AdminAccessManagement() {
                 </span>
               </button>
 
-              <button
-                type="button"
-                onClick={
-                  startCreate
-                }
-                disabled={
-                  isSaving
-                }
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-brand-ink px-5 text-sm font-semibold text-brand-bg shadow-[0_10px_24px_rgba(55,38,25,0.15)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(55,38,25,0.2)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
-              >
-                <Plus size={17} />
-                New profile
-              </button>
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={
+                    startCreate
+                  }
+                  disabled={
+                    isSaving
+                  }
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-brand-ink px-5 text-sm font-semibold text-brand-bg shadow-[0_10px_24px_rgba(55,38,25,0.15)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(55,38,25,0.2)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                >
+                  <Plus
+                    size={17}
+                  />
+                  New role
+                </button>
+              )}
             </div>
           </div>
         </header>
@@ -1134,9 +1457,9 @@ export default function AdminAccessManagement() {
                 />
               }
               value={
-                profiles.length
+                roles.length
               }
-              label="Profiles"
+              label="Roles"
             />
 
             <Metric
@@ -1146,9 +1469,21 @@ export default function AdminAccessManagement() {
                 />
               }
               value={
-                activeProfileCount
+                activeRoleCount
               }
               label="Active"
+            />
+
+            <Metric
+              icon={
+                <KeyRound
+                  size={18}
+                />
+              }
+              value={
+                allPermissions.length
+              }
+              label="Permissions"
             />
 
             <Metric
@@ -1158,21 +1493,9 @@ export default function AdminAccessManagement() {
                 />
               }
               value={
-                permissions.length
+                systemRoleCount
               }
-              label="Permissions"
-            />
-
-            <Metric
-              icon={
-                <Sparkles
-                  size={18}
-                />
-              }
-              value={
-                systemProfileCount
-              }
-              label="System profiles"
+              label="System roles"
               last
             />
           </div>
@@ -1181,7 +1504,7 @@ export default function AdminAccessManagement() {
         {isLoading ? (
           <div className="mt-6 overflow-hidden rounded-[1.4rem] border border-brand-ink/10 bg-white/50 shadow-sm backdrop-blur">
             <LoadingState
-              text="Loading access profiles..."
+              text="Loading roles..."
             />
           </div>
         ) : (
@@ -1191,16 +1514,16 @@ export default function AdminAccessManagement() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-brand-ink/30">
-                      Access profiles
+                      Access roles
                     </p>
 
                     <h2 className="mt-1 text-lg font-semibold tracking-[-0.025em] text-brand-ink">
-                      Permission sets
+                      Roles
                     </h2>
                   </div>
 
                   <span className="rounded-full border border-brand-ink/10 bg-white/55 px-2.5 py-1 text-[10px] font-semibold text-brand-ink/45">
-                    {profiles.length}
+                    {roles.length}
                   </span>
                 </div>
 
@@ -1223,7 +1546,7 @@ export default function AdminAccessManagement() {
                           .value,
                       )
                     }
-                    placeholder="Search profiles..."
+                    placeholder="Search roles..."
                     className="h-10 w-full rounded-xl border border-brand-ink/10 bg-white/60 pl-9 pr-9 text-xs font-medium text-brand-ink outline-none transition placeholder:text-brand-ink/28 focus:border-brand-ink/25 focus:bg-white focus:ring-2 focus:ring-brand-ink/[0.055]"
                   />
 
@@ -1246,10 +1569,45 @@ export default function AdminAccessManagement() {
                     </button>
                   )}
                 </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl border border-brand-ink/[0.07] bg-brand-ink/[0.025] p-1">
+                  {(
+                    [
+                      "all",
+                      "active",
+                      "inactive",
+                    ] as const
+                  ).map(
+                    (status) => (
+                      <button
+                        key={
+                          status
+                        }
+                        type="button"
+                        onClick={() =>
+                          setStatusFilter(
+                            status,
+                          )
+                        }
+                        className={[
+                          "h-8 rounded-lg text-[9px] font-bold uppercase tracking-[0.07em] transition",
+                          statusFilter ===
+                          status
+                            ? "bg-white text-brand-ink shadow-sm"
+                            : "text-brand-ink/35 hover:text-brand-ink/60",
+                        ].join(
+                          " ",
+                        )}
+                      >
+                        {status}
+                      </button>
+                    ),
+                  )}
+                </div>
               </div>
 
               <div className="max-h-[640px] overflow-y-auto p-2">
-                {filteredProfiles.length ===
+                {filteredRoles.length ===
                 0 ? (
                   <div className="px-4 py-10 text-center">
                     <Shield
@@ -1260,29 +1618,26 @@ export default function AdminAccessManagement() {
                     />
 
                     <p className="mt-3 text-xs font-semibold text-brand-ink/55">
-                      No profiles
-                      found
+                      No roles found
                     </p>
                   </div>
                 ) : (
-                  filteredProfiles.map(
-                    (
-                      profile,
-                    ) => (
-                      <ProfileListItem
+                  filteredRoles.map(
+                    (role) => (
+                      <RoleListItem
                         key={
-                          profile.id
+                          role.id
                         }
-                        profile={
-                          profile
+                        role={
+                          role
                         }
                         selected={
-                          profile.id ===
-                          selectedProfileId
+                          role.id ===
+                          selectedRoleId
                         }
                         onClick={() =>
-                          void selectProfile(
-                            profile,
+                          void selectRole(
+                            role,
                           )
                         }
                       />
@@ -1291,21 +1646,22 @@ export default function AdminAccessManagement() {
                 )}
               </div>
 
-              <div className="border-t border-brand-ink/10 p-3">
-                <button
-                  type="button"
-                  onClick={
-                    startCreate
-                  }
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-brand-ink/15 px-3 py-2.5 text-xs font-semibold text-brand-ink/50 transition hover:border-brand-ink/25 hover:bg-white/55 hover:text-brand-ink"
-                >
-                  <Plus
-                    size={14}
-                  />
-                  Create permission
-                  profile
-                </button>
-              </div>
+              {canCreate && (
+                <div className="border-t border-brand-ink/10 p-3">
+                  <button
+                    type="button"
+                    onClick={
+                      startCreate
+                    }
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-brand-ink/15 px-3 py-2.5 text-xs font-semibold text-brand-ink/50 transition hover:border-brand-ink/25 hover:bg-white/55 hover:text-brand-ink"
+                  >
+                    <Plus
+                      size={14}
+                    />
+                    Create role
+                  </button>
+                </div>
+              )}
             </aside>
 
             <main className="min-w-0">
@@ -1321,8 +1677,8 @@ export default function AdminAccessManagement() {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-[9px] font-semibold uppercase tracking-[0.19em] text-brand-ink/32">
                           {isCreating
-                            ? "New access profile"
-                            : "Permission profile"}
+                            ? "New role"
+                            : "Access role"}
                         </p>
 
                         {form.isSystem && (
@@ -1336,6 +1692,17 @@ export default function AdminAccessManagement() {
                           </span>
                         )}
 
+                        {form.isAdministrator && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-brand-ink/10 bg-brand-ink px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-brand-bg">
+                            <ShieldCheck
+                              size={
+                                9
+                              }
+                            />
+                            Administrator
+                          </span>
+                        )}
+
                         {isDirty && (
                           <span className="rounded-full border border-amber-200/70 bg-amber-50/70 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-amber-700">
                             Unsaved
@@ -1346,7 +1713,7 @@ export default function AdminAccessManagement() {
                       <h2 className="mt-1.5 truncate text-2xl font-semibold tracking-[-0.035em] text-brand-ink">
                         {isCreating
                           ? form.name ||
-                            "Create profile"
+                            "Create role"
                           : form.name}
                       </h2>
 
@@ -1363,7 +1730,7 @@ export default function AdminAccessManagement() {
                         </span>
 
                         {!isCreating &&
-                          selectedProfile && (
+                          selectedRole && (
                             <>
                               <span className="h-1 w-1 rounded-full bg-brand-ink/20" />
 
@@ -1375,10 +1742,10 @@ export default function AdminAccessManagement() {
                                 />
 
                                 {
-                                  selectedProfile.users_count
+                                  selectedRole.users_count
                                 }{" "}
                                 user
-                                {selectedProfile.users_count ===
+                                {selectedRole.users_count ===
                                 1
                                   ? ""
                                   : "s"}
@@ -1393,47 +1760,96 @@ export default function AdminAccessManagement() {
                             ? "Active"
                             : "Inactive"}
                         </span>
+
+                        {form.code && (
+                          <>
+                            <span className="h-1 w-1 rounded-full bg-brand-ink/20" />
+
+                            <span className="font-mono text-[10px]">
+                              {
+                                form.code
+                              }
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
 
                     {!isCreating &&
-                      selectedProfile && (
-                        <button
-                          type="button"
-                          onClick={
-                            duplicateProfile
-                          }
-                          disabled={
-                            isSaving
-                          }
-                          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-brand-ink/10 bg-white/55 px-3 text-xs font-semibold text-brand-ink/55 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink disabled:opacity-40"
-                        >
-                          <Copy
-                            size={
-                              13
-                            }
-                          />
-                          Duplicate
-                        </button>
+                      selectedRole && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {canCreate && (
+                            <button
+                              type="button"
+                              onClick={
+                                duplicateRole
+                              }
+                              disabled={
+                                isSaving
+                              }
+                              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-brand-ink/10 bg-white/55 px-3 text-xs font-semibold text-brand-ink/55 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink disabled:opacity-40"
+                            >
+                              <Copy
+                                size={
+                                  13
+                                }
+                              />
+                              Duplicate
+                            </button>
+                          )}
+
+                          {canDelete &&
+                            !selectedRole.is_system && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleDelete()
+                                }
+                                disabled={
+                                  isDeleting ||
+                                  selectedRole.users_count >
+                                    0
+                                }
+                                className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-red-200/70 bg-red-50/60 px-3 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {isDeleting ? (
+                                  <RefreshCw
+                                    size={
+                                      13
+                                    }
+                                    className="animate-spin"
+                                  />
+                                ) : (
+                                  <Trash2
+                                    size={
+                                      13
+                                    }
+                                  />
+                                )}
+
+                                Delete
+                              </button>
+                            )}
+                        </div>
                       )}
                   </div>
                 </div>
 
-                {isLoadingProfile ? (
+                {isLoadingRole ? (
                   <LoadingState
-                    text="Loading profile..."
+                    text="Loading role..."
                   />
                 ) : (
                   <>
                     <div className="px-5 py-6 sm:px-6">
                       <FormSection
-                        eyebrow="Profile"
-                        title="Profile details"
-                        description="Give this reusable access profile a clear name and description."
+                        eyebrow="Role"
+                        title="Role details"
+                        description="Define the staff role and the capabilities assigned to every user with this role."
                       >
                         <div className="grid gap-4 lg:grid-cols-2">
                           <Field
-                            label="Profile name"
+                            label="Role name"
                             required
                           >
                             <input
@@ -1441,7 +1857,7 @@ export default function AdminAccessManagement() {
                                 form.name
                               }
                               disabled={
-                                form.isSystem
+                                !canEditCurrentRole
                               }
                               onChange={(
                                 event,
@@ -1464,56 +1880,20 @@ export default function AdminAccessManagement() {
                             />
                           </Field>
 
-                          <div className="flex items-end">
-                            <div
-                              className={[
-                                "flex min-h-11 w-full items-center justify-between gap-4 rounded-2xl border px-3.5 py-2.5",
-                                form.isActive
-                                  ? "border-brand-ink/10 bg-white/50"
-                                  : "border-red-100 bg-red-50/45",
-                                form.isSystem
-                                  ? "opacity-65"
-                                  : "",
-                              ].join(
-                                " ",
-                              )}
-                            >
-                              <div>
-                                <p className="text-xs font-semibold text-brand-ink/70">
-                                  Profile
-                                  active
-                                </p>
-
-                                <p className="mt-0.5 text-[10px] text-brand-ink/38">
-                                  {form.isSystem
-                                    ? "System profiles remain active."
-                                    : "Inactive profiles are not used for active profile access."}
-                                </p>
-                              </div>
-
-                              <Toggle
-                                checked={
-                                  form.isActive
-                                }
-                                disabled={
-                                  form.isSystem
-                                }
-                                onChange={(
-                                  checked,
-                                ) =>
-                                  setForm(
-                                    (
-                                      current,
-                                    ) => ({
-                                      ...current,
-                                      isActive:
-                                        checked,
-                                    }),
-                                  )
-                                }
-                              />
-                            </div>
-                          </div>
+                          <Field label="Role code">
+                            <input
+                              value={
+                                form.code ||
+                                (isCreating
+                                  ? "Generated automatically"
+                                  : "")
+                              }
+                              disabled
+                              className={
+                                fieldClassName
+                              }
+                            />
+                          </Field>
                         </div>
 
                         <div className="mt-4">
@@ -1521,6 +1901,9 @@ export default function AdminAccessManagement() {
                             <textarea
                               value={
                                 form.description
+                              }
+                              disabled={
+                                !canEditCurrentRole
                               }
                               onChange={(
                                 event,
@@ -1538,16 +1921,84 @@ export default function AdminAccessManagement() {
                                 )
                               }
                               className={`${fieldClassName} min-h-[88px] resize-y py-3`}
-                              placeholder="Explain who should receive this access profile..."
+                              placeholder="Explain who should receive this role..."
                             />
                           </Field>
                         </div>
+
+                        {!isCreating &&
+                          selectedRole &&
+                          canUpdate && (
+                            <div className="mt-4">
+                              <div
+                                className={[
+                                  "flex items-center justify-between gap-4 rounded-2xl border px-4 py-3.5",
+                                  selectedRole.is_active
+                                    ? "border-brand-ink/10 bg-white/50"
+                                    : "border-red-100 bg-red-50/45",
+                                ].join(
+                                  " ",
+                                )}
+                              >
+                                <div>
+                                  <p className="text-xs font-semibold text-brand-ink/70">
+                                    Role status
+                                  </p>
+
+                                  <p className="mt-0.5 text-[10px] leading-4 text-brand-ink/38">
+                                    {selectedRole.is_administrator
+                                      ? "The Administrator role cannot be deactivated."
+                                      : selectedRole.code ===
+                                          "customer"
+                                        ? "The Customer role cannot be deactivated."
+                                        : selectedRole.is_active
+                                          ? "Users assigned to this role currently receive its permissions."
+                                          : "This role is inactive and does not grant access."}
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleStatusChange()
+                                  }
+                                  disabled={
+                                    isChangingStatus ||
+                                    selectedRole.is_administrator ||
+                                    selectedRole.code ===
+                                      "customer"
+                                  }
+                                  className={[
+                                    "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-3 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40",
+                                    selectedRole.is_active
+                                      ? "border-red-200/70 bg-red-50/60 text-red-600 hover:bg-red-50"
+                                      : "border-brand-ink/10 bg-brand-ink text-brand-bg",
+                                  ].join(
+                                    " ",
+                                  )}
+                                >
+                                  {isChangingStatus && (
+                                    <RefreshCw
+                                      size={
+                                        11
+                                      }
+                                      className="animate-spin"
+                                    />
+                                  )}
+
+                                  {selectedRole.is_active
+                                    ? "Deactivate"
+                                    : "Activate"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                       </FormSection>
 
                       <FormSection
                         eyebrow="Permissions"
                         title="Allowed capabilities"
-                        description="Select the capabilities users receive when this permission profile is assigned to them."
+                        description="Permissions are inherited directly from this role by every user assigned to it."
                         last
                       >
                         <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-brand-ink/[0.08] bg-brand-bg/25 p-3.5 sm:flex-row sm:items-center sm:justify-between">
@@ -1567,51 +2018,50 @@ export default function AdminAccessManagement() {
                                 }{" "}
                                 of{" "}
                                 {
-                                  permissions.length
+                                  allPermissions.length
                                 }{" "}
                                 enabled
                               </p>
 
                               <p className="mt-0.5 text-[10px] leading-4 text-brand-ink/38">
-                                Profile
-                                permissions
-                                combine with
-                                any
-                                user-specific
-                                overrides.
+                                {form.isAdministrator
+                                  ? "Administrator is protected and always receives every registered permission."
+                                  : "Users inherit these permissions from their assigned role."}
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setAllPermissions(
-                                  true,
-                                )
-                              }
-                              className="h-8 rounded-xl border border-brand-ink/10 bg-white/55 px-3 text-[10px] font-semibold text-brand-ink/50 transition hover:bg-white hover:text-brand-ink"
-                            >
-                              Select all
-                            </button>
+                          {!permissionsLocked && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAllPermissions(
+                                    true,
+                                  )
+                                }
+                                className="h-8 rounded-xl border border-brand-ink/10 bg-white/55 px-3 text-[10px] font-semibold text-brand-ink/50 transition hover:bg-white hover:text-brand-ink"
+                              >
+                                Select all
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setAllPermissions(
-                                  false,
-                                )
-                              }
-                              className="h-8 rounded-xl border border-brand-ink/10 bg-white/55 px-3 text-[10px] font-semibold text-brand-ink/50 transition hover:bg-white hover:text-brand-ink"
-                            >
-                              Clear
-                            </button>
-                          </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAllPermissions(
+                                    false,
+                                  )
+                                }
+                                className="h-8 rounded-xl border border-brand-ink/10 bg-white/55 px-3 text-[10px] font-semibold text-brand-ink/50 transition hover:bg-white hover:text-brand-ink"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         <div className="space-y-3">
-                          {groupedPermissions.map(
+                          {permissionGroups.map(
                             (
                               group,
                             ) => {
@@ -1620,8 +2070,8 @@ export default function AdminAccessManagement() {
                                   (
                                     permission,
                                   ) =>
-                                    form.permissions.includes(
-                                      permission.key,
+                                    form.permissionIds.includes(
+                                      permission.id,
                                     ),
                                 ).length;
 
@@ -1638,19 +2088,22 @@ export default function AdminAccessManagement() {
                               return (
                                 <PermissionGroupCard
                                   key={
-                                    group.key
+                                    group.group
                                   }
                                   group={
                                     group
                                   }
-                                  selectedKeys={
-                                    form.permissions
+                                  selectedIds={
+                                    form.permissionIds
                                   }
                                   allEnabled={
                                     allEnabled
                                   }
                                   enabledCount={
                                     enabled
+                                  }
+                                  disabled={
+                                    permissionsLocked
                                   }
                                   onTogglePermission={
                                     togglePermission
@@ -1674,8 +2127,7 @@ export default function AdminAccessManagement() {
                         <div>
                           {isDirty ? (
                             <p className="text-[10px] font-semibold text-amber-700">
-                              You have
-                              unsaved
+                              You have unsaved
                               changes.
                             </p>
                           ) : (
@@ -1686,52 +2138,54 @@ export default function AdminAccessManagement() {
                           )}
                         </div>
 
-                        <div className="flex items-center justify-end gap-2.5">
-                          <button
-                            type="button"
-                            onClick={
-                              resetForm
-                            }
-                            disabled={
-                              !isDirty ||
-                              isSaving
-                            }
-                            className="h-11 rounded-2xl border border-brand-ink/10 bg-white/50 px-5 text-sm font-semibold text-brand-ink/55 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-35"
-                          >
-                            Reset
-                          </button>
+                        {canEditCurrentRole && (
+                          <div className="flex items-center justify-end gap-2.5">
+                            <button
+                              type="button"
+                              onClick={
+                                resetForm
+                              }
+                              disabled={
+                                !isDirty ||
+                                isSaving
+                              }
+                              className="h-11 rounded-2xl border border-brand-ink/10 bg-white/50 px-5 text-sm font-semibold text-brand-ink/55 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-35"
+                            >
+                              Reset
+                            </button>
 
-                          <button
-                            type="submit"
-                            disabled={
-                              isSaving ||
-                              !form.name.trim() ||
-                              !isDirty
-                            }
-                            className="inline-flex h-11 min-w-[140px] items-center justify-center gap-2 rounded-2xl bg-brand-ink px-5 text-sm font-semibold text-brand-bg shadow-[0_9px_22px_rgba(55,38,25,0.14)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_26px_rgba(55,38,25,0.2)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
-                          >
-                            {isSaving ? (
-                              <RefreshCw
-                                size={
-                                  14
-                                }
-                                className="animate-spin"
-                              />
-                            ) : (
-                              <Save
-                                size={
-                                  14
-                                }
-                              />
-                            )}
+                            <button
+                              type="submit"
+                              disabled={
+                                isSaving ||
+                                !form.name.trim() ||
+                                !isDirty
+                              }
+                              className="inline-flex h-11 min-w-[140px] items-center justify-center gap-2 rounded-2xl bg-brand-ink px-5 text-sm font-semibold text-brand-bg shadow-[0_9px_22px_rgba(55,38,25,0.14)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_26px_rgba(55,38,25,0.2)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                            >
+                              {isSaving ? (
+                                <RefreshCw
+                                  size={
+                                    14
+                                  }
+                                  className="animate-spin"
+                                />
+                              ) : (
+                                <Save
+                                  size={
+                                    14
+                                  }
+                                />
+                              )}
 
-                            {isSaving
-                              ? "Saving..."
-                              : isCreating
-                                ? "Create profile"
-                                : "Save changes"}
-                          </button>
-                        </div>
+                              {isSaving
+                                ? "Saving..."
+                                : isCreating
+                                  ? "Create role"
+                                  : "Save changes"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </>
@@ -1745,27 +2199,23 @@ export default function AdminAccessManagement() {
   );
 }
 
-type PermissionGroup = {
-  key: string;
-  label: string;
-  permissions:
-    AdminPermission[];
-};
-
 function PermissionGroupCard({
   group,
-  selectedKeys,
+  selectedIds,
   allEnabled,
   enabledCount,
+  disabled,
   onTogglePermission,
   onToggleAll,
 }: {
-  group: PermissionGroup;
-  selectedKeys: string[];
+  group:
+    AdminRolePermissionGroup;
+  selectedIds: number[];
   allEnabled: boolean;
   enabledCount: number;
+  disabled: boolean;
   onTogglePermission: (
-    key: string,
+    id: number,
   ) => void;
   onToggleAll: () => void;
 }) {
@@ -1781,7 +2231,9 @@ function PermissionGroupCard({
 
           <div className="min-w-0">
             <h4 className="truncate text-xs font-semibold text-brand-ink/72">
-              {group.label}
+              {formatGroupName(
+                group.group,
+              )}
             </h4>
 
             <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.09em] text-brand-ink/30">
@@ -1795,29 +2247,31 @@ function PermissionGroupCard({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={
-            onToggleAll
-          }
-          className={[
-            "inline-flex h-8 items-center gap-1.5 rounded-xl border px-3 text-[10px] font-semibold transition",
-            allEnabled
-              ? "border-brand-ink/15 bg-brand-ink text-brand-bg"
-              : "border-brand-ink/10 bg-white/55 text-brand-ink/50 hover:bg-white hover:text-brand-ink",
-          ].join(" ")}
-        >
-          {allEnabled && (
-            <Check
-              size={11}
-              strokeWidth={3}
-            />
-          )}
+        {!disabled && (
+          <button
+            type="button"
+            onClick={
+              onToggleAll
+            }
+            className={[
+              "inline-flex h-8 items-center gap-1.5 rounded-xl border px-3 text-[10px] font-semibold transition",
+              allEnabled
+                ? "border-brand-ink/15 bg-brand-ink text-brand-bg"
+                : "border-brand-ink/10 bg-white/55 text-brand-ink/50 hover:bg-white hover:text-brand-ink",
+            ].join(" ")}
+          >
+            {allEnabled && (
+              <Check
+                size={11}
+                strokeWidth={3}
+              />
+            )}
 
-          {allEnabled
-            ? "All enabled"
-            : "Enable all"}
-        </button>
+            {allEnabled
+              ? "All enabled"
+              : "Enable all"}
+          </button>
+        )}
       </div>
 
       <div className="grid gap-px bg-brand-ink/[0.055] md:grid-cols-2">
@@ -1826,8 +2280,8 @@ function PermissionGroupCard({
             permission,
           ) => {
             const checked =
-              selectedKeys.includes(
-                permission.key,
+              selectedIds.includes(
+                permission.id,
               );
 
             return (
@@ -1841,9 +2295,12 @@ function PermissionGroupCard({
                 checked={
                   checked
                 }
+                disabled={
+                  disabled
+                }
                 onChange={() =>
                   onTogglePermission(
-                    permission.key,
+                    permission.id,
                   )
                 }
               />
@@ -1858,11 +2315,13 @@ function PermissionGroupCard({
 function PermissionItem({
   permission,
   checked,
+  disabled,
   onChange,
 }: {
   permission:
-    AdminPermission;
+    AdminRolePermission;
   checked: boolean;
+  disabled: boolean;
   onChange: () => void;
 }) {
   return (
@@ -1872,6 +2331,9 @@ function PermissionItem({
       aria-checked={
         checked
       }
+      disabled={
+        disabled
+      }
       onClick={
         onChange
       }
@@ -1880,6 +2342,9 @@ function PermissionItem({
         checked
           ? "bg-white/80"
           : "hover:bg-white/72",
+        disabled
+          ? "cursor-default opacity-75"
+          : "",
       ].join(" ")}
     >
       <span
@@ -1917,13 +2382,12 @@ function PermissionItem({
   );
 }
 
-function ProfileListItem({
-  profile,
+function RoleListItem({
+  role,
   selected,
   onClick,
 }: {
-  profile:
-    AdminPermissionProfile;
+  role: AdminRole;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -1948,7 +2412,7 @@ function ProfileListItem({
             : "border-brand-ink/[0.07] bg-brand-ink/[0.04] text-brand-ink/45",
         ].join(" ")}
       >
-        {profile.is_system ? (
+        {role.is_system ? (
           <LockKeyhole
             size={14}
           />
@@ -1969,7 +2433,7 @@ function ProfileListItem({
                 : "text-brand-ink/75",
             ].join(" ")}
           >
-            {profile.name}
+            {role.name}
           </p>
 
           <ChevronRight
@@ -1983,6 +2447,17 @@ function ProfileListItem({
           />
         </div>
 
+        <p
+          className={[
+            "mt-0.5 truncate font-mono text-[9px]",
+            selected
+              ? "text-brand-bg/40"
+              : "text-brand-ink/25",
+          ].join(" ")}
+        >
+          {role.code}
+        </p>
+
         <div
           className={[
             "mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] font-semibold",
@@ -1993,8 +2468,7 @@ function ProfileListItem({
         >
           <span>
             {
-              profile.permissions
-                .length
+              role.permissions_count
             }{" "}
             permissions
           </span>
@@ -2003,14 +2477,14 @@ function ProfileListItem({
 
           <span>
             {
-              profile.users_count
+              role.users_count
             }{" "}
             users
           </span>
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {profile.is_system && (
+          {role.is_system && (
             <MiniBadge
               selected={
                 selected
@@ -2020,15 +2494,25 @@ function ProfileListItem({
             </MiniBadge>
           )}
 
+          {role.is_administrator && (
+            <MiniBadge
+              selected={
+                selected
+              }
+            >
+              Administrator
+            </MiniBadge>
+          )}
+
           <MiniBadge
             selected={
               selected
             }
             muted={
-              !profile.is_active
+              !role.is_active
             }
           >
-            {profile.is_active
+            {role.is_active
               ? "Active"
               : "Inactive"}
           </MiniBadge>
@@ -2174,62 +2658,6 @@ function Field({
 const fieldClassName =
   "h-11 w-full rounded-2xl border border-brand-ink/10 bg-white/60 px-3.5 text-sm font-medium text-brand-ink outline-none transition placeholder:text-brand-ink/28 hover:border-brand-ink/15 focus:border-brand-ink/25 focus:bg-white focus:ring-2 focus:ring-brand-ink/[0.055] disabled:cursor-not-allowed disabled:bg-brand-ink/[0.035] disabled:text-brand-ink/45";
 
-function Toggle({
-  checked,
-  disabled = false,
-  onChange,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (
-    checked: boolean,
-  ) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={
-        checked
-      }
-      disabled={
-        disabled
-      }
-      onClick={() =>
-        onChange(
-          !checked,
-        )
-      }
-      className={[
-        "relative h-7 w-12 shrink-0 rounded-full border transition duration-200",
-        checked
-          ? "border-brand-ink bg-brand-ink"
-          : "border-brand-ink/10 bg-brand-ink/10",
-        disabled
-          ? "cursor-not-allowed opacity-60"
-          : "cursor-pointer",
-      ].join(" ")}
-    >
-      <span
-        className={[
-          "absolute top-[3px] grid h-5 w-5 place-items-center rounded-full bg-brand-bg shadow-sm transition-all duration-200",
-          checked
-            ? "left-[23px]"
-            : "left-[3px]",
-        ].join(" ")}
-      >
-        {checked && (
-          <Check
-            size={10}
-            strokeWidth={3}
-            className="text-brand-ink"
-          />
-        )}
-      </span>
-    </button>
-  );
-}
-
 function Notice({
   type,
   children,
@@ -2306,77 +2734,6 @@ function LoadingState({
   );
 }
 
-function groupPermissions(
-  permissions:
-    AdminPermission[],
-): PermissionGroup[] {
-  const groups =
-    new Map<
-      string,
-      AdminPermission[]
-    >();
-
-  for (
-    const permission
-    of permissions
-  ) {
-    const groupKey =
-      permission.group?.trim() ||
-      "Other";
-
-    const current =
-      groups.get(
-        groupKey,
-      ) ?? [];
-
-    current.push(
-      permission,
-    );
-
-    groups.set(
-      groupKey,
-      current,
-    );
-  }
-
-  return Array.from(
-    groups.entries(),
-  )
-    .map(
-      ([
-        key,
-        groupPermissions,
-      ]) => ({
-        key,
-
-        label:
-          formatGroupName(
-            key,
-          ),
-
-        permissions:
-          [...groupPermissions].sort(
-            (
-              first,
-              second,
-            ) =>
-              first.name.localeCompare(
-                second.name,
-              ),
-          ),
-      }),
-    )
-    .sort(
-      (
-        first,
-        second,
-      ) =>
-        first.label.localeCompare(
-          second.label,
-        ),
-    );
-}
-
 function formatGroupName(
   value: string,
 ) {
@@ -2392,39 +2749,58 @@ function formatGroupName(
     );
 }
 
-function profileToForm(
-  profile:
-    AdminPermissionProfile,
-): ProfileForm {
+function roleToForm(
+  role: AdminRole,
+): RoleForm {
   return {
-    id: profile.id,
-    name: profile.name,
+    id: role.id,
+
+    name:
+      role.name,
+
+    code:
+      role.code,
 
     description:
-      profile.description ??
+      role.description ??
       "",
 
     isActive:
-      profile.is_active,
+      role.is_active,
 
     isSystem:
-      profile.is_system,
+      role.is_system,
 
-    permissions:
+    isAdministrator:
+      role.is_administrator,
+
+    permissionIds:
       [
-        ...profile.permissions,
-      ].sort(),
+        ...(role.permission_ids ??
+          []),
+      ].sort(
+        (
+          first,
+          second,
+        ) =>
+          first -
+          second,
+      ),
   };
 }
 
 function snapshotForm(
-  form: ProfileForm,
+  form: RoleForm,
 ) {
   return JSON.stringify({
-    id: form.id,
+    id:
+      form.id,
 
     name:
       form.name.trim(),
+
+    code:
+      form.code,
 
     description:
       form.description.trim(),
@@ -2435,19 +2811,36 @@ function snapshotForm(
     isSystem:
       form.isSystem,
 
-    permissions:
+    isAdministrator:
+      form.isAdministrator,
+
+    permissionIds:
       [
-        ...form.permissions,
-      ].sort(),
+        ...form.permissionIds,
+      ].sort(
+        (
+          first,
+          second,
+        ) =>
+          first -
+          second,
+      ),
   });
 }
 
-function sortProfiles(
-  first:
-    AdminPermissionProfile,
-  second:
-    AdminPermissionProfile,
+function sortRoles(
+  first: AdminRole,
+  second: AdminRole,
 ) {
+  if (
+    first.is_administrator !==
+    second.is_administrator
+  ) {
+    return first.is_administrator
+      ? -1
+      : 1;
+  }
+
   if (
     first.is_system !==
     second.is_system

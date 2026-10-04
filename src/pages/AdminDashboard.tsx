@@ -1,13 +1,29 @@
 /** @format */
 
-import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  Link,
+  useNavigate,
+} from "react-router-dom";
 
 import Page from "../components/Page";
 
-import { logout } from "../lib/auth";
-import { useAuthSession } from "../lib/useAuthSession";
-import { getAdminDashboardStats } from "../lib/adminOrdersApi";
+import {
+  logout,
+} from "../lib/auth";
+
+import {
+  useAuthSession,
+} from "../lib/useAuthSession";
+
+import {
+  getAdminDashboardStats,
+} from "../lib/adminOrdersApi";
 
 type Stats = {
   totalOrders: number;
@@ -26,102 +42,182 @@ type DashboardModule = {
 
 const storefrontModules: DashboardModule[] = [
   {
-    to: "/admin/hero-slides",
-    permission: "website-admin.hero-slides.manage",
-    eyebrow: "HERO MANAGEMENT",
-    title: "Home hero slides",
+    to:
+      "/admin/hero-slides",
+
+    permission:
+      "website-admin.hero-slides.read",
+
+    eyebrow:
+      "HERO MANAGEMENT",
+
+    title:
+      "Home hero slides",
+
     description:
-      "Create, edit, reorder, activate, and deactivate home page hero slides with Cloudinary artwork and custom wording.",
+      "View and manage home page hero slides, artwork, visibility, and presentation.",
   },
+
   {
-    to: "/admin/products",
-    permission: "website-admin.catalog.manage",
-    eyebrow: "PRODUCT MANAGEMENT",
-    title: "Products & categories",
+    to:
+      "/admin/products",
+
+    permission:
+      "website-admin.catalog.read",
+
+    eyebrow:
+      "PRODUCT MANAGEMENT",
+
+    title:
+      "Products & categories",
+
     description:
-      "Manage menu products, categories, subcategories, prices, availability, and product imagery.",
+      "View and manage menu products, categories, subcategories, prices, availability, and product imagery.",
   },
+
   {
-    to: "/admin/promotions",
-    permission: "website-admin.promotions.manage",
-    eyebrow: "PROMOTION MANAGEMENT",
-    title: "Offers & coupons",
+    to:
+      "/admin/promotions",
+
+    permission:
+      "website-admin.promotions.read",
+
+    eyebrow:
+      "PROMOTION MANAGEMENT",
+
+    title:
+      "Offers & coupons",
+
     description:
-      "Manage coupon codes, QR offers, happy-hour offers, and category or product campaigns.",
+      "View and manage coupon codes, offers, and product or category promotions.",
   },
+
   {
-    to: "/admin/site-settings",
-    permission: "website-admin.site-mode.manage",
-    eyebrow: "SITE SETTINGS",
-    title: "Site switch modes",
+    to:
+      "/admin/site-settings",
+
+    permission:
+      "website-admin.site-mode.read",
+
+    eyebrow:
+      "SITE SETTINGS",
+
+    title:
+      "Site switch modes",
+
     description:
-      "Control Coming Soon, Maintenance, and Critical Break modes for the storefront.",
+      "View website operating mode and manage Coming Soon, Maintenance, and Critical Break states when permitted.",
   },
 ];
 
 const operationsModules: DashboardModule[] = [
   {
-    to: "/admin/orders",
-    permission: "website-admin.orders.manage",
-    eyebrow: "ORDER MANAGEMENT",
-    title: "Manage orders",
+    to:
+      "/admin/orders",
+
+    permission:
+      "website-admin.orders.read",
+
+    eyebrow:
+      "ORDER MANAGEMENT",
+
+    title:
+      "Manage orders",
+
     description:
-      "View customer orders, review payments, and update preparation and fulfilment status.",
+      "View customer orders, payments, preparation progress, and fulfilment information.",
   },
+
   {
-    to: "/admin/delivery",
-    permission: "website-admin.delivery.manage",
-    eyebrow: "DELIVERY MANAGEMENT",
-    title: "Delivery schedule",
+    to:
+      "/admin/delivery",
+
+    permission:
+      "website-admin.delivery.read",
+
+    eyebrow:
+      "DELIVERY MANAGEMENT",
+
+    title:
+      "Delivery schedule",
+
     description:
-      "Manage available delivery dates, morning and afternoon slots, pricing, and delivery settings.",
+      "View delivery dates, slots, pricing, vehicle rules, and delivery configuration.",
   },
 ];
 
 const administrationModules: DashboardModule[] = [
   {
-    to: "/admin/users",
-    permission: "website-admin.users.manage",
-    eyebrow: "USER MANAGEMENT",
-    title: "Users & staff",
+    to:
+      "/admin/users",
+
+    permission:
+      "website-admin.users.read",
+
+    eyebrow:
+      "USER MANAGEMENT",
+
+    title:
+      "Users & staff",
+
     description:
-      "Create and manage customer and staff accounts, account access, roles, contact details, and account status.",
+      "View customer and staff accounts, assigned roles, contact information, and account status.",
   },
+
   {
-    to: "/admin/access",
-    permission: "website-admin.permission-profiles.manage",
-    eyebrow: "ACCESS MANAGEMENT",
-    title: "Permissions & access",
+    to:
+      "/admin/access",
+
+    permission:
+      "website-admin.roles.read",
+
+    eyebrow:
+      "ROLE MANAGEMENT",
+
+    title:
+      "Roles & permissions",
+
     description:
-      "Create and manage permission profiles that control which website administration tools staff members can access.",
+      "Manage staff roles and control the permissions assigned to each role.",
   },
 ];
 
 export default function AdminDashboard() {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
   const {
     user,
-    isLoading: isAuthLoading,
+    profile,
+    isLoading:
+      isAuthLoading,
     hasPermission,
   } = useAuthSession();
 
-  const [stats, setStats] = useState<Stats>({
+  const [
+    stats,
+    setStats,
+  ] = useState<Stats>({
     totalOrders: 0,
     pendingPayments: 0,
     paidOrders: 0,
     completedOrders: 0,
   });
 
-  const [isStatsLoading, setIsStatsLoading] =
-    useState(false);
+  const [
+    isStatsLoading,
+    setIsStatsLoading,
+  ] = useState(false);
 
-  const [errorText, setErrorText] =
-    useState("");
+  const [
+    errorText,
+    setErrorText,
+  ] = useState("");
 
-  const canManageOrders = hasPermission(
-    "website-admin.orders.manage",
-  );
+  const canReadOrders =
+    hasPermission(
+      "website-admin.orders.read",
+    );
 
   const visibleStorefrontModules =
     useMemo(
@@ -163,15 +259,19 @@ export default function AdminDashboard() {
     if (
       isAuthLoading ||
       !user ||
-      !canManageOrders
+      !canReadOrders
     ) {
       return;
     }
 
-    let cancelled = false;
+    let cancelled =
+      false;
 
     async function loadStats() {
-      setIsStatsLoading(true);
+      setIsStatsLoading(
+        true,
+      );
+
       setErrorText("");
 
       try {
@@ -179,7 +279,9 @@ export default function AdminDashboard() {
           await getAdminDashboardStats();
 
         if (!cancelled) {
-          setStats(nextStats);
+          setStats(
+            nextStats,
+          );
         }
       } catch (error) {
         if (!cancelled) {
@@ -191,7 +293,9 @@ export default function AdminDashboard() {
         }
       } finally {
         if (!cancelled) {
-          setIsStatsLoading(false);
+          setIsStatsLoading(
+            false,
+          );
         }
       }
     }
@@ -203,12 +307,13 @@ export default function AdminDashboard() {
     };
   }, [
     user,
-    canManageOrders,
+    canReadOrders,
     isAuthLoading,
   ]);
 
   async function handleLogout() {
     await logout();
+
     navigate("/");
   }
 
@@ -233,13 +338,23 @@ export default function AdminDashboard() {
 
             <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-brand-ink sm:text-4xl">
               Welcome,{" "}
-              {user?.name || "Staff"}
+              {user?.name ||
+                "Staff"}
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-ink/70">
-              Access the website management
-              tools available to your account.
+              Access the website
+              administration tools
+              available to your account.
             </p>
+
+            {profile?.roleLabel && (
+              <div className="mt-4 inline-flex rounded-full border border-black/10 bg-white/65 px-3 py-1.5 text-xs font-semibold text-brand-ink/65">
+                {
+                  profile.roleLabel
+                }
+              </div>
+            )}
           </div>
 
           <button
@@ -259,7 +374,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {canManageOrders && (
+        {canReadOrders && (
           <section>
             <div className="mb-4">
               <p className="text-xs font-semibold tracking-[0.18em] text-brand-ink/50">
@@ -273,7 +388,8 @@ export default function AdminDashboard() {
 
             {isStatsLoading ? (
               <div className="rounded-3xl border border-black/10 bg-white/55 p-8 text-sm text-brand-ink/70">
-                Loading order statistics...
+                Loading order
+                statistics...
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -356,10 +472,12 @@ export default function AdminDashboard() {
               </p>
 
               <p className="mt-2 text-sm leading-6 text-brand-ink/65">
-                Your account is signed in, but
-                it does not currently have
-                permission to manage any of the
-                available website modules.
+                Your account can access
+                website administration,
+                but its assigned role does
+                not currently include
+                permission to view any
+                management modules.
               </p>
             </div>
           )}
@@ -390,17 +508,27 @@ function DashboardSection({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {modules.map((module) => (
-          <AdminLinkCard
-            key={module.to}
-            to={module.to}
-            eyebrow={module.eyebrow}
-            title={module.title}
-            description={
-              module.description
-            }
-          />
-        ))}
+        {modules.map(
+          (module) => (
+            <AdminLinkCard
+              key={
+                module.to
+              }
+              to={
+                module.to
+              }
+              eyebrow={
+                module.eyebrow
+              }
+              title={
+                module.title
+              }
+              description={
+                module.description
+              }
+            />
+          ),
+        )}
       </div>
     </section>
   );
@@ -440,27 +568,22 @@ function AdminLinkCard({
   return (
     <Link
       to={to}
-      className="group rounded-3xl border border-black/10 bg-white/60 p-6 text-brand-ink shadow-sm transition duration-300 hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-md"
+      className="group rounded-3xl border border-black/10 bg-white/60 p-6 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-md"
     >
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-xs font-semibold tracking-[0.14em] text-brand-ink/55">
-          {eyebrow}
-        </p>
+      <p className="text-xs font-semibold tracking-[0.16em] text-brand-ink/50">
+        {eyebrow}
+      </p>
 
-        <span
-          className="text-lg text-brand-ink/45 transition-transform duration-300 group-hover:translate-x-1"
-          aria-hidden="true"
-        >
-          →
-        </span>
-      </div>
-
-      <h3 className="mt-4 text-2xl font-semibold tracking-[-0.02em] text-brand-ink">
+      <h3 className="mt-3 text-lg font-semibold tracking-[-0.015em] text-brand-ink">
         {title}
       </h3>
 
-      <p className="mt-3 text-sm leading-6 text-brand-ink/65">
+      <p className="mt-2 text-sm leading-6 text-brand-ink/65">
         {description}
+      </p>
+
+      <p className="mt-5 text-sm font-semibold text-brand-ink transition group-hover:translate-x-1">
+        Open management →
       </p>
     </Link>
   );
