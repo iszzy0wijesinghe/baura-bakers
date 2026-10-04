@@ -29,6 +29,7 @@ import AdminPromotions from "../pages/AdminPromotions";
 import AdminDeliveryManagement from "../pages/AdminDeliveryManagement";
 import AdminSiteSettings from "../pages/AdminSiteSettings";
 import AdminUsers from "../pages/AdminUsers";
+import AdminAccessManagement from "../pages/AdminAccessManagement";
 
 import ComingSoonPage from "../pages/system/ComingSoonPage";
 import CriticalBreakPage from "../pages/system/CriticalBreakPage";
@@ -268,6 +269,16 @@ export const router = createBrowserRouter([
         element: (
           <AdminRoute permission="website-admin.users.manage">
             <AdminUsers />
+          </AdminRoute>
+        ),
+      },
+
+      {
+        path: "/admin/access",
+
+        element: (
+          <AdminRoute permission="website-admin.permission-profiles.manage">
+            <AdminAccessManagement />
           </AdminRoute>
         ),
       },

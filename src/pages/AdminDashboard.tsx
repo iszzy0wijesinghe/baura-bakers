@@ -87,6 +87,14 @@ const administrationModules: DashboardModule[] = [
     description:
       "Create and manage customer and staff accounts, account access, roles, contact details, and account status.",
   },
+  {
+    to: "/admin/access",
+    permission: "website-admin.permission-profiles.manage",
+    eyebrow: "ACCESS MANAGEMENT",
+    title: "Permissions & access",
+    description:
+      "Create and manage permission profiles that control which website administration tools staff members can access.",
+  },
 ];
 
 export default function AdminDashboard() {
