@@ -558,7 +558,7 @@ function DesktopAccountMenu({
             "font-semibold",
             overlay ? "text-white" : "text-brand-ink",
           ].join(" ")}>
-          {profile?.full_name || user.email}
+          {profile?.fullName || user.email}
         </p>
 
         <p
@@ -569,7 +569,7 @@ function DesktopAccountMenu({
             "tracking-[0.18em]",
             overlay ? "text-white/45" : "text-brand-ink/40",
           ].join(" ")}>
-          {profile?.role || "customer"}
+          {profile?.roleLabel || profile?.roleName || "Customer"}
         </p>
       </div>
 
@@ -838,11 +838,11 @@ function MobileAccountMenu({
 
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-brand-ink">
-            {profile?.full_name || user.email}
+            {profile?.fullName || user.email}
           </p>
 
           <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.18em] text-brand-ink/40">
-            {profile?.role || "customer"}
+            {profile?.roleLabel || profile?.roleName || "Customer"}
           </p>
         </div>
       </div>
