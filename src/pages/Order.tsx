@@ -13,6 +13,7 @@ import {
   MessageCircle,
   PackageCheck,
   ShoppingBag,
+  Store,
   Truck,
   UserRound,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import {
   getCheckoutQuote,
   type CheckoutDeliverySlot,
   type CheckoutQuote,
+  type FulfillmentType,
 } from "../lib/checkoutApi";
 
 const WHATSAPP_NUMBER = "94769878770";
@@ -69,7 +71,9 @@ type FieldErrors = Partial<
     | "receiverContactNumber"
     | "receiverAddress"
     | "deliveryLocation"
-    | "deliverySlot",
+    | "deliverySlot"
+    | "pickupDate"
+    | "pickupTime",
     string
   >
 >;
@@ -155,10 +159,10 @@ function extractLatLngFromGoogleMapsUrl(url: string) {
   return null;
 }
 
-function stepTitle(step: StepNo) {
+function stepTitle(step: StepNo, isPickup: boolean) {
   if (step === 1) return "Customer details";
-  if (step === 2) return "Delivery location";
-  if (step === 3) return "Delivery schedule";
+  if (step === 2) return "Receive your order";
+  if (step === 3) return isPickup ? "Collection schedule" : "Delivery schedule";
   return "Review order";
 }
 
@@ -167,6 +171,17 @@ export default function Order() {
   const { items, clear } = useCart();
 
   const [step, setStep] = useState<StepNo>(1);
+  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>("PICKUP");
+  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  const [checkoutReady, setCheckoutReady] = useState(false);
+  const [pickupEnabled, setPickupEnabled] = useState(true);
+  const [businessOpenTime, setBusinessOpenTime] = useState("09:00");
+  const [businessCloseTime, setBusinessCloseTime] = useState("18:00");
+  const [pickupPreviewDays, setPickupPreviewDays] = useState(14);
+  const [pickupDate, setPickupDate] = useState("");
+  const [pickupStartTime, setPickupStartTime] = useState("");
+  const pickupEndTime = pickupStartTime ? addTenMinutes(pickupStartTime) : "";
+  const isPickup = fulfillmentType === "PICKUP";
   const stepTopRef = useRef<HTMLDivElement | null>(null);
   const hasMountedStepScroll = useRef(false);
 
@@ -257,7 +272,7 @@ export default function Order() {
     return items.reduce((sum, item) => sum + item.quantity, 0);
   }, [items]);
 
-  const needsReceiver = form.hasDifferentReceiver || form.isGift;
+  const needsReceiver = !isPickup && (form.hasDifferentReceiver || form.isGift);
 
   const selectedDeliverySlot = useMemo(() => {
     return (
@@ -336,7 +351,7 @@ export default function Order() {
       form.senderName.trim().length >= 2 &&
       isEmailLike(form.senderEmail) &&
       isValidSriLankanMobile(form.senderContactNumber) &&
-      form.senderAddress.trim().length >= 5;
+      (isPickup || form.senderAddress.trim().length >= 5);
 
     if (!needsReceiver) {
       return senderValid;
@@ -348,19 +363,50 @@ export default function Order() {
       form.receiverAddress.trim().length >= 5;
 
     return senderValid && receiverValid;
-  }, [form, needsReceiver]);
+  }, [form, needsReceiver, isPickup]);
 
   const deliveryAddressValid =
     effectiveDelivery.address.trim().length >= 5 &&
     Boolean(deliveryLocationCoords);
 
-  const deliveryFeeLkr = checkoutQuote?.delivery_fee_lkr || 0;
+  const deliveryFeeLkr = isPickup ? 0 : checkoutQuote?.delivery_fee_lkr || 0;
+  const pickupToday = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Colombo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+  const pickupLastDate = (() => {
+    const date = new Date(`${pickupToday}T12:00:00+05:30`);
+    date.setUTCDate(date.getUTCDate() + Math.max(1, pickupPreviewDays) - 1);
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Colombo", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(date);
+  })();
+  const pickupTimeChoices = useMemo(() => {
+    const choices: string[] = [];
+    const open = minutesOfDay(businessOpenTime);
+    const close = minutesOfDay(businessCloseTime);
+    if (!Number.isFinite(open) || !Number.isFinite(close) || close <= open) return choices;
+    const first = Math.ceil(open / 15) * 15;
+    for (let minute = first; minute + 10 <= close; minute += 15) {
+      const start = minuteToTime(minute);
+      if (pickupDate && new Date(`${pickupDate}T${start}:00+05:30`).getTime() > Date.now()) {
+        choices.push(start);
+      }
+    }
+    return choices;
+  }, [businessOpenTime, businessCloseTime, pickupDate]);
+  const pickupScheduleValid = Boolean(
+    pickupDate && pickupStartTime && pickupEndTime &&
+    pickupDate >= pickupToday && pickupDate <= pickupLastDate &&
+    pickupStartTime >= businessOpenTime && pickupEndTime <= businessCloseTime &&
+    pickupEndTime > pickupStartTime && pickupTimeChoices.includes(pickupStartTime) &&
+    new Date(`${pickupDate}T${pickupStartTime}:00+05:30`).getTime() > Date.now(),
+  );
 
   const finalTotalLkr = totalLkr + deliveryFeeLkr;
 
   const deliveryCostValid = Boolean(checkoutQuote);
 
-  const scheduleValid = Boolean(selectedDeliverySlot) && deliveryCostValid;
+  const scheduleValid = isPickup ? pickupScheduleValid : Boolean(selectedDeliverySlot) && deliveryCostValid;
 
   const currentLocationUrl =
     form.deliveryTarget === "RECEIVER"
@@ -467,6 +513,15 @@ export default function Order() {
         const checkout = await getCheckoutBootstrap();
 
         setMaxDeliveryDistanceKm(checkout.max_delivery_distance_km);
+        setDeliveryEnabled(checkout.delivery_enabled === true);
+        setPickupEnabled(checkout.pickup_enabled === true);
+        setBusinessOpenTime((checkout.business_open_time || "09:00").slice(0, 5));
+        setBusinessCloseTime((checkout.business_close_time || "18:00").slice(0, 5));
+        setPickupPreviewDays(Math.max(1, checkout.pickup_preview_days || 14));
+        setFulfillmentType((current) =>
+          current === "DELIVERY" && checkout.delivery_enabled !== true ? "PICKUP" : current,
+        );
+        setCheckoutReady(true);
 
         const availableSlots = checkout.slots
           .filter((slot) => slot.is_available && slot.remaining_orders > 0)
@@ -495,6 +550,7 @@ export default function Order() {
           return availableSlots[0]?.slot_date || "";
         });
       } catch (error) {
+        setCheckoutReady(false);
         setDeliverySlots([]);
 
         setSubmitError(
@@ -568,7 +624,7 @@ export default function Order() {
     let ignore = false;
 
     async function calculateDeliveryQuote() {
-      if (!deliveryLocationCoords || totalQuantity < 1) {
+      if (isPickup || !deliveryEnabled || !deliveryLocationCoords || totalQuantity < 1) {
         setCheckoutQuote(null);
         setDistanceNotice("");
         setIsCalculatingDistance(false);
@@ -616,7 +672,7 @@ export default function Order() {
     return () => {
       ignore = true;
     };
-  }, [deliveryLocationCoords, totalQuantity]);
+  }, [deliveryLocationCoords, totalQuantity, isPickup, deliveryEnabled]);
 
   const whatsappMessage = useMemo(() => {
     const senderPhone = onlyDigitsPhone(form.senderContactNumber);
@@ -649,13 +705,14 @@ export default function Order() {
             "",
           ].join("\n")
         : "",
-      "🚚 *Delivery*",
-      `Deliver To: ${
+      isPickup ? "🏬 *Store Pickup*" : "🚚 *Delivery*",
+      isPickup ? `Collection: ${pickupDate} at ${formatHour(pickupStartTime)}` : "",
+      !isPickup ? `Deliver To: ${
         form.deliveryTarget === "RECEIVER" ? "Receiver" : "Sender"
-      }`,
-      `Address: ${effectiveDelivery.address || "-"}`,
-      locationUrl ? `Location: ${locationUrl}` : "",
-      selectedDeliverySlot
+      }` : "",
+      !isPickup ? `Address: ${effectiveDelivery.address || "-"}` : "",
+      !isPickup && locationUrl ? `Location: ${locationUrl}` : "",
+      !isPickup && selectedDeliverySlot
         ? `Schedule: ${formatSlot(selectedDeliverySlot)}`
         : "",
       form.note.trim() ? `Note: ${form.note.trim()}` : "",
@@ -663,8 +720,8 @@ export default function Order() {
       "🛍️ *Items*",
       cartLines.length ? cartLines.join("\n") : "(No items)",
       "",
-      checkoutQuote ? `📍 *Distance:* ${checkoutQuote.distance_km}km` : "",
-      `🚚 *Delivery Fee:* ${formatLkr(deliveryFeeLkr)}`,
+      !isPickup && checkoutQuote ? `📍 *Distance:* ${checkoutQuote.distance_km}km` : "",
+      isPickup ? "🏬 *Collection Fee:* FREE" : `🚚 *Delivery Fee:* ${formatLkr(deliveryFeeLkr)}`,
       `💰 *Order Total:* ${formatLkr(finalTotalLkr)}`,
       "",
       "🏦 *Payment:* Bank transfer / WhatsApp confirmation",
@@ -683,6 +740,7 @@ export default function Order() {
     cartLines,
     checkoutQuote,
     deliveryLocationCoords,
+    isPickup, pickupDate, pickupStartTime, pickupEndTime,
   ]);
 
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -742,7 +800,7 @@ export default function Order() {
       errors.senderContactNumber = "Enter a valid contact number.";
     }
 
-    if (form.senderAddress.trim().length < 5) {
+    if (!isPickup && form.senderAddress.trim().length < 5) {
       errors.senderAddress = "Please enter your full address.";
     }
 
@@ -772,6 +830,7 @@ export default function Order() {
   }
 
   function validateDelivery() {
+    if (isPickup) return true;
     if (effectiveDelivery.address.trim().length < 5) {
       setFieldErrors({
         deliveryLocation: "Add a complete delivery address before continuing.",
@@ -797,6 +856,18 @@ export default function Order() {
   }
 
   function validateSchedule() {
+    if (isPickup) {
+      const errors: FieldErrors = {};
+      if (!pickupDate || pickupDate < pickupToday || pickupDate > pickupLastDate) {
+        errors.pickupDate = "Choose an available collection date.";
+      }
+      if (!pickupScheduleValid) {
+        errors.pickupTime = "Choose an available pickup time within bakery hours.";
+      }
+      setFieldErrors(errors);
+      if (Object.keys(errors).length) requestErrorFocus();
+      return Object.keys(errors).length === 0;
+    }
     if (!selectedDeliverySlot) {
       setFieldErrors({
         deliverySlot: "Choose a delivery time before continuing.",
@@ -827,6 +898,15 @@ export default function Order() {
       return;
     }
 
+    if (step === 2 && !checkoutReady) {
+      setSubmitError("Loading collection and delivery availability. Please try again.");
+      return;
+    }
+    if (step === 2 && !detailsValid) {
+      setStep(1);
+      validateDetails();
+      return;
+    }
     if (step === 2 && !validateDelivery()) {
       return;
     }
@@ -861,7 +941,7 @@ export default function Order() {
       return;
     }
 
-    if (target >= 3 && !deliveryAddressValid) {
+    if (target >= 3 && !isPickup && !deliveryAddressValid) {
       setStep(2);
       validateDelivery();
       return;
@@ -984,22 +1064,23 @@ export default function Order() {
       return saveOrderPromiseRef.current;
     }
 
-    if (!selectedDeliverySlot) {
-      throw new Error("Please choose a delivery time.");
+    if (!checkoutReady) throw new Error("Checkout availability has not loaded. Please refresh and try again.");
+    if (isPickup && !pickupEnabled) throw new Error("Store pickup is currently unavailable.");
+    if (!isPickup && !deliveryEnabled) throw new Error("Delivery is currently unavailable.");
+    if (isPickup && !pickupScheduleValid) throw new Error("Please choose an available pickup time.");
+    if (!isPickup && (!selectedDeliverySlot || !deliveryLocationCoords || !checkoutQuote)) {
+      throw new Error("Please finish your delivery location, quote and schedule.");
     }
-
-    if (!deliveryLocationCoords) {
-      throw new Error("Please add an exact delivery location.");
-    }
-
-    if (!checkoutQuote) {
-      throw new Error("Delivery pricing is not ready yet.");
-    }
-
-    const fallbackLocationUrl = `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}`;
+    const fallbackLocationUrl = deliveryLocationCoords
+      ? `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}`
+      : "";
 
     const request = createGuestOrder({
       orderNo: orderId,
+      fulfillmentType,
+      pickupDate: isPickup ? pickupDate : undefined,
+      pickupStartTime: isPickup ? pickupStartTime : undefined,
+      pickupEndTime: isPickup ? pickupEndTime : undefined,
 
       senderName: form.senderName,
       senderEmail: form.senderEmail,
@@ -1021,20 +1102,20 @@ export default function Order() {
 
       deliveryTarget: form.deliveryTarget,
       deliveryAddress: effectiveDelivery.address,
-      deliveryLocationUrl: effectiveDelivery.locationUrl || fallbackLocationUrl,
-      deliveryLat: deliveryLocationCoords.lat,
-      deliveryLng: deliveryLocationCoords.lng,
-      deliverySlotId: selectedDeliverySlot.id,
+      deliveryLocationUrl: isPickup ? "" : effectiveDelivery.locationUrl || fallbackLocationUrl,
+      deliveryLat: isPickup ? null : deliveryLocationCoords?.lat,
+      deliveryLng: isPickup ? null : deliveryLocationCoords?.lng,
+      deliverySlotId: isPickup ? undefined : selectedDeliverySlot?.id,
 
-      deliveryDate: selectedDeliverySlot.slot_date,
-      deliverySlotLabel: selectedDeliverySlot.slot_label,
-      deliverySlotStart: selectedDeliverySlot.start_time,
-      deliverySlotEnd: selectedDeliverySlot.end_time,
+      deliveryDate: selectedDeliverySlot?.slot_date,
+      deliverySlotLabel: selectedDeliverySlot?.slot_label,
+      deliverySlotStart: selectedDeliverySlot?.start_time,
+      deliverySlotEnd: selectedDeliverySlot?.end_time,
 
-      deliveryDistanceKm: checkoutQuote.distance_km,
-      deliveryVehicleType: checkoutQuote.vehicle_type,
-      deliveryFeeLkr: checkoutQuote.delivery_fee_lkr,
-      deliveryPricingMode: checkoutQuote.pricing_mode,
+      deliveryDistanceKm: isPickup ? null : checkoutQuote?.distance_km,
+      deliveryVehicleType: isPickup ? null : checkoutQuote?.vehicle_type,
+      deliveryFeeLkr,
+      deliveryPricingMode: isPickup ? null : checkoutQuote?.pricing_mode,
 
       deliveryApp: DELIVERY_METHOD,
       paymentMethod,
@@ -1066,7 +1147,12 @@ export default function Order() {
       return;
     }
 
-    if (!validateDelivery()) {
+    if (!detailsValid) {
+      setStep(1);
+      validateDetails();
+      return;
+    }
+    if (!isPickup && !validateDelivery()) {
       setStep(2);
       return;
     }
@@ -1158,7 +1244,7 @@ export default function Order() {
     step === 1
       ? detailsValid
       : step === 2
-        ? deliveryAddressValid
+        ? (isPickup ? true : deliveryAddressValid)
         : step === 3
           ? scheduleValid
           : true;
@@ -1175,8 +1261,8 @@ export default function Order() {
     },
     {
       id: 2,
-      label: "Delivery",
-      icon: <MapPin size={15} />,
+      label: "Method",
+      icon: isPickup ? <Store size={15} /> : <MapPin size={15} />,
     },
     {
       id: 3,
@@ -1232,11 +1318,11 @@ export default function Order() {
             </p>
 
             <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-brand-ink sm:text-3xl">
-              {stepTitle(step)}
+              {stepTitle(step, isPickup)}
             </h1>
 
             <p className="mt-1.5 max-w-xl text-sm leading-6 text-brand-ink/60">
-              Complete your Baura order in four quick steps.
+              A simpler checkout, designed around how you receive your order.
             </p>
           </div>
 
@@ -1249,7 +1335,16 @@ export default function Order() {
           </div>
         </header>
 
-        <div className="mb-5 overflow-x-auto pb-1 sm:mb-6">
+        <div className="mb-4 rounded-2xl border border-brand-ink/10 bg-white/65 px-4 py-3 sm:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-brand-ink">Step {step} of 4 · {stepMeta[step - 1].label}</p>
+            <span className="text-[11px] font-medium text-brand-ink/45">{Math.round(step / 4 * 100)}%</span>
+          </div>
+          <div className="mt-3 grid grid-cols-4 gap-1.5" aria-label="Checkout progress">
+            {stepMeta.map((item) => <span key={item.id} className={`h-1.5 rounded-full ${item.id <= step ? "bg-brand-ink" : "bg-brand-ink/10"}`} />)}
+          </div>
+        </div>
+        <div className="mb-5 hidden overflow-x-auto pb-1 sm:block sm:mb-6">
           <div className="grid min-w-[520px] grid-cols-4 gap-2 sm:min-w-0">
             {stepMeta.map((item) => {
               const active = step === item.id;
@@ -1314,6 +1409,13 @@ export default function Order() {
             <section className="rounded-[1.65rem] border border-brand-ink/10 bg-white/60 p-4 shadow-sm backdrop-blur sm:p-6">
               {step === 1 && (
                 <div className="space-y-5">
+                  <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/55 p-4 sm:p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-ink/45">Receive your order</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <ToggleCard active={isPickup} icon={<Store size={17} />} title="Store pickup" description="Collect at the bakery · Free" disabled={!pickupEnabled} onClick={() => { setFulfillmentType("PICKUP"); setFieldErrors({}); }} />
+                      <ToggleCard active={!isPickup} icon={<Truck size={17} />} title="Delivery" description={deliveryEnabled ? "Address-based delivery" : "Currently unavailable"} disabled={!deliveryEnabled} onClick={() => { setFulfillmentType("DELIVERY"); setFieldErrors({}); }} />
+                    </div>
+                  </div>
                   <StepHeader
                     eyebrow="Customer details"
                     title="Who is placing the order?"
@@ -1418,7 +1520,7 @@ export default function Order() {
                     </div>
                   )}
 
-                  <Field label="Your address" error={fieldErrors.senderAddress}>
+                  {!isPickup && <Field label="Your address" error={fieldErrors.senderAddress}>
                     <textarea
                       value={form.senderAddress}
                       onChange={(event) => {
@@ -1431,9 +1533,9 @@ export default function Order() {
                       placeholder="House number, street, city"
                       autoComplete="street-address"
                     />
-                  </Field>
+                  </Field>}
 
-                  <div className="border-t border-brand-ink/10 pt-5">
+                  {!isPickup && <div className="border-t border-brand-ink/10 pt-5">
                     <p className="text-sm font-semibold text-brand-ink">
                       Is someone else receiving it?
                     </p>
@@ -1462,9 +1564,9 @@ export default function Order() {
                         onClick={() => toggleGift(!form.isGift)}
                       />
                     </div>
-                  </div>
+                  </div>}
 
-                  {needsReceiver && (
+                  {!isPickup && needsReceiver && (
                     <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/55 p-4 sm:p-5">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
@@ -1559,6 +1661,15 @@ export default function Order() {
 
               {step === 2 && (
                 <div className="space-y-5">
+                  {!checkoutReady && <InfoBox tone="warning">Checkout availability has not loaded. Check that the Laravel API is running and refresh this page.</InfoBox>}
+                  <StepHeader eyebrow="FULFILLMENT" title="How would you like your order?" description="Choose a convenient collection or delivery option." />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <ToggleCard active={isPickup} icon={<Store size={18} />} title="Collect from bakery" description="Pickup is free. Choose your collection time next." disabled={!pickupEnabled} onClick={() => { setFulfillmentType("PICKUP"); setFieldErrors({}); setSubmitError(""); }} />
+                    <ToggleCard active={!isPickup} icon={<Truck size={18} />} title="Home delivery" description={deliveryEnabled ? "We calculate delivery fees from your exact location." : "Currently we do not offer delivery."} disabled={!deliveryEnabled} onClick={() => { setFulfillmentType("DELIVERY"); setFieldErrors({}); setSubmitError(""); }} />
+                  </div>
+                  {!deliveryEnabled && <InfoBox tone="neutral">Currently we do not offer delivery. You can collect your order from the bakery.</InfoBox>}
+                  {isPickup && <Field label="Order note — optional"><textarea value={form.note} onChange={(e) => updateForm("note", e.target.value)} className={`${inputClass(false)} min-h-[82px] resize-y`} placeholder="Collection instructions or other notes" /></Field>}
+                  {!isPickup && <div className="space-y-5 border-t border-brand-ink/10 pt-5">
                   <StepHeader
                     eyebrow="Delivery"
                     title="Where should we deliver?"
@@ -1747,11 +1858,76 @@ export default function Order() {
                       placeholder="Landmark, gift message or special delivery instruction"
                     />
                   </Field>
+                  </div>}
                 </div>
               )}
 
               {step === 3 && (
                 <div className="space-y-5">
+                  {isPickup ? <>
+                    <StepHeader eyebrow="COLLECTION" title="Choose your pickup time" description="Select a convenient collection window during our opening hours." />
+                    <div className="rounded-[1.4rem] border border-brand-ink/10 bg-white/65 p-3.5 sm:p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-brand-ink">Choose a collection day</p>
+                          <p className="mt-1 text-xs text-brand-ink/50">Only available dates in the next {pickupPreviewDays} days</p>
+                        </div>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-brand-ink/10 bg-brand-bg px-3 py-2 text-xs font-semibold text-brand-ink/70">
+                          <Clock3 size={14} /> {formatHour(businessOpenTime)} – {formatHour(businessCloseTime)}
+                        </span>
+                      </div>
+                      <PickupCalendar
+                        today={pickupToday}
+                        lastDate={pickupLastDate}
+                        selected={pickupDate}
+                        onSelect={(value) => {
+                          setPickupDate(value);
+                          setPickupStartTime("");
+                          clearFieldError("pickupDate");
+                          clearFieldError("pickupTime");
+                        }}
+                      />
+                      {fieldErrors.pickupDate && <p data-checkout-error="true" className="mt-2 text-xs font-semibold text-red-600">{fieldErrors.pickupDate}</p>}
+                    </div>
+                    <div className="rounded-[1.4rem] border border-brand-ink/10 bg-white/65 p-3.5 sm:p-5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-brand-ink">Select your pickup time</p>
+                          <p className="mt-1 text-xs text-brand-ink/50">Times are shown in Sri Lanka time</p>
+                        </div>
+                        <Clock3 size={18} className="text-brand-ink/45" />
+                      </div>
+                      {!pickupDate ? (
+                        <p className="mt-4 rounded-xl bg-brand-bg/70 p-4 text-sm text-brand-ink/60">Select a day above to see collection times.</p>
+                      ) : pickupTimeChoices.length === 0 ? (
+                        <p className="mt-4 rounded-xl bg-brand-bg/70 p-4 text-sm text-brand-ink/60">No collection times remain on this day. Choose another date.</p>
+                      ) : (
+                        <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+                          {pickupTimeChoices.map((time) => (
+                            <button key={time} type="button" onClick={() => { setPickupStartTime(time); clearFieldError("pickupTime"); }}
+                              aria-pressed={pickupStartTime === time}
+                              className={`min-h-11 rounded-xl border px-2 py-2.5 text-xs font-semibold transition sm:text-sm ${pickupStartTime === time ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm" : "border-brand-ink/10 bg-brand-bg/45 text-brand-ink hover:border-brand-ink/30 hover:bg-white"}`}>
+                              {formatHour(time)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {fieldErrors.pickupTime && <p data-checkout-error="true" className="mt-3 text-xs font-semibold text-red-600">{fieldErrors.pickupTime}</p>}
+                      {pickupScheduleValid && (
+                        <div className="mt-4 flex items-start gap-2 rounded-xl bg-brand-bg/75 px-3 py-3 text-xs leading-5 text-brand-ink/75">
+                          <Check size={16} className="mt-0.5 shrink-0" />
+                          <span>Your collection time is <strong>{formatHour(pickupStartTime)}</strong>. Please arrive on time.</span>
+                        </div>
+                      )}
+                    </div>
+                    <InfoBox tone={pickupScheduleValid ? "success" : "neutral"}>
+                      {pickupScheduleValid ? `Collection: ${formatCalendarDate(pickupDate)} at ${formatHour(pickupStartTime)} (10-minute window)` : "Choose a collection date and time above. Pickup is free."}
+                    </InfoBox>
+                    <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/60 p-4">
+                      <PriceRow label="Store pickup" value="FREE" />
+                      <div className="mt-3 border-t border-brand-ink/10 pt-3"><PriceRow label="Order total" value={formatLkr(totalLkr)} /></div>
+                    </div>
+                  </> : <>
                   <StepHeader
                     eyebrow="Schedule"
                     title="When should it arrive?"
@@ -1983,7 +2159,7 @@ export default function Order() {
                     </div>
                   </div>
 
-                  {selectedDeliverySlot && (
+                  {!isPickup && selectedDeliverySlot && (
                     <InfoBox tone="success">
                       <span className="font-semibold">Selected:</span>{" "}
                       {formatSlot(selectedDeliverySlot)}
@@ -1993,6 +2169,7 @@ export default function Order() {
                   {distanceNotice && (
                     <InfoBox tone="warning">{distanceNotice}</InfoBox>
                   )}
+                  </>}
                 </div>
               )}
 
@@ -2015,20 +2192,16 @@ export default function Order() {
                       </p>
                     </ReviewCard>
 
-                    <ReviewCard icon={<MapPin size={17} />} title="Delivery">
-                      <p>{effectiveDelivery.name}</p>
-
-                      <p className="mt-1 text-brand-ink/55">
-                        {effectiveDelivery.address}
-                      </p>
+                    <ReviewCard icon={isPickup ? <Store size={17} /> : <MapPin size={17} />} title={isPickup ? "Collection" : "Delivery"}>
+                      {isPickup ? <p>Collect from Baura Bakers</p> : <><p>{effectiveDelivery.name}</p><p className="mt-1 text-brand-ink/55">{effectiveDelivery.address}</p></>}
                     </ReviewCard>
 
                     <ReviewCard icon={<Clock3 size={17} />} title="Schedule">
-                      <p>{formatSlot(selectedDeliverySlot)}</p>
+                      <p>{isPickup ? `${formatCalendarDate(pickupDate)} at ${formatHour(pickupStartTime)}` : formatSlot(selectedDeliverySlot)}</p>
                     </ReviewCard>
 
-                    <ReviewCard icon={<Truck size={17} />} title="Delivery fee">
-                      <p>{formatLkr(deliveryFeeLkr)}</p>
+                    <ReviewCard icon={isPickup ? <Store size={17} /> : <Truck size={17} />} title={isPickup ? "Collection fee" : "Delivery fee"}>
+                      <p>{isPickup ? "FREE" : formatLkr(deliveryFeeLkr)}</p>
 
                       {checkoutQuote && (
                         <p className="mt-1 text-brand-ink/55">
@@ -2038,7 +2211,7 @@ export default function Order() {
                     </ReviewCard>
                   </div>
 
-                  {form.isGift && (
+                  {!isPickup && form.isGift && (
                     <div className="flex items-center gap-3 rounded-2xl border border-brand-ink/10 bg-brand-bg/60 px-4 py-3">
                       <Gift size={17} className="shrink-0 text-brand-ink/60" />
 
@@ -2067,8 +2240,8 @@ export default function Order() {
                       <PriceRow label="Subtotal" value={formatLkr(totalLkr)} />
 
                       <PriceRow
-                        label="Delivery"
-                        value={formatLkr(deliveryFeeLkr)}
+                        label={isPickup ? "Collection" : "Delivery"}
+                        value={isPickup ? "FREE" : formatLkr(deliveryFeeLkr)}
                       />
                     </div>
 
@@ -2201,7 +2374,7 @@ export default function Order() {
                       </p>
 
                       <p className="mt-1 text-[11px] leading-5 text-brand-ink/50">
-                        {item.size.label} · {item.sugar} sugar · Qty{" "}
+                        {item.size.label} · {item.sugar ? `${item.sugar} sugar · ` : ""}Qty{" "}
                         {item.quantity}
                       </p>
                     </div>
@@ -2221,9 +2394,9 @@ export default function Order() {
                 <PriceRow
                   label="Delivery"
                   value={
-                    checkoutQuote ? formatLkr(deliveryFeeLkr) : "Not calculated"
+                    isPickup ? "FREE" : checkoutQuote ? formatLkr(deliveryFeeLkr) : "Not calculated"
                   }
-                  muted={!checkoutQuote}
+                  muted={!isPickup && !checkoutQuote}
                 />
               </div>
 
@@ -2236,7 +2409,7 @@ export default function Order() {
               </div>
             </div>
 
-            {selectedDeliverySlot && (
+            {!isPickup && selectedDeliverySlot && (
               <div className="mt-4 rounded-xl bg-brand-bg/70 p-3">
                 <div className="flex items-start gap-2.5">
                   <Clock3
@@ -2257,7 +2430,7 @@ export default function Order() {
               </div>
             )}
 
-            {checkoutQuote && (
+            {!isPickup && checkoutQuote && (
               <div className="mt-2 rounded-xl bg-brand-bg/70 p-3">
                 <div className="flex items-start gap-2.5">
                   <Truck
@@ -2278,6 +2451,9 @@ export default function Order() {
                 </div>
               </div>
             )}
+            {isPickup && pickupScheduleValid && <div className="mt-4 rounded-xl bg-brand-bg/70 p-3 text-xs font-medium text-brand-ink/70">
+              <Store size={15} className="mb-2" /> Collect {formatCalendarDate(pickupDate)} at {formatHour(pickupStartTime)}
+            </div>}
           </aside>
         </div>
 
@@ -2541,6 +2717,62 @@ function InfoBox({
         className,
       ].join(" ")}>
       {children}
+    </div>
+  );
+}
+
+function minutesOfDay(value: string): number {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function minuteToTime(value: number): string {
+  return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+}
+
+function addTenMinutes(value: string): string {
+  return minuteToTime(minutesOfDay(value) + 10);
+}
+
+function formatHour(value: string): string {
+  if (!value) return "—";
+  const hours = Math.floor(minutesOfDay(value) / 60);
+  return `${String(hours % 12 || 12)}:${value.slice(3, 5)} ${hours < 12 ? "AM" : "PM"}`;
+}
+
+function PickupCalendar({ today, lastDate, selected, onSelect }: {
+  today: string;
+  lastDate: string;
+  selected: string;
+  onSelect: (value: string) => void;
+}) {
+  const days: string[] = [];
+  for (let date = new Date(`${today}T12:00:00+05:30`); ; date = new Date(date.getTime() + 86400000)) {
+    const iso = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+    if (iso > lastDate) break;
+    days.push(iso);
+    if (days.length >= 90) break;
+  }
+  const offset = days.length ? new Date(`${days[0]}T12:00:00+05:30`).getUTCDay() : 0;
+  return (
+    <div className="mt-4">
+      <p className="mb-3 text-sm font-semibold text-brand-ink">{new Date(`${today}T12:00:00+05:30`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "Asia/Colombo" })}</p>
+      <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <div key={day} className="py-1 text-center text-[10px] font-semibold text-brand-ink/40">{day}</div>)}
+        {Array.from({ length: offset }, (_, i) => <div key={`offset-${i}`} />)}
+        {days.map((day) => {
+          const date = new Date(`${day}T12:00:00+05:30`);
+          const active = selected === day;
+          return (
+            <button type="button" key={day} onClick={() => onSelect(day)} aria-pressed={active}
+              aria-label={date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "Asia/Colombo" })}
+              className={`flex aspect-square min-h-10 flex-col items-center justify-center rounded-xl border text-sm font-semibold transition sm:min-h-12 ${active ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm" : "border-brand-ink/10 bg-brand-bg/35 text-brand-ink hover:border-brand-ink/30 hover:bg-white"}`}>
+              {date.getUTCDate()}
+              {day === today && <span className={`mt-0.5 text-[8px] font-semibold ${active ? "text-brand-bg/75" : "text-brand-ink/40"}`}>Today</span>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

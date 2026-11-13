@@ -25,6 +25,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
+import { invalidateCheckoutBootstrap } from "../lib/checkoutApi";
 import { getCurrentUser } from "../lib/auth";
 import {
   createAdminDeliverySlots,
@@ -323,6 +324,7 @@ export default function AdminDeliveryManagement() {
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savingAvailability, setSavingAvailability] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [priceForm, setPriceForm] = useState(resetPriceForm());
@@ -520,6 +522,7 @@ export default function AdminDeliveryManagement() {
         data.distancePrices as DeliveryDistancePrice[],
       );
       setSettings(data.settings);
+      invalidateCheckoutBootstrap();
       setSuccessText("Delivery settings updated.");
 
       return true;
@@ -531,6 +534,25 @@ export default function AdminDeliveryManagement() {
       );
 
       return false;
+    }
+  }
+
+  async function toggleDeliveryAvailability() {
+    if (savingAvailability || saving) return;
+    const currentEnabled = settings.delivery_enabled === "true";
+    const nextEnabled = !currentEnabled;
+    setSavingAvailability(true);
+    setErrorText("");
+    setSuccessText("");
+    try {
+      const updated = await saveAdminDeliverySettings([{ setting_key: "delivery_enabled", setting_value: nextEnabled ? "true" : "false" }]);
+      setSettings(updated.settings);
+      invalidateCheckoutBootstrap();
+      setSuccessText(nextEnabled ? "Delivery is now available for checkout." : "Delivery is disabled. Customers can still choose store pickup.");
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : "Unable to change delivery availability.");
+    } finally {
+      setSavingAvailability(false);
     }
   }
 
@@ -1196,6 +1218,40 @@ export default function AdminDeliveryManagement() {
           </div>
         </header>
 
+        <section className="mt-5 rounded-[1.4rem] border border-brand-ink/10 bg-white/65 p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-ink text-brand-bg"><Truck size={19} /></div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-ink/45">Customer checkout</p>
+                <h2 className="mt-1 text-lg font-semibold text-brand-ink">Delivery availability</h2>
+                <p className="mt-1 max-w-xl text-xs leading-5 text-brand-ink/55">
+                  {settings.delivery_enabled === "true" ? "Customers can choose store pickup or delivery." : "Currently we do not offer delivery. Store pickup stays available."}
+                </p>
+              </div>
+            </div>
+            <button type="button" role="switch" aria-checked={settings.delivery_enabled === "true"}
+              aria-label="Toggle customer delivery availability" disabled={savingAvailability || saving}
+              onClick={toggleDeliveryAvailability}
+              className={`group flex min-h-14 w-full items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition sm:w-auto sm:min-w-[250px] ${settings.delivery_enabled === "true" ? "border-brand-ink/20 bg-brand-ink text-brand-bg shadow-sm" : "border-brand-ink/15 bg-white text-brand-ink hover:border-brand-ink/30"} disabled:cursor-wait disabled:opacity-60`}>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{savingAvailability ? "Saving availability…" : settings.delivery_enabled === "true" ? "Delivery is active" : "Delivery is paused"}</span>
+                <span className={`mt-1 block text-[11px] ${settings.delivery_enabled === "true" ? "text-brand-bg/65" : "text-brand-ink/50"}`}>{settings.delivery_enabled === "true" ? "Tap to pause" : "Tap to enable"}</span>
+              </span>
+              <span aria-hidden="true" className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full border p-1 transition ${settings.delivery_enabled === "true" ? "border-brand-bg/35 bg-brand-bg/25" : "border-brand-ink/10 bg-brand-ink/15"}`}>
+                <span className={`h-6 w-6 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.15)] transition-transform ${settings.delivery_enabled === "true" ? "translate-x-6" : "translate-x-0"}`} />
+              </span>
+            </button>
+          </div>
+        </section>
+
+        {settings.delivery_enabled !== "true" && (
+          <div className="mt-4 flex items-start gap-3 rounded-2xl border border-brand-ink/10 bg-white/60 px-4 py-3 text-xs leading-5 text-brand-ink/60">
+            <Ban size={17} className="mt-0.5 shrink-0" />
+            <p>Delivery settings are locked while delivery is paused. Enable delivery above to edit schedules, pricing, vehicle rules and service limits. Existing configuration is preserved.</p>
+          </div>
+        )}
+        <fieldset disabled={settings.delivery_enabled !== "true"} inert={settings.delivery_enabled !== "true"} className={settings.delivery_enabled !== "true" ? "pointer-events-none select-none opacity-45 saturate-50" : ""}>
         {/* NAVIGATION */}
 
         <nav className="mt-5 grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -3172,6 +3228,7 @@ export default function AdminDeliveryManagement() {
             </div>
           </div>
         )}
+        </fieldset>
       </div>
     </Page>
   );
