@@ -1,19 +1,8 @@
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-} from "framer-motion";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  Link,
-  useNavigate,
-  useParams,
-} from "react-router-dom";
+/** @format */
+
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCart } from "../app/cart";
 import DeliveryBadges from "../components/DeliveryBadges";
 import Page from "../components/Page";
@@ -26,13 +15,7 @@ import {
 } from "../lib/items";
 import { trackProductClick } from "../lib/productClicks";
 
-function GalleryMainImage({
-  src,
-  alt,
-}: {
-  src: string;
-  alt: string;
-}) {
+function GalleryMainImage({ src, alt }: { src: string; alt: string }) {
   const reduce = useReducedMotion();
 
   if (reduce) {
@@ -77,9 +60,7 @@ function GalleryMainImage({
 }
 
 function formatLkr(value: number) {
-  return `LKR ${Number(
-    value || 0,
-  ).toLocaleString()}`;
+  return `LKR ${Number(value || 0).toLocaleString()}`;
 }
 
 export default function ProductDetails() {
@@ -87,30 +68,22 @@ export default function ProductDetails() {
   const nav = useNavigate();
   const { addItem } = useCart();
 
-  const [product, setProduct] =
-    useState<MenuItem | null>(null);
+  const [product, setProduct] = useState<MenuItem | null>(null);
 
-  const [size, setSize] =
-    useState<MenuItemSize | null>(null);
+  const [size, setSize] = useState<MenuItemSize | null>(null);
 
-  const [sugar, setSugar] =
-    useState<MenuSugarLevel | null>(null);
+  const [sugar, setSugar] = useState<MenuSugarLevel | null>(null);
 
   const [qty, setQty] = useState(1);
-  const [imgIndex, setImgIndex] =
-    useState(0);
+  const [imgIndex, setImgIndex] = useState(0);
 
-  const [isLoading, setIsLoading] =
-    useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [errorText, setErrorText] =
-    useState("");
+  const [errorText, setErrorText] = useState("");
 
-  const [added, setAdded] =
-    useState(false);
+  const [added, setAdded] = useState(false);
 
-  const hideTimerRef =
-    useRef<number | null>(null);
+  const hideTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     async function loadProduct() {
@@ -124,17 +97,12 @@ export default function ProductDetails() {
         setIsLoading(true);
         setErrorText("");
 
-        const item =
-          await getItemBySlug(slug);
+        const item = await getItemBySlug(slug);
 
         setProduct(item);
         setSize(item.sizes[0] || null);
 
-        setSugar(
-          item.sugarLevels.length > 0
-            ? item.sugarLevels[0]
-            : null,
-        );
+        setSugar(item.sugarLevels.length > 0 ? item.sugarLevels[0] : null);
 
         setQty(1);
         setImgIndex(0);
@@ -148,9 +116,7 @@ export default function ProductDetails() {
         });
       } catch (error) {
         setErrorText(
-          error instanceof Error
-            ? error.message
-            : "Product not found.",
+          error instanceof Error ? error.message : "Product not found.",
         );
       } finally {
         setIsLoading(false);
@@ -163,9 +129,7 @@ export default function ProductDetails() {
   useEffect(() => {
     return () => {
       if (hideTimerRef.current) {
-        window.clearTimeout(
-          hideTimerRef.current,
-        );
+        window.clearTimeout(hideTimerRef.current);
       }
     };
   }, []);
@@ -181,8 +145,7 @@ export default function ProductDetails() {
         ? [
             {
               id: 0,
-              imageUrl:
-                product.thumbnailUrl,
+              imageUrl: product.thumbnailUrl,
               alt: `${product.name} image`,
               sortOrder: 0,
             },
@@ -190,46 +153,28 @@ export default function ProductDetails() {
         : [];
   }, [product]);
 
-  const mainImg =
-    galleryImages[imgIndex];
+  const mainImg = galleryImages[imgIndex];
 
   const showAddedToast = () => {
     setAdded(true);
 
     if (hideTimerRef.current) {
-      window.clearTimeout(
-        hideTimerRef.current,
-      );
+      window.clearTimeout(hideTimerRef.current);
     }
 
-    hideTimerRef.current =
-      window.setTimeout(
-        () => setAdded(false),
-        2200,
-      );
+    hideTimerRef.current = window.setTimeout(() => setAdded(false), 2200);
   };
 
-  const hasSugarOptions =
-    Boolean(
-      product &&
-        product.sugarLevels.length > 0,
-    );
+  const hasSugarOptions = Boolean(product && product.sugarLevels.length > 0);
 
-  const canAddToCart = Boolean(
-    product &&
-      size &&
-      (!hasSugarOptions || sugar),
-  );
+  const canAddToCart = Boolean(product && size && (!hasSugarOptions || sugar));
 
   const addToCart = () => {
     if (!product || !size) {
       return false;
     }
 
-    if (
-      product.sugarLevels.length > 0 &&
-      !sugar
-    ) {
+    if (product.sugarLevels.length > 0 && !sugar) {
       return false;
     }
 
@@ -237,30 +182,21 @@ export default function ProductDetails() {
       itemId: product.id,
       itemSizeId: size.id,
 
-      sugarLevelId:
-        product.sugarLevels.length > 0
-          ? sugar?.id ?? null
-          : null,
+      sugarLevelId: product.sugarLevels.length > 0 ? (sugar?.id ?? null) : null,
 
       productSlug: product.slug,
       productName: product.name,
 
-      image:
-        product.thumbnailUrl ||
-        galleryImages[0]?.imageUrl,
+      image: product.thumbnailUrl || galleryImages[0]?.imageUrl,
 
       size: {
         id: size.id,
         label: size.label,
-        serves:
-          size.serves ?? undefined,
+        serves: size.serves ?? undefined,
         priceLkr: size.priceLkr,
       },
 
-      sugar:
-        product.sugarLevels.length > 0
-          ? sugar?.name ?? null
-          : null,
+      sugar: product.sugarLevels.length > 0 ? (sugar?.name ?? null) : null,
 
       quantity: qty,
       unitPriceLkr: size.priceLkr,
@@ -298,14 +234,10 @@ export default function ProductDetails() {
           </h1>
 
           <p className="text-sm text-brand-ink/65">
-            {errorText ||
-              "This product is unavailable or inactive."}
+            {errorText || "This product is unavailable or inactive."}
           </p>
 
-          <Link
-            className="text-sm font-semibold underline"
-            to="/menu"
-          >
+          <Link className="text-sm font-semibold underline" to="/menu">
             Back to menu
           </Link>
         </div>
@@ -324,9 +256,7 @@ export default function ProductDetails() {
       </h1>
 
       {product.slogan && (
-        <p className="text-sm text-brand-ink/75">
-          {product.slogan}
-        </p>
+        <p className="text-sm text-brand-ink/75">{product.slogan}</p>
       )}
 
       {product.description && (
@@ -343,10 +273,7 @@ export default function ProductDetails() {
         {mainImg ? (
           <GalleryMainImage
             src={mainImg.imageUrl}
-            alt={
-              mainImg.alt ||
-              product.name
-            }
+            alt={mainImg.alt || product.name}
           />
         ) : (
           <div className="grid h-full place-items-center text-sm text-brand-ink/60">
@@ -357,53 +284,34 @@ export default function ProductDetails() {
 
       {galleryImages.length > 1 && (
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-          {galleryImages.map(
-            (image, index) => {
-              const active =
-                index === imgIndex;
+          {galleryImages.map((image, index) => {
+            const active = index === imgIndex;
 
-              return (
-                <button
-                  key={`${image.id}-${image.imageUrl}`}
-                  type="button"
-                  onClick={() =>
-                    setImgIndex(index)
-                  }
+            return (
+              <button
+                key={`${image.id}-${image.imageUrl}`}
+                type="button"
+                onClick={() => setImgIndex(index)}
+                className={[
+                  "shrink-0 overflow-hidden rounded-xl border",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink",
+                  active ? "border-brand-ink/40" : "border-brand-ink/15",
+                ].join(" ")}
+                aria-current={active ? "true" : undefined}
+                aria-label={`View image ${index + 1}`}>
+                <img
+                  src={image.imageUrl}
+                  alt={image.alt || product.name}
                   className={[
-                    "shrink-0 overflow-hidden rounded-xl border",
-                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink",
-                    active
-                      ? "border-brand-ink/40"
-                      : "border-brand-ink/15",
+                    "h-16 w-20 object-cover transition",
+                    active ? "opacity-100" : "opacity-80 hover:opacity-100",
                   ].join(" ")}
-                  aria-current={
-                    active
-                      ? "true"
-                      : undefined
-                  }
-                  aria-label={`View image ${
-                    index + 1
-                  }`}
-                >
-                  <img
-                    src={image.imageUrl}
-                    alt={
-                      image.alt ||
-                      product.name
-                    }
-                    className={[
-                      "h-16 w-20 object-cover transition",
-                      active
-                        ? "opacity-100"
-                        : "opacity-80 hover:opacity-100",
-                    ].join(" ")}
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </button>
-              );
-            },
-          )}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -412,46 +320,54 @@ export default function ProductDetails() {
   const orderBox = (
     <div className="rounded-3xl border border-brand-ink/15 bg-white/40 p-5 shadow-sm">
       <div className="grid gap-4">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
-            SIZE
-          </p>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold tracking-[0.16em] text-brand-ink/55">
+              SELECT YOUR SIZE
+            </p>
+            <p className="text-sm text-brand-ink/60">
+              Choose your preferred serving size.
+            </p>
+          </div>
 
           {product.sizes.length ? (
-            <div className="flex flex-wrap gap-2">
-              {product.sizes.map(
-                (option) => (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {product.sizes.map((option) => {
+                const selected = size?.id === option.id;
+
+                return (
                   <button
                     key={option.id}
                     type="button"
-                    onClick={() =>
-                      setSize(option)
-                    }
+                    onClick={() => setSize(option)}
+                    aria-pressed={selected}
                     className={[
-                      "rounded-xl border px-3 py-2 text-sm transition",
+                      "relative min-h-16 rounded-2xl border px-4 py-3 text-left transition-all duration-200",
                       "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink",
-                      size?.id ===
-                      option.id
-                        ? "border-brand-ink/40 bg-brand-bg/70"
-                        : "border-brand-ink/15 bg-white/30 hover:bg-white/45",
-                    ].join(" ")}
-                  >
-                    <span className="font-semibold">
+                      selected
+                        ? "border-brand-ink/50 bg-brand-ink/[0.07] shadow-sm"
+                        : "border-brand-ink/15 bg-white/45 hover:border-brand-ink/30 hover:bg-white/70",
+                    ].join(" ")}>
+                    <span className="block pr-5 text-sm font-semibold text-brand-ink">
                       {option.label}
                     </span>
 
-                    <span className="ml-2 text-xs text-brand-ink/70">
-                      {option.serves
-                        ? `Serves ${option.serves} • `
-                        : ""}
+                    {option.serves && (
+                      <span className="mt-1 block text-xs text-brand-ink/55">
+                        Serves {option.serves}
+                      </span>
+                    )}
 
-                      {formatLkr(
-                        option.priceLkr,
-                      )}
-                    </span>
+                    {selected && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-brand-ink text-xs text-white">
+                        ✓
+                      </span>
+                    )}
                   </button>
-                ),
-              )}
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-brand-ink/60">
@@ -460,38 +376,66 @@ export default function ProductDetails() {
           )}
         </div>
 
-        {product.sugarLevels.length >
-          0 && (
+        {product.sugarLevels.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
               SUGAR
             </p>
 
             <div className="flex flex-wrap gap-2">
-              {product.sugarLevels.map(
-                (level) => (
-                  <button
-                    key={level.id}
-                    type="button"
-                    onClick={() =>
-                      setSugar(level)
-                    }
-                    className={[
-                      "rounded-xl border px-3 py-2 text-sm transition",
-                      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink",
-                      sugar?.id ===
-                      level.id
-                        ? "border-brand-ink/40 bg-brand-bg/70"
-                        : "border-brand-ink/15 bg-white/30 hover:bg-white/45",
-                    ].join(" ")}
-                  >
-                    {level.name}
-                  </button>
-                ),
-              )}
+              {product.sugarLevels.map((level) => (
+                <button
+                  key={level.id}
+                  type="button"
+                  onClick={() => setSugar(level)}
+                  className={[
+                    "rounded-xl border px-3 py-2 text-sm transition",
+                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink",
+                    sugar?.id === level.id
+                      ? "border-brand-ink/40 bg-brand-bg/70"
+                      : "border-brand-ink/15 bg-white/30 hover:bg-white/45",
+                  ].join(" ")}>
+                  {level.name}
+                </button>
+              ))}
             </div>
           </div>
         )}
+
+        <div
+          className="rounded-2xl border border-brand-ink/10 bg-white/60 px-5 py-5 sm:px-6"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-ink/55">
+            Selected size price
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-3xl font-bold tracking-tight text-brand-ink sm:text-4xl">
+                {size ? formatLkr(size.priceLkr) : "Select a size"}
+              </p>
+
+              {size && (
+                <p className="mt-1 text-xs text-brand-ink/55">
+                  Per item · {size.label}
+                </p>
+              )}
+            </div>
+
+            {size && qty > 1 && (
+              <div className="text-right">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-brand-ink/50">
+                  Total for {qty}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-brand-ink">
+                  {formatLkr(size.priceLkr * qty)}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="space-y-2">
           <p className="text-xs font-semibold tracking-widest text-brand-ink/60">
@@ -501,17 +445,9 @@ export default function ProductDetails() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() =>
-                setQty((current) =>
-                  Math.max(
-                    1,
-                    current - 1,
-                  ),
-                )
-              }
+              onClick={() => setQty((current) => Math.max(1, current - 1))}
               className="h-10 w-10 rounded-xl border border-brand-ink/15 bg-white/30 text-lg hover:bg-white/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink"
-              aria-label="Decrease quantity"
-            >
+              aria-label="Decrease quantity">
               −
             </button>
 
@@ -521,15 +457,9 @@ export default function ProductDetails() {
 
             <button
               type="button"
-              onClick={() =>
-                setQty(
-                  (current) =>
-                    current + 1,
-                )
-              }
+              onClick={() => setQty((current) => current + 1)}
               className="h-10 w-10 rounded-xl border border-brand-ink/15 bg-white/30 text-lg hover:bg-white/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink"
-              aria-label="Increase quantity"
-            >
+              aria-label="Increase quantity">
               +
             </button>
           </div>
@@ -545,8 +475,7 @@ export default function ProductDetails() {
               canAddToCart
                 ? "bg-brand-ink hover:bg-brand-ink/95"
                 : "cursor-not-allowed bg-brand-ink/40",
-            ].join(" ")}
-          >
+            ].join(" ")}>
             Add to cart
           </button>
 
@@ -559,15 +488,13 @@ export default function ProductDetails() {
               canAddToCart
                 ? "border-brand-ink/25 bg-transparent text-brand-ink hover:bg-black/5"
                 : "cursor-not-allowed border-brand-ink/10 text-brand-ink/35",
-            ].join(" ")}
-          >
+            ].join(" ")}>
             Buy now
           </button>
 
           <Link
             to="/cart"
-            className="rounded-xl bg-black/5 px-4 py-2.5 text-sm font-semibold text-brand-ink hover:bg-black/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink"
-          >
+            className="rounded-xl bg-black/5 px-4 py-2.5 text-sm font-semibold text-brand-ink hover:bg-black/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink">
             Go to cart
           </Link>
         </div>
@@ -578,20 +505,17 @@ export default function ProductDetails() {
               initial={{
                 opacity: 0,
                 y: -6,
-                filter:
-                  "blur(2px)",
+                filter: "blur(2px)",
               }}
               animate={{
                 opacity: 1,
                 y: 0,
-                filter:
-                  "blur(0px)",
+                filter: "blur(0px)",
               }}
               exit={{
                 opacity: 0,
                 y: -6,
-                filter:
-                  "blur(2px)",
+                filter: "blur(2px)",
               }}
               transition={{
                 duration: 0.25,
@@ -599,12 +523,8 @@ export default function ProductDetails() {
               }}
               className="mt-2 inline-flex w-fit items-center gap-2 rounded-xl border border-brand-ink/15 bg-white/55 px-3 py-2 text-xs font-semibold text-brand-ink/80"
               role="status"
-              aria-live="polite"
-            >
-              <span className="text-base leading-none">
-                ✓
-              </span>
-
+              aria-live="polite">
+              <span className="text-base leading-none">✓</span>
               Item added to cart
             </motion.div>
           )}
@@ -615,10 +535,7 @@ export default function ProductDetails() {
 
   const packageAndNote = (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Section
-        eyebrow="PACKAGE"
-        title="What’s in the package"
-      >
+      <Section eyebrow="PACKAGE" title="What’s in the package">
         <div className="rounded-2xl border border-brand-ink/15 bg-white/40 p-4 text-sm text-brand-ink/80">
           <ul className="space-y-1">
             <li>• Sealed package</li>
@@ -628,14 +545,10 @@ export default function ProductDetails() {
         </div>
       </Section>
 
-      <Section
-        eyebrow="NOTE"
-        title="Fresh order"
-      >
+      <Section eyebrow="NOTE" title="Fresh order">
         <div className="rounded-2xl border border-brand-ink/15 bg-white/40 p-4 text-sm leading-relaxed text-brand-ink/80">
-          Final delivery time is
-          confirmed after your order is
-          reviewed by Baura Bakers.
+          Final delivery time is confirmed after your order is reviewed by Baura
+          Bakers.
         </div>
       </Section>
     </div>

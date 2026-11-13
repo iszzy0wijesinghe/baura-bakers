@@ -1,12 +1,6 @@
 /** @format */
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Check,
@@ -89,6 +83,11 @@ function onlyDigitsPhone(value: string) {
   return value.replace(/[^\d+]/g, "");
 }
 
+function isValidSriLankanMobile(value: string): boolean {
+  const clean = value.replace(/[\s()-]/g, "");
+  return /^(?:07\d{8}|\+947\d{8}|947\d{8})$/.test(clean);
+}
+
 function isEmailLike(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -135,9 +134,7 @@ function formatCalendarMonth(dateString: string) {
 function extractLatLngFromGoogleMapsUrl(url: string) {
   const clean = url.trim();
 
-  const qMatch = clean.match(
-    /[?&]q=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
-  );
+  const qMatch = clean.match(/[?&]q=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
 
   if (qMatch) {
     return {
@@ -146,9 +143,7 @@ function extractLatLngFromGoogleMapsUrl(url: string) {
     };
   }
 
-  const atMatch = clean.match(
-    /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
-  );
+  const atMatch = clean.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
 
   if (atMatch) {
     return {
@@ -184,44 +179,47 @@ export default function Order() {
   const [submitError, setSubmitError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
+  const [errorFocusRequest, setErrorFocusRequest] = useState(0);
+
+  function requestErrorFocus() {
+    setErrorFocusRequest((current) => current + 1);
+  }
+
   const [savedOrderNo, setSavedOrderNo] = useState<string | null>(null);
 
-  const savedOrderRef = useRef<
-    Awaited<ReturnType<typeof createGuestOrder>> | null
-  >(null);
+  const savedOrderRef = useRef<Awaited<
+    ReturnType<typeof createGuestOrder>
+  > | null>(null);
 
-  const saveOrderPromiseRef = useRef<
-    Promise<Awaited<ReturnType<typeof createGuestOrder>>> | null
-  >(null);
+  const saveOrderPromiseRef = useRef<Promise<
+    Awaited<ReturnType<typeof createGuestOrder>>
+  > | null>(null);
 
-  const [deliverySlots, setDeliverySlots] = useState<
-    CheckoutDeliverySlot[]
-  >([]);
+  const [deliverySlots, setDeliverySlots] = useState<CheckoutDeliverySlot[]>(
+    [],
+  );
 
-  const [selectedDeliverySlotId, setSelectedDeliverySlotId] =
-    useState("");
+  const [selectedDeliverySlotId, setSelectedDeliverySlotId] = useState("");
 
-  const [selectedDeliveryDate, setSelectedDeliveryDate] =
-    useState("");
+  const [selectedDeliveryDate, setSelectedDeliveryDate] = useState("");
 
   const [isLoadingSlots, setIsLoadingSlots] = useState(true);
 
-  const [maxDeliveryDistanceKm, setMaxDeliveryDistanceKm] =
-    useState<number | null>(null);
+  const [maxDeliveryDistanceKm, setMaxDeliveryDistanceKm] = useState<
+    number | null
+  >(null);
 
-  const [isExistingCustomerEmail, setIsExistingCustomerEmail] =
-    useState(false);
+  const [isExistingCustomerEmail, setIsExistingCustomerEmail] = useState(false);
 
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
-  const [dismissLoginPrompt, setDismissLoginPrompt] =
-    useState(false);
+  const [dismissLoginPrompt, setDismissLoginPrompt] = useState(false);
 
-  const [checkoutQuote, setCheckoutQuote] =
-    useState<CheckoutQuote | null>(null);
+  const [checkoutQuote, setCheckoutQuote] = useState<CheckoutQuote | null>(
+    null,
+  );
 
-  const [isCalculatingDistance, setIsCalculatingDistance] =
-    useState(false);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
 
   const [distanceNotice, setDistanceNotice] = useState("");
 
@@ -256,28 +254,19 @@ export default function Order() {
   }, [items]);
 
   const totalQuantity = useMemo(() => {
-    return items.reduce(
-      (sum, item) => sum + item.quantity,
-      0,
-    );
+    return items.reduce((sum, item) => sum + item.quantity, 0);
   }, [items]);
 
-  const needsReceiver =
-    form.hasDifferentReceiver || form.isGift;
+  const needsReceiver = form.hasDifferentReceiver || form.isGift;
 
   const selectedDeliverySlot = useMemo(() => {
     return (
-      deliverySlots.find(
-        (slot) => slot.id === selectedDeliverySlotId,
-      ) || null
+      deliverySlots.find((slot) => slot.id === selectedDeliverySlotId) || null
     );
   }, [deliverySlots, selectedDeliverySlotId]);
 
   const deliveryCalendarDays = useMemo(() => {
-    const grouped = new Map<
-      string,
-      CheckoutDeliverySlot[]
-    >();
+    const grouped = new Map<string, CheckoutDeliverySlot[]>();
 
     for (const slot of deliverySlots) {
       const current = grouped.get(slot.slot_date) || [];
@@ -286,34 +275,26 @@ export default function Order() {
       grouped.set(slot.slot_date, current);
     }
 
-    return Array.from(grouped.entries()).map(
-      ([date, slots]) => ({
-        date,
-        slots: [...slots].sort((a, b) =>
-          a.start_time.localeCompare(b.start_time),
-        ),
-      }),
-    );
+    return Array.from(grouped.entries()).map(([date, slots]) => ({
+      date,
+      slots: [...slots].sort((a, b) =>
+        a.start_time.localeCompare(b.start_time),
+      ),
+    }));
   }, [deliverySlots]);
 
   const selectedDateSlots = useMemo(() => {
     return (
-      deliveryCalendarDays.find(
-        (day) => day.date === selectedDeliveryDate,
-      )?.slots || []
+      deliveryCalendarDays.find((day) => day.date === selectedDeliveryDate)
+        ?.slots || []
     );
   }, [deliveryCalendarDays, selectedDeliveryDate]);
 
   const effectiveDelivery = useMemo(() => {
-    if (
-      form.deliveryTarget === "RECEIVER" &&
-      needsReceiver
-    ) {
+    if (form.deliveryTarget === "RECEIVER" && needsReceiver) {
       return {
         name: form.receiverName,
-        contactNumber: onlyDigitsPhone(
-          form.receiverContactNumber,
-        ),
+        contactNumber: onlyDigitsPhone(form.receiverContactNumber),
         address: form.receiverAddress,
         locationUrl: form.receiverLocationUrl,
         lat: form.receiverLat,
@@ -323,9 +304,7 @@ export default function Order() {
 
     return {
       name: form.senderName,
-      contactNumber: onlyDigitsPhone(
-        form.senderContactNumber,
-      ),
+      contactNumber: onlyDigitsPhone(form.senderContactNumber),
       address: form.senderAddress,
       locationUrl: form.senderLocationUrl,
       lat: form.senderLat,
@@ -334,10 +313,7 @@ export default function Order() {
   }, [form, needsReceiver]);
 
   const deliveryLocationCoords = useMemo(() => {
-    if (
-      effectiveDelivery.lat !== null &&
-      effectiveDelivery.lng !== null
-    ) {
+    if (effectiveDelivery.lat !== null && effectiveDelivery.lng !== null) {
       return {
         lat: effectiveDelivery.lat,
         lng: effectiveDelivery.lng,
@@ -345,9 +321,7 @@ export default function Order() {
     }
 
     if (effectiveDelivery.locationUrl.trim()) {
-      return extractLatLngFromGoogleMapsUrl(
-        effectiveDelivery.locationUrl,
-      );
+      return extractLatLngFromGoogleMapsUrl(effectiveDelivery.locationUrl);
     }
 
     return null;
@@ -361,9 +335,7 @@ export default function Order() {
     const senderValid =
       form.senderName.trim().length >= 2 &&
       isEmailLike(form.senderEmail) &&
-      onlyDigitsPhone(
-        form.senderContactNumber,
-      ).trim().length >= 9 &&
+      isValidSriLankanMobile(form.senderContactNumber) &&
       form.senderAddress.trim().length >= 5;
 
     if (!needsReceiver) {
@@ -372,9 +344,7 @@ export default function Order() {
 
     const receiverValid =
       form.receiverName.trim().length >= 2 &&
-      onlyDigitsPhone(
-        form.receiverContactNumber,
-      ).trim().length >= 9 &&
+      isValidSriLankanMobile(form.receiverContactNumber) &&
       form.receiverAddress.trim().length >= 5;
 
     return senderValid && receiverValid;
@@ -384,16 +354,13 @@ export default function Order() {
     effectiveDelivery.address.trim().length >= 5 &&
     Boolean(deliveryLocationCoords);
 
-  const deliveryFeeLkr =
-    checkoutQuote?.delivery_fee_lkr || 0;
+  const deliveryFeeLkr = checkoutQuote?.delivery_fee_lkr || 0;
 
   const finalTotalLkr = totalLkr + deliveryFeeLkr;
 
   const deliveryCostValid = Boolean(checkoutQuote);
 
-  const scheduleValid =
-    Boolean(selectedDeliverySlot) &&
-    deliveryCostValid;
+  const scheduleValid = Boolean(selectedDeliverySlot) && deliveryCostValid;
 
   const currentLocationUrl =
     form.deliveryTarget === "RECEIVER"
@@ -406,8 +373,7 @@ export default function Order() {
 
   const cartLines = useMemo(() => {
     return items.map((item, index) => {
-      const lineTotal =
-        item.unitPriceLkr * item.quantity;
+      const lineTotal = item.unitPriceLkr * item.quantity;
 
       return `${index + 1}. ${item.productName} • ${
         item.size.label
@@ -432,6 +398,39 @@ export default function Order() {
   }, [step]);
 
   useEffect(() => {
+    if (errorFocusRequest === 0) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const container = stepTopRef.current;
+
+      if (!container) return;
+
+      const errorContainer = container.querySelector<HTMLElement>(
+        '[data-checkout-error="true"]',
+      );
+
+      if (!errorContainer) return;
+
+      const field = errorContainer.querySelector<HTMLElement>(
+        "input, textarea, select, button",
+      );
+
+      const target = field || errorContainer;
+
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      target.focus({
+        preventScroll: true,
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [errorFocusRequest, step]);
+
+  useEffect(() => {
     async function loadLoggedInUserDetails() {
       try {
         setIsLoadingUser(true);
@@ -442,18 +441,11 @@ export default function Order() {
 
         setForm((previous) => ({
           ...previous,
-          senderName:
-            previous.senderName || user.name || "",
-          senderEmail:
-            previous.senderEmail || user.email || "",
-          senderContactNumber:
-            previous.senderContactNumber ||
-            user.phone ||
-            "",
+          senderName: previous.senderName || user.name || "",
+          senderEmail: previous.senderEmail || user.email || "",
+          senderContactNumber: previous.senderContactNumber || user.phone || "",
           senderAddress:
-            previous.senderAddress ||
-            user.default_delivery_address ||
-            "",
+            previous.senderAddress || user.default_delivery_address || "",
         }));
       } catch {
         setSubmitError(
@@ -472,48 +464,30 @@ export default function Order() {
       try {
         setIsLoadingSlots(true);
 
-        const checkout =
-          await getCheckoutBootstrap();
+        const checkout = await getCheckoutBootstrap();
 
-        setMaxDeliveryDistanceKm(
-          checkout.max_delivery_distance_km,
-        );
+        setMaxDeliveryDistanceKm(checkout.max_delivery_distance_km);
 
         const availableSlots = checkout.slots
-          .filter(
-            (slot) =>
-              slot.is_available &&
-              slot.remaining_orders > 0,
-          )
+          .filter((slot) => slot.is_available && slot.remaining_orders > 0)
           .sort((a, b) => {
             if (a.slot_date !== b.slot_date) {
-              return a.slot_date.localeCompare(
-                b.slot_date,
-              );
+              return a.slot_date.localeCompare(b.slot_date);
             }
 
-            return a.start_time.localeCompare(
-              b.start_time,
-            );
+            return a.start_time.localeCompare(b.start_time);
           });
 
         setDeliverySlots(availableSlots);
 
         setSelectedDeliverySlotId((current) =>
-          availableSlots.some(
-            (slot) => slot.id === current,
-          )
-            ? current
-            : "",
+          availableSlots.some((slot) => slot.id === current) ? current : "",
         );
 
         setSelectedDeliveryDate((current) => {
           if (
             current &&
-            availableSlots.some(
-              (slot) =>
-                slot.slot_date === current,
-            )
+            availableSlots.some((slot) => slot.slot_date === current)
           ) {
             return current;
           }
@@ -539,9 +513,7 @@ export default function Order() {
   useEffect(() => {
     let active = true;
 
-    const email = form.senderEmail
-      .trim()
-      .toLowerCase();
+    const email = form.senderEmail.trim().toLowerCase();
 
     async function checkEmail() {
       if (!isEmailLike(email)) {
@@ -564,8 +536,7 @@ export default function Order() {
 
         setIsCheckingEmail(true);
 
-        const exists =
-          await checkCustomerEmailExists(email);
+        const exists = await checkCustomerEmailExists(email);
 
         if (!active) return;
 
@@ -585,10 +556,7 @@ export default function Order() {
       }
     }
 
-    const timer = window.setTimeout(
-      checkEmail,
-      600,
-    );
+    const timer = window.setTimeout(checkEmail, 600);
 
     return () => {
       active = false;
@@ -600,10 +568,7 @@ export default function Order() {
     let ignore = false;
 
     async function calculateDeliveryQuote() {
-      if (
-        !deliveryLocationCoords ||
-        totalQuantity < 1
-      ) {
+      if (!deliveryLocationCoords || totalQuantity < 1) {
         setCheckoutQuote(null);
         setDistanceNotice("");
         setIsCalculatingDistance(false);
@@ -624,9 +589,7 @@ export default function Order() {
 
         setCheckoutQuote(quote);
 
-        if (
-          quote.distance_source === "ESTIMATED"
-        ) {
+        if (quote.distance_source === "ESTIMATED") {
           setDistanceNotice(
             "The delivery distance is currently estimated. Your fee is still calculated by Baura Bakers.",
           );
@@ -656,13 +619,9 @@ export default function Order() {
   }, [deliveryLocationCoords, totalQuantity]);
 
   const whatsappMessage = useMemo(() => {
-    const senderPhone = onlyDigitsPhone(
-      form.senderContactNumber,
-    );
+    const senderPhone = onlyDigitsPhone(form.senderContactNumber);
 
-    const receiverPhone = onlyDigitsPhone(
-      form.receiverContactNumber,
-    );
+    const receiverPhone = onlyDigitsPhone(form.receiverContactNumber);
 
     const locationUrl =
       effectiveDelivery.locationUrl ||
@@ -683,52 +642,30 @@ export default function Order() {
       needsReceiver
         ? [
             "🎁 *Receiver Details*",
-            `Gift Order: ${
-              form.isGift ? "Yes" : "No"
-            }`,
+            `Gift Order: ${form.isGift ? "Yes" : "No"}`,
             `Name: ${form.receiverName || "-"}`,
             `Contact: ${receiverPhone || "-"}`,
-            `Address: ${
-              form.receiverAddress || "-"
-            }`,
+            `Address: ${form.receiverAddress || "-"}`,
             "",
           ].join("\n")
         : "",
       "🚚 *Delivery*",
       `Deliver To: ${
-        form.deliveryTarget === "RECEIVER"
-          ? "Receiver"
-          : "Sender"
+        form.deliveryTarget === "RECEIVER" ? "Receiver" : "Sender"
       }`,
-      `Address: ${
-        effectiveDelivery.address || "-"
-      }`,
-      locationUrl
-        ? `Location: ${locationUrl}`
-        : "",
+      `Address: ${effectiveDelivery.address || "-"}`,
+      locationUrl ? `Location: ${locationUrl}` : "",
       selectedDeliverySlot
-        ? `Schedule: ${formatSlot(
-            selectedDeliverySlot,
-          )}`
+        ? `Schedule: ${formatSlot(selectedDeliverySlot)}`
         : "",
-      form.note.trim()
-        ? `Note: ${form.note.trim()}`
-        : "",
+      form.note.trim() ? `Note: ${form.note.trim()}` : "",
       "",
       "🛍️ *Items*",
-      cartLines.length
-        ? cartLines.join("\n")
-        : "(No items)",
+      cartLines.length ? cartLines.join("\n") : "(No items)",
       "",
-      checkoutQuote
-        ? `📍 *Distance:* ${checkoutQuote.distance_km}km`
-        : "",
-      `🚚 *Delivery Fee:* ${formatLkr(
-        deliveryFeeLkr,
-      )}`,
-      `💰 *Order Total:* ${formatLkr(
-        finalTotalLkr,
-      )}`,
+      checkoutQuote ? `📍 *Distance:* ${checkoutQuote.distance_km}km` : "",
+      `🚚 *Delivery Fee:* ${formatLkr(deliveryFeeLkr)}`,
+      `💰 *Order Total:* ${formatLkr(finalTotalLkr)}`,
       "",
       "🏦 *Payment:* Bank transfer / WhatsApp confirmation",
       "Please confirm the order and payment details.",
@@ -748,10 +685,7 @@ export default function Order() {
     deliveryLocationCoords,
   ]);
 
-  function updateForm<K extends keyof FormState>(
-    key: K,
-    value: FormState[K],
-  ) {
+  function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({
       ...previous,
       [key]: value,
@@ -760,9 +694,7 @@ export default function Order() {
     setSubmitError("");
   }
 
-  function clearFieldError(
-    key: keyof FieldErrors,
-  ) {
+  function clearFieldError(key: keyof FieldErrors) {
     setFieldErrors((previous) => {
       if (!previous[key]) return previous;
 
@@ -773,16 +705,12 @@ export default function Order() {
     });
   }
 
-  function toggleDifferentReceiver(
-    value: boolean,
-  ) {
+  function toggleDifferentReceiver(value: boolean) {
     setForm((previous) => ({
       ...previous,
       hasDifferentReceiver: value,
       isGift: value ? previous.isGift : false,
-      deliveryTarget: value
-        ? previous.deliveryTarget
-        : "SENDER",
+      deliveryTarget: value ? previous.deliveryTarget : "SENDER",
     }));
 
     setSubmitError("");
@@ -792,12 +720,8 @@ export default function Order() {
     setForm((previous) => ({
       ...previous,
       isGift: value,
-      hasDifferentReceiver: value
-        ? true
-        : previous.hasDifferentReceiver,
-      deliveryTarget: value
-        ? "RECEIVER"
-        : previous.deliveryTarget,
+      hasDifferentReceiver: value ? true : previous.hasDifferentReceiver,
+      deliveryTarget: value ? "RECEIVER" : previous.deliveryTarget,
     }));
 
     setSubmitError("");
@@ -807,68 +731,53 @@ export default function Order() {
     const errors: FieldErrors = {};
 
     if (form.senderName.trim().length < 2) {
-      errors.senderName =
-        "Please enter your name.";
+      errors.senderName = "Please enter your name.";
     }
 
     if (!isEmailLike(form.senderEmail)) {
-      errors.senderEmail =
-        "Enter a valid email address.";
+      errors.senderEmail = "Enter a valid email address.";
     }
 
-    if (
-      onlyDigitsPhone(
-        form.senderContactNumber,
-      ).trim().length < 9
-    ) {
-      errors.senderContactNumber =
-        "Enter a valid contact number.";
+    if (!isValidSriLankanMobile(form.senderContactNumber)) {
+      errors.senderContactNumber = "Enter a valid contact number.";
     }
 
     if (form.senderAddress.trim().length < 5) {
-      errors.senderAddress =
-        "Please enter your full address.";
+      errors.senderAddress = "Please enter your full address.";
     }
 
     if (needsReceiver) {
-      if (
-        form.receiverName.trim().length < 2
-      ) {
-        errors.receiverName =
-          "Please enter the receiver's name.";
+      if (form.receiverName.trim().length < 2) {
+        errors.receiverName = "Please enter the receiver's name.";
       }
 
-      if (
-        onlyDigitsPhone(
-          form.receiverContactNumber,
-        ).trim().length < 9
-      ) {
-        errors.receiverContactNumber =
-          "Enter a valid receiver contact number.";
+      if (!isValidSriLankanMobile(form.receiverContactNumber)) {
+        errors.receiverContactNumber = "Enter a valid receiver contact number.";
       }
 
-      if (
-        form.receiverAddress.trim().length < 5
-      ) {
-        errors.receiverAddress =
-          "Please enter the receiver's address.";
+      if (form.receiverAddress.trim().length < 5) {
+        errors.receiverAddress = "Please enter the receiver's address.";
       }
     }
 
     setFieldErrors(errors);
 
-    return Object.keys(errors).length === 0;
+    const isValid = Object.keys(errors).length === 0;
+
+    if (!isValid) {
+      requestErrorFocus();
+    }
+
+    return isValid;
   }
 
   function validateDelivery() {
-    if (
-      effectiveDelivery.address.trim().length < 5
-    ) {
+    if (effectiveDelivery.address.trim().length < 5) {
       setFieldErrors({
-        deliveryLocation:
-          "Add a complete delivery address before continuing.",
+        deliveryLocation: "Add a complete delivery address before continuing.",
       });
 
+      requestErrorFocus();
       return false;
     }
 
@@ -878,6 +787,7 @@ export default function Order() {
           "Add an exact map location using your current location or a Google Maps coordinate link.",
       });
 
+      requestErrorFocus();
       return false;
     }
 
@@ -889,10 +799,10 @@ export default function Order() {
   function validateSchedule() {
     if (!selectedDeliverySlot) {
       setFieldErrors({
-        deliverySlot:
-          "Choose a delivery time before continuing.",
+        deliverySlot: "Choose a delivery time before continuing.",
       });
 
+      requestErrorFocus();
       return false;
     }
 
@@ -901,6 +811,7 @@ export default function Order() {
         "Your delivery fee is not ready yet. Check the delivery location and try again.",
       );
 
+      requestErrorFocus();
       return false;
     }
 
@@ -924,20 +835,14 @@ export default function Order() {
       return;
     }
 
-    setStep(
-      (previous) =>
-        Math.min(previous + 1, 4) as StepNo,
-    );
+    setStep((previous) => Math.min(previous + 1, 4) as StepNo);
   }
 
   function goBack() {
     setSubmitError("");
     setFieldErrors({});
 
-    setStep(
-      (previous) =>
-        Math.max(previous - 1, 1) as StepNo,
-    );
+    setStep((previous) => Math.max(previous - 1, 1) as StepNo);
   }
 
   function goToStep(target: StepNo) {
@@ -956,10 +861,7 @@ export default function Order() {
       return;
     }
 
-    if (
-      target >= 3 &&
-      !deliveryAddressValid
-    ) {
+    if (target >= 3 && !deliveryAddressValid) {
       setStep(2);
       validateDelivery();
       return;
@@ -980,11 +882,9 @@ export default function Order() {
     setForm((previous) => ({
       ...previous,
       receiverName: previous.senderName,
-      receiverContactNumber:
-        previous.senderContactNumber,
+      receiverContactNumber: previous.senderContactNumber,
       receiverAddress: previous.senderAddress,
-      receiverLocationUrl:
-        previous.senderLocationUrl,
+      receiverLocationUrl: previous.senderLocationUrl,
       receiverLat: previous.senderLat,
       receiverLng: previous.senderLng,
     }));
@@ -997,9 +897,7 @@ export default function Order() {
     }));
   }
 
-  function useCurrentLocation(
-    target: DeliveryTarget,
-  ) {
+  function useCurrentLocation(target: DeliveryTarget) {
     if (!navigator.geolocation) {
       setSubmitError(
         "Location sharing isn't supported by this browser. Please paste your Google Maps location instead.",
@@ -1012,13 +910,9 @@ export default function Order() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const lat = Number(
-          position.coords.latitude.toFixed(7),
-        );
+        const lat = Number(position.coords.latitude.toFixed(7));
 
-        const lng = Number(
-          position.coords.longitude.toFixed(7),
-        );
+        const lng = Number(position.coords.longitude.toFixed(7));
 
         const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
 
@@ -1058,12 +952,9 @@ export default function Order() {
   }
 
   function updateLocationUrl(value: string) {
-    const coords =
-      extractLatLngFromGoogleMapsUrl(value);
+    const coords = extractLatLngFromGoogleMapsUrl(value);
 
-    if (
-      form.deliveryTarget === "RECEIVER"
-    ) {
+    if (form.deliveryTarget === "RECEIVER") {
       setForm((previous) => ({
         ...previous,
         receiverLocationUrl: value,
@@ -1084,9 +975,7 @@ export default function Order() {
     }
   }
 
-  async function saveOrderOnce(
-    paymentMethod: string,
-  ) {
+  async function saveOrderOnce(paymentMethod: string) {
     if (savedOrderRef.current) {
       return savedOrderRef.current;
     }
@@ -1096,37 +985,27 @@ export default function Order() {
     }
 
     if (!selectedDeliverySlot) {
-      throw new Error(
-        "Please choose a delivery time.",
-      );
+      throw new Error("Please choose a delivery time.");
     }
 
     if (!deliveryLocationCoords) {
-      throw new Error(
-        "Please add an exact delivery location.",
-      );
+      throw new Error("Please add an exact delivery location.");
     }
 
     if (!checkoutQuote) {
-      throw new Error(
-        "Delivery pricing is not ready yet.",
-      );
+      throw new Error("Delivery pricing is not ready yet.");
     }
 
-    const fallbackLocationUrl =
-      `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}`;
+    const fallbackLocationUrl = `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}`;
 
     const request = createGuestOrder({
       orderNo: orderId,
 
       senderName: form.senderName,
       senderEmail: form.senderEmail,
-      senderContactNumber: onlyDigitsPhone(
-        form.senderContactNumber,
-      ),
+      senderContactNumber: onlyDigitsPhone(form.senderContactNumber),
       senderAddress: form.senderAddress,
-      senderLocationUrl:
-        form.senderLocationUrl,
+      senderLocationUrl: form.senderLocationUrl,
       senderLat: form.senderLat,
       senderLng: form.senderLng,
 
@@ -1134,43 +1013,28 @@ export default function Order() {
       isGift: form.isGift,
 
       receiverName: form.receiverName,
-      receiverContactNumber: onlyDigitsPhone(
-        form.receiverContactNumber,
-      ),
+      receiverContactNumber: onlyDigitsPhone(form.receiverContactNumber),
       receiverAddress: form.receiverAddress,
-      receiverLocationUrl:
-        form.receiverLocationUrl,
+      receiverLocationUrl: form.receiverLocationUrl,
       receiverLat: form.receiverLat,
       receiverLng: form.receiverLng,
 
       deliveryTarget: form.deliveryTarget,
-      deliveryAddress:
-        effectiveDelivery.address,
-      deliveryLocationUrl:
-        effectiveDelivery.locationUrl ||
-        fallbackLocationUrl,
+      deliveryAddress: effectiveDelivery.address,
+      deliveryLocationUrl: effectiveDelivery.locationUrl || fallbackLocationUrl,
       deliveryLat: deliveryLocationCoords.lat,
       deliveryLng: deliveryLocationCoords.lng,
-      deliverySlotId:
-        selectedDeliverySlot.id,
+      deliverySlotId: selectedDeliverySlot.id,
 
-      deliveryDate:
-        selectedDeliverySlot.slot_date,
-      deliverySlotLabel:
-        selectedDeliverySlot.slot_label,
-      deliverySlotStart:
-        selectedDeliverySlot.start_time,
-      deliverySlotEnd:
-        selectedDeliverySlot.end_time,
+      deliveryDate: selectedDeliverySlot.slot_date,
+      deliverySlotLabel: selectedDeliverySlot.slot_label,
+      deliverySlotStart: selectedDeliverySlot.start_time,
+      deliverySlotEnd: selectedDeliverySlot.end_time,
 
-      deliveryDistanceKm:
-        checkoutQuote.distance_km,
-      deliveryVehicleType:
-        checkoutQuote.vehicle_type,
-      deliveryFeeLkr:
-        checkoutQuote.delivery_fee_lkr,
-      deliveryPricingMode:
-        checkoutQuote.pricing_mode,
+      deliveryDistanceKm: checkoutQuote.distance_km,
+      deliveryVehicleType: checkoutQuote.vehicle_type,
+      deliveryFeeLkr: checkoutQuote.delivery_fee_lkr,
+      deliveryPricingMode: checkoutQuote.pricing_mode,
 
       deliveryApp: DELIVERY_METHOD,
       paymentMethod,
@@ -1193,10 +1057,7 @@ export default function Order() {
   }
 
   async function bankTransferViaWhatsApp() {
-    if (
-      isSubmitting ||
-      !items.length
-    ) {
+    if (isSubmitting || !items.length) {
       return;
     }
 
@@ -1215,10 +1076,7 @@ export default function Order() {
       return;
     }
 
-    const whatsappTab = window.open(
-      "about:blank",
-      "_blank",
-    );
+    const whatsappTab = window.open("about:blank", "_blank");
 
     if (whatsappTab) {
       whatsappTab.opener = null;
@@ -1228,31 +1086,21 @@ export default function Order() {
       setIsSubmitting(true);
       setSubmitError("");
 
-      const savedOrder = await saveOrderOnce(
-        "BANK_TRANSFER_WHATSAPP",
-      );
+      const savedOrder = await saveOrderOnce("BANK_TRANSFER_WHATSAPP");
 
-      const savedOrderNoForTracking =
-        savedOrder.orderNo;
+      const savedOrderNoForTracking = savedOrder.orderNo;
 
       const trackingUrl = savedOrder.trackingToken
-        ? `${
-            window.location.origin
-          }/track/${encodeURIComponent(
+        ? `${window.location.origin}/track/${encodeURIComponent(
             savedOrderNoForTracking,
-          )}?t=${encodeURIComponent(
-            savedOrder.trackingToken,
-          )}`
-        : `${
-            window.location.origin
-          }/track/${encodeURIComponent(
+          )}?t=${encodeURIComponent(savedOrder.trackingToken)}`
+        : `${window.location.origin}/track/${encodeURIComponent(
             savedOrderNoForTracking,
           )}`;
 
-      const isLoggedIn =
-        await getAuthenticatedUser()
-          .then(Boolean)
-          .catch(() => false);
+      const isLoggedIn = await getAuthenticatedUser()
+        .then(Boolean)
+        .catch(() => false);
 
       localStorage.setItem(
         "baura_completed_bank_transfer_v1",
@@ -1270,28 +1118,20 @@ export default function Order() {
         `🔎 *Track Order:* ${trackingUrl}`,
       ].join("\n");
 
-      const whatsappUrl =
-        `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-          finalWhatsappMessage,
-        )}`;
+      const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+        finalWhatsappMessage,
+      )}`;
 
       clear();
 
       if (whatsappTab) {
         whatsappTab.location.href = whatsappUrl;
       } else {
-        window.open(
-          whatsappUrl,
-          "_blank",
-          "noopener,noreferrer",
-        );
+        window.open(whatsappUrl, "_blank", "noopener,noreferrer");
       }
 
       if (!isLoggedIn) {
-        sessionStorage.setItem(
-          "baura_after_login_redirect",
-          "/orders",
-        );
+        sessionStorage.setItem("baura_after_login_redirect", "/orders");
       }
 
       navigate("/orders");
@@ -1300,16 +1140,15 @@ export default function Order() {
         whatsappTab.close();
       }
 
-      console.error(
-        "Bank transfer order failed:",
-        error,
-      );
+      console.error("Bank transfer order failed:", error);
 
+      const message = error instanceof Error ? error.message : "";
       setSubmitError(
-        error instanceof Error
-          ? error.message
-          : "We couldn't save your order. Your cart is still safe — please try again.",
+        /items\.\d+\.sugar_level_id/.test(message)
+          ? "One item has an unavailable sugar selection. Please return to your cart and select a valid option, or try again after the catalogue is updated."
+          : message || "We couldn't save your order. Your cart is still safe — please try again.",
       );
+      requestErrorFocus();
 
       setIsSubmitting(false);
     }
@@ -1356,10 +1195,7 @@ export default function Order() {
       <Page>
         <section className="mx-auto max-w-xl rounded-[1.75rem] border border-brand-ink/10 bg-white/65 px-5 py-10 text-center shadow-sm backdrop-blur sm:px-8 sm:py-12">
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-ink text-brand-bg">
-            <ShoppingBag
-              size={21}
-              strokeWidth={1.8}
-            />
+            <ShoppingBag size={21} strokeWidth={1.8} />
           </div>
 
           <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.26em] text-brand-ink/40">
@@ -1371,14 +1207,13 @@ export default function Order() {
           </h1>
 
           <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-brand-ink/60">
-            Pick something delicious from the menu
-            and come back when you're ready.
+            Pick something delicious from the menu and come back when you're
+            ready.
           </p>
 
           <Link
             to="/menu"
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg transition hover:bg-brand-ink/90"
-          >
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg transition hover:bg-brand-ink/90">
             Explore menu
             <ChevronRight size={16} />
           </Link>
@@ -1389,10 +1224,7 @@ export default function Order() {
 
   return (
     <Page>
-      <div
-        ref={stepTopRef}
-        className="scroll-mt-24 pb-24 lg:pb-0"
-      >
+      <div ref={stepTopRef} className="scroll-mt-24 pb-24 lg:pb-0">
         <header className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-brand-ink/40">
@@ -1404,8 +1236,7 @@ export default function Order() {
             </h1>
 
             <p className="mt-1.5 max-w-xl text-sm leading-6 text-brand-ink/60">
-              Complete your Baura order in four
-              quick steps.
+              Complete your Baura order in four quick steps.
             </p>
           </div>
 
@@ -1414,9 +1245,7 @@ export default function Order() {
               Order
             </span>
 
-            <span className="text-xs font-bold text-brand-ink">
-              {orderId}
-            </span>
+            <span className="text-xs font-bold text-brand-ink">{orderId}</span>
           </div>
         </header>
 
@@ -1430,9 +1259,7 @@ export default function Order() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() =>
-                    goToStep(item.id)
-                  }
+                  onClick={() => goToStep(item.id)}
                   className={[
                     "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition",
                     active
@@ -1440,8 +1267,7 @@ export default function Order() {
                       : done
                         ? "border-brand-ink/15 bg-brand-bg/80 text-brand-ink"
                         : "border-brand-ink/10 bg-white/45 text-brand-ink/45 hover:bg-white/70",
-                  ].join(" ")}
-                >
+                  ].join(" ")}>
                   <span
                     className={[
                       "grid h-7 w-7 shrink-0 place-items-center rounded-lg",
@@ -1450,24 +1276,16 @@ export default function Order() {
                         : done
                           ? "bg-brand-ink text-brand-bg"
                           : "bg-brand-ink/[0.05]",
-                    ].join(" ")}
-                  >
-                    {done ? (
-                      <Check size={14} />
-                    ) : (
-                      item.icon
-                    )}
+                    ].join(" ")}>
+                    {done ? <Check size={14} /> : item.icon}
                   </span>
 
                   <span>
                     <span
                       className={[
                         "block text-[9px] font-semibold uppercase tracking-wider",
-                        active
-                          ? "text-brand-bg/55"
-                          : "text-brand-ink/35",
-                      ].join(" ")}
-                    >
+                        active ? "text-brand-bg/55" : "text-brand-ink/35",
+                      ].join(" ")}>
                       Step {item.id}
                     </span>
 
@@ -1484,7 +1302,11 @@ export default function Order() {
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_350px] xl:grid-cols-[minmax(0,1fr)_380px]">
           <main className="min-w-0">
             {submitError && (
-              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium leading-6 text-red-700">
+              <div
+                data-checkout-error="true"
+                tabIndex={-1}
+                role="alert"
+                className="mb-4 scroll-mt-28 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium leading-6 text-red-700 outline-none">
                 {submitError}
               </div>
             )}
@@ -1505,26 +1327,14 @@ export default function Order() {
                   )}
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field
-                      label="Your name"
-                      error={fieldErrors.senderName}
-                    >
+                    <Field label="Your name" error={fieldErrors.senderName}>
                       <input
                         value={form.senderName}
                         onChange={(event) => {
-                          updateForm(
-                            "senderName",
-                            event.target.value,
-                          );
-                          clearFieldError(
-                            "senderName",
-                          );
+                          updateForm("senderName", event.target.value);
+                          clearFieldError("senderName");
                         }}
-                        className={inputClass(
-                          Boolean(
-                            fieldErrors.senderName,
-                          ),
-                        )}
+                        className={inputClass(Boolean(fieldErrors.senderName))}
                         placeholder="Full name"
                         autoComplete="name"
                       />
@@ -1532,55 +1342,41 @@ export default function Order() {
 
                     <Field
                       label="Contact number"
-                      error={
-                        fieldErrors.senderContactNumber
-                      }
-                    >
+                      error={fieldErrors.senderContactNumber}>
                       <input
-                        value={
-                          form.senderContactNumber
-                        }
+                        value={form.senderContactNumber}
                         onChange={(event) => {
-                          updateForm(
-                            "senderContactNumber",
-                            event.target.value,
-                          );
-                          clearFieldError(
-                            "senderContactNumber",
-                          );
+                          updateForm("senderContactNumber", event.target.value);
+                          clearFieldError("senderContactNumber");
                         }}
                         className={inputClass(
-                          Boolean(
-                            fieldErrors.senderContactNumber,
-                          ),
+                          Boolean(fieldErrors.senderContactNumber),
                         )}
                         placeholder="07X XXX XXXX"
                         inputMode="tel"
-                        autoComplete="tel"
+                        maxLength={16}
+                          aria-invalid={Boolean(fieldErrors.senderContactNumber)}
+                          onBlur={() => {
+                            if (form.senderContactNumber.trim() && !isValidSriLankanMobile(form.senderContactNumber)) {
+                              setFieldErrors((current) => ({
+                                ...current,
+                                senderContactNumber: "Enter a valid Sri Lankan mobile number.",
+                              }));
+                            }
+                          }}
+                          autoComplete="tel"
                       />
                     </Field>
                   </div>
 
-                  <Field
-                    label="Email address"
-                    error={fieldErrors.senderEmail}
-                  >
+                  <Field label="Email address" error={fieldErrors.senderEmail}>
                     <input
                       value={form.senderEmail}
                       onChange={(event) => {
-                        updateForm(
-                          "senderEmail",
-                          event.target.value,
-                        );
-                        clearFieldError(
-                          "senderEmail",
-                        );
+                        updateForm("senderEmail", event.target.value);
+                        clearFieldError("senderEmail");
                       }}
-                      className={inputClass(
-                        Boolean(
-                          fieldErrors.senderEmail,
-                        ),
-                      )}
+                      className={inputClass(Boolean(fieldErrors.senderEmail))}
                       placeholder="you@example.com"
                       type="email"
                       inputMode="email"
@@ -1594,64 +1390,43 @@ export default function Order() {
                     </p>
                   )}
 
-                  {isExistingCustomerEmail &&
-                    !dismissLoginPrompt && (
-                      <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/70 p-4">
-                        <p className="text-sm font-semibold text-brand-ink">
-                          Welcome back
-                        </p>
+                  {isExistingCustomerEmail && !dismissLoginPrompt && (
+                    <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/70 p-4">
+                      <p className="text-sm font-semibold text-brand-ink">
+                        Welcome back
+                      </p>
 
-                        <p className="mt-1 text-xs leading-5 text-brand-ink/60">
-                          There's already an account
-                          using this email. You can sign
-                          in for faster checkout or
-                          continue as a guest.
-                        </p>
+                      <p className="mt-1 text-xs leading-5 text-brand-ink/60">
+                        There's already an account using this email. You can
+                        sign in for faster checkout or continue as a guest.
+                      </p>
 
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Link
-                            to="/login"
-                            className="rounded-xl bg-brand-ink px-4 py-2 text-xs font-semibold text-brand-bg"
-                          >
-                            Sign in
-                          </Link>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Link
+                          to="/login"
+                          className="rounded-xl bg-brand-ink px-4 py-2 text-xs font-semibold text-brand-bg">
+                          Sign in
+                        </Link>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setDismissLoginPrompt(
-                                true,
-                              )
-                            }
-                            className="rounded-xl border border-brand-ink/15 bg-white/60 px-4 py-2 text-xs font-semibold text-brand-ink"
-                          >
-                            Continue as guest
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDismissLoginPrompt(true)}
+                          className="rounded-xl border border-brand-ink/15 bg-white/60 px-4 py-2 text-xs font-semibold text-brand-ink">
+                          Continue as guest
+                        </button>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                  <Field
-                    label="Your address"
-                    error={
-                      fieldErrors.senderAddress
-                    }
-                  >
+                  <Field label="Your address" error={fieldErrors.senderAddress}>
                     <textarea
                       value={form.senderAddress}
                       onChange={(event) => {
-                        updateForm(
-                          "senderAddress",
-                          event.target.value,
-                        );
-                        clearFieldError(
-                          "senderAddress",
-                        );
+                        updateForm("senderAddress", event.target.value);
+                        clearFieldError("senderAddress");
                       }}
                       className={`${inputClass(
-                        Boolean(
-                          fieldErrors.senderAddress,
-                        ),
+                        Boolean(fieldErrors.senderAddress),
                       )} min-h-[88px] resize-y`}
                       placeholder="House number, street, city"
                       autoComplete="street-address"
@@ -1664,24 +1439,18 @@ export default function Order() {
                     </p>
 
                     <p className="mt-1 text-xs leading-5 text-brand-ink/55">
-                      Add receiver details for gifts or
-                      deliveries to another person.
+                      Add receiver details for gifts or deliveries to another
+                      person.
                     </p>
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <ToggleCard
-                        active={
-                          form.hasDifferentReceiver
-                        }
-                        icon={
-                          <UserRound size={17} />
-                        }
+                        active={form.hasDifferentReceiver}
+                        icon={<UserRound size={17} />}
                         title="Different receiver"
                         description="Send the order to someone else."
                         onClick={() =>
-                          toggleDifferentReceiver(
-                            !form.hasDifferentReceiver,
-                          )
+                          toggleDifferentReceiver(!form.hasDifferentReceiver)
                         }
                       />
 
@@ -1690,11 +1459,7 @@ export default function Order() {
                         icon={<Gift size={17} />}
                         title="This is a gift"
                         description="We'll use the receiver's details."
-                        onClick={() =>
-                          toggleGift(
-                            !form.isGift,
-                          )
-                        }
+                        onClick={() => toggleGift(!form.isGift)}
                       />
                     </div>
                   </div>
@@ -1714,11 +1479,8 @@ export default function Order() {
 
                         <button
                           type="button"
-                          onClick={
-                            copySenderToReceiver
-                          }
-                          className="w-fit rounded-xl border border-brand-ink/15 bg-white/65 px-3 py-2 text-xs font-semibold text-brand-ink transition hover:bg-white"
-                        >
+                          onClick={copySenderToReceiver}
+                          className="w-fit rounded-xl border border-brand-ink/15 bg-white/65 px-3 py-2 text-xs font-semibold text-brand-ink transition hover:bg-white">
                           Copy sender details
                         </button>
                       </div>
@@ -1726,27 +1488,15 @@ export default function Order() {
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         <Field
                           label="Receiver name"
-                          error={
-                            fieldErrors.receiverName
-                          }
-                        >
+                          error={fieldErrors.receiverName}>
                           <input
-                            value={
-                              form.receiverName
-                            }
+                            value={form.receiverName}
                             onChange={(event) => {
-                              updateForm(
-                                "receiverName",
-                                event.target.value,
-                              );
-                              clearFieldError(
-                                "receiverName",
-                              );
+                              updateForm("receiverName", event.target.value);
+                              clearFieldError("receiverName");
                             }}
                             className={inputClass(
-                              Boolean(
-                                fieldErrors.receiverName,
-                              ),
+                              Boolean(fieldErrors.receiverName),
                             )}
                             placeholder="Full name"
                             autoComplete="off"
@@ -1755,31 +1505,32 @@ export default function Order() {
 
                         <Field
                           label="Receiver contact"
-                          error={
-                            fieldErrors.receiverContactNumber
-                          }
-                        >
+                          error={fieldErrors.receiverContactNumber}>
                           <input
-                            value={
-                              form.receiverContactNumber
-                            }
+                            value={form.receiverContactNumber}
                             onChange={(event) => {
                               updateForm(
                                 "receiverContactNumber",
                                 event.target.value,
                               );
-                              clearFieldError(
-                                "receiverContactNumber",
-                              );
+                              clearFieldError("receiverContactNumber");
                             }}
                             className={inputClass(
-                              Boolean(
-                                fieldErrors.receiverContactNumber,
-                              ),
+                              Boolean(fieldErrors.receiverContactNumber),
                             )}
                             placeholder="07X XXX XXXX"
                             inputMode="tel"
-                            autoComplete="off"
+                            maxLength={16}
+                          aria-invalid={Boolean(fieldErrors.receiverContactNumber)}
+                          onBlur={() => {
+                            if (form.receiverContactNumber.trim() && !isValidSriLankanMobile(form.receiverContactNumber)) {
+                              setFieldErrors((current) => ({
+                                ...current,
+                                receiverContactNumber: "Enter a valid Sri Lankan mobile number.",
+                              }));
+                            }
+                          }}
+                          autoComplete="off"
                           />
                         </Field>
                       </div>
@@ -1787,27 +1538,15 @@ export default function Order() {
                       <div className="mt-4">
                         <Field
                           label="Receiver address"
-                          error={
-                            fieldErrors.receiverAddress
-                          }
-                        >
+                          error={fieldErrors.receiverAddress}>
                           <textarea
-                            value={
-                              form.receiverAddress
-                            }
+                            value={form.receiverAddress}
                             onChange={(event) => {
-                              updateForm(
-                                "receiverAddress",
-                                event.target.value,
-                              );
-                              clearFieldError(
-                                "receiverAddress",
-                              );
+                              updateForm("receiverAddress", event.target.value);
+                              clearFieldError("receiverAddress");
                             }}
                             className={`${inputClass(
-                              Boolean(
-                                fieldErrors.receiverAddress,
-                              ),
+                              Boolean(fieldErrors.receiverAddress),
                             )} min-h-[88px] resize-y`}
                             placeholder="House number, street, city"
                           />
@@ -1828,52 +1567,32 @@ export default function Order() {
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <ToggleCard
-                      active={
-                        form.deliveryTarget ===
-                        "SENDER"
-                      }
+                      active={form.deliveryTarget === "SENDER"}
                       icon={<UserRound size={17} />}
                       title="My address"
-                      description={
-                        form.senderAddress ||
-                        "Sender address"
-                      }
+                      description={form.senderAddress || "Sender address"}
                       onClick={() => {
-                        updateForm(
-                          "deliveryTarget",
-                          "SENDER",
-                        );
-                        clearFieldError(
-                          "deliveryLocation",
-                        );
+                        updateForm("deliveryTarget", "SENDER");
+                        clearFieldError("deliveryLocation");
                       }}
                     />
 
                     <ToggleCard
-                      active={
-                        form.deliveryTarget ===
-                        "RECEIVER"
-                      }
+                      active={form.deliveryTarget === "RECEIVER"}
                       disabled={!needsReceiver}
                       icon={<Gift size={17} />}
                       title="Receiver address"
                       description={
                         needsReceiver
-                          ? form.receiverAddress ||
-                            "Receiver address"
+                          ? form.receiverAddress || "Receiver address"
                           : "Add a receiver in step 1 first."
                       }
                       onClick={() => {
                         if (!needsReceiver) return;
 
-                        updateForm(
-                          "deliveryTarget",
-                          "RECEIVER",
-                        );
+                        updateForm("deliveryTarget", "RECEIVER");
 
-                        clearFieldError(
-                          "deliveryLocation",
-                        );
+                        clearFieldError("deliveryLocation");
                       }}
                     />
                   </div>
@@ -1890,8 +1609,7 @@ export default function Order() {
                         </p>
 
                         <p className="mt-1 text-sm font-semibold leading-6 text-brand-ink">
-                          {effectiveDelivery.address ||
-                            "No address added"}
+                          {effectiveDelivery.address || "No address added"}
                         </p>
                       </div>
                     </div>
@@ -1905,32 +1623,24 @@ export default function Order() {
                         </p>
 
                         <p className="mt-1 text-xs leading-5 text-brand-ink/55">
-                          Use your device location or
-                          paste a Google Maps coordinate
-                          link.
+                          Use your device location or paste a Google Maps
+                          coordinate link.
                         </p>
                       </div>
 
                       <button
                         type="button"
-                        onClick={() =>
-                          useCurrentLocation(
-                            form.deliveryTarget,
-                          )
-                        }
+                        onClick={() => useCurrentLocation(form.deliveryTarget)}
                         disabled={isLocating}
                         className={[
                           "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition",
                           isLocating
                             ? "cursor-not-allowed bg-brand-ink/30 text-brand-bg"
                             : "bg-brand-ink text-brand-bg hover:bg-brand-ink/90",
-                        ].join(" ")}
-                      >
+                        ].join(" ")}>
                         <LocateFixed size={15} />
 
-                        {isLocating
-                          ? "Locating…"
-                          : "Use my location"}
+                        {isLocating ? "Locating…" : "Use my location"}
                       </button>
                     </div>
 
@@ -1938,14 +1648,10 @@ export default function Order() {
                       <input
                         value={currentLocationUrl}
                         onChange={(event) =>
-                          updateLocationUrl(
-                            event.target.value,
-                          )
+                          updateLocationUrl(event.target.value)
                         }
                         className={inputClass(
-                          Boolean(
-                            fieldErrors.deliveryLocation,
-                          ),
+                          Boolean(fieldErrors.deliveryLocation),
                         )}
                         placeholder="Google Maps coordinate link"
                         inputMode="url"
@@ -1953,9 +1659,7 @@ export default function Order() {
 
                       {fieldErrors.deliveryLocation && (
                         <p className="mt-1.5 text-xs font-medium text-red-600">
-                          {
-                            fieldErrors.deliveryLocation
-                          }
+                          {fieldErrors.deliveryLocation}
                         </p>
                       )}
                     </div>
@@ -1972,85 +1676,64 @@ export default function Order() {
 
                       <div className="flex flex-col gap-2 border-t border-brand-ink/10 bg-white/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-2 text-xs font-medium text-brand-ink/65">
-                          <Check
-                            size={14}
-                            className="text-green-700"
-                          />
+                          <Check size={14} className="text-green-700" />
                           Location added
                         </div>
 
                         <span className="text-[11px] text-brand-ink/40">
-                          {deliveryLocationCoords.lat.toFixed(
-                            5,
-                          )}
-                          ,{" "}
-                          {deliveryLocationCoords.lng.toFixed(
-                            5,
-                          )}
+                          {deliveryLocationCoords.lat.toFixed(5)},{" "}
+                          {deliveryLocationCoords.lng.toFixed(5)}
                         </span>
                       </div>
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-brand-ink/15 bg-white/35 px-5 py-8 text-center">
-                      <MapPin
-                        size={22}
-                        className="mx-auto text-brand-ink/30"
-                      />
+                      <MapPin size={22} className="mx-auto text-brand-ink/30" />
 
                       <p className="mt-2 text-sm font-semibold text-brand-ink/70">
                         No map location yet
                       </p>
 
                       <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-brand-ink/50">
-                        An exact location is needed to
-                        calculate your delivery fee.
+                        An exact location is needed to calculate your delivery
+                        fee.
                       </p>
                     </div>
                   )}
 
                   {isCalculatingDistance && (
                     <InfoBox tone="neutral">
-                      Calculating delivery to this
-                      location…
+                      Calculating delivery to this location…
                     </InfoBox>
                   )}
 
-                  {!isCalculatingDistance &&
-                    checkoutQuote && (
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <MiniStat
-                          label="Distance"
-                          value={`${checkoutQuote.distance_km} km`}
-                        />
+                  {!isCalculatingDistance && checkoutQuote && (
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <MiniStat
+                        label="Distance"
+                        value={`${checkoutQuote.distance_km} km`}
+                      />
 
-                        <MiniStat
-                          label="Delivery"
-                          value={formatLkr(
-                            checkoutQuote.delivery_fee_lkr,
-                          )}
-                        />
+                      <MiniStat
+                        label="Delivery"
+                        value={formatLkr(checkoutQuote.delivery_fee_lkr)}
+                      />
 
-                        <MiniStat
-                          label="Vehicle"
-                          value={
-                            checkoutQuote.vehicle_type
-                          }
-                        />
-                      </div>
-                    )}
+                      <MiniStat
+                        label="Vehicle"
+                        value={checkoutQuote.vehicle_type}
+                      />
+                    </div>
+                  )}
 
                   {distanceNotice && (
-                    <InfoBox tone="warning">
-                      {distanceNotice}
-                    </InfoBox>
+                    <InfoBox tone="warning">{distanceNotice}</InfoBox>
                   )}
 
                   {maxDeliveryDistanceKm && (
                     <p className="text-xs leading-5 text-brand-ink/45">
-                      Delivery is currently available
-                      within{" "}
-                      {maxDeliveryDistanceKm} km of
-                      Baura Bakers.
+                      Delivery is currently available within{" "}
+                      {maxDeliveryDistanceKm} km of Baura Bakers.
                     </p>
                   )}
 
@@ -2058,14 +1741,9 @@ export default function Order() {
                     <textarea
                       value={form.note}
                       onChange={(event) =>
-                        updateForm(
-                          "note",
-                          event.target.value,
-                        )
+                        updateForm("note", event.target.value)
                       }
-                      className={`${inputClass(
-                        false,
-                      )} min-h-[82px] resize-y`}
+                      className={`${inputClass(false)} min-h-[82px] resize-y`}
                       placeholder="Landmark, gift message or special delivery instruction"
                     />
                   </Field>
@@ -2081,21 +1759,23 @@ export default function Order() {
                   />
 
                   {fieldErrors.deliverySlot && (
-                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                    <div
+                      data-checkout-error="true"
+                      tabIndex={-1}
+                      role="alert"
+                      className="scroll-mt-28 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 outline-none">
                       {fieldErrors.deliverySlot}
                     </div>
                   )}
 
                   {isLoadingSlots ? (
                     <div className="grid gap-3 sm:grid-cols-2">
-                      {[1, 2, 3, 4].map(
-                        (item) => (
-                          <div
-                            key={item}
-                            className="h-24 animate-pulse rounded-2xl border border-brand-ink/5 bg-brand-ink/[0.04]"
-                          />
-                        ),
-                      )}
+                      {[1, 2, 3, 4].map((item) => (
+                        <div
+                          key={item}
+                          className="h-24 animate-pulse rounded-2xl border border-brand-ink/5 bg-brand-ink/[0.04]"
+                        />
+                      ))}
                     </div>
                   ) : deliveryCalendarDays.length ? (
                     <>
@@ -2112,79 +1792,57 @@ export default function Order() {
                           </div>
 
                           <span className="rounded-lg bg-brand-ink/[0.05] px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-ink/45">
-                            {
-                              deliveryCalendarDays.length
-                            }{" "}
-                            days
+                            {deliveryCalendarDays.length} days
                           </span>
                         </div>
 
                         <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
-                          {deliveryCalendarDays.map(
-                            (day) => {
-                              const active =
-                                selectedDeliveryDate ===
-                                day.date;
+                          {deliveryCalendarDays.map((day) => {
+                            const active = selectedDeliveryDate === day.date;
 
-                              return (
-                                <button
-                                  key={day.date}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedDeliveryDate(
-                                      day.date,
-                                    );
+                            return (
+                              <button
+                                key={day.date}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDeliveryDate(day.date);
 
-                                    setSelectedDeliverySlotId(
-                                      "",
-                                    );
+                                  setSelectedDeliverySlotId("");
 
-                                    clearFieldError(
-                                      "deliverySlot",
-                                    );
-                                  }}
+                                  clearFieldError("deliverySlot");
+                                }}
+                                className={[
+                                  "rounded-2xl border p-3 text-left transition",
+                                  active
+                                    ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
+                                    : "border-brand-ink/10 bg-white/55 text-brand-ink hover:border-brand-ink/20 hover:bg-white/80",
+                                ].join(" ")}>
+                                <span
                                   className={[
-                                    "rounded-2xl border p-3 text-left transition",
+                                    "text-[9px] font-semibold uppercase tracking-[0.18em]",
                                     active
-                                      ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
-                                      : "border-brand-ink/10 bg-white/55 text-brand-ink hover:border-brand-ink/20 hover:bg-white/80",
-                                  ].join(" ")}
-                                >
-                                  <span
-                                    className={[
-                                      "text-[9px] font-semibold uppercase tracking-[0.18em]",
-                                      active
-                                        ? "text-brand-bg/55"
-                                        : "text-brand-ink/35",
-                                    ].join(" ")}
-                                  >
-                                    {formatCalendarMonth(
-                                      day.date,
-                                    )}
-                                  </span>
+                                      ? "text-brand-bg/55"
+                                      : "text-brand-ink/35",
+                                  ].join(" ")}>
+                                  {formatCalendarMonth(day.date)}
+                                </span>
 
-                                  <span className="mt-1 block text-2xl font-bold leading-none">
-                                    {formatCalendarDayNumber(
-                                      day.date,
-                                    )}
-                                  </span>
+                                <span className="mt-1 block text-2xl font-bold leading-none">
+                                  {formatCalendarDayNumber(day.date)}
+                                </span>
 
-                                  <span
-                                    className={[
-                                      "mt-2 block text-[11px] font-medium",
-                                      active
-                                        ? "text-brand-bg/75"
-                                        : "text-brand-ink/55",
-                                    ].join(" ")}
-                                  >
-                                    {formatCalendarDate(
-                                      day.date,
-                                    )}
-                                  </span>
-                                </button>
-                              );
-                            },
-                          )}
+                                <span
+                                  className={[
+                                    "mt-2 block text-[11px] font-medium",
+                                    active
+                                      ? "text-brand-bg/75"
+                                      : "text-brand-ink/55",
+                                  ].join(" ")}>
+                                  {formatCalendarDate(day.date)}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -2195,120 +1853,85 @@ export default function Order() {
 
                         <p className="mt-1 text-xs text-brand-ink/50">
                           {selectedDeliveryDate
-                            ? formatCalendarDate(
-                                selectedDeliveryDate,
-                              )
+                            ? formatCalendarDate(selectedDeliveryDate)
                             : "Select a delivery day"}
                         </p>
 
                         {selectedDateSlots.length ? (
                           <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-                            {selectedDateSlots.map(
-                              (slot) => {
-                                const active =
-                                  selectedDeliverySlotId ===
-                                  slot.id;
+                            {selectedDateSlots.map((slot) => {
+                              const active = selectedDeliverySlotId === slot.id;
 
-                                return (
-                                  <button
-                                    key={slot.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedDeliverySlotId(
-                                        slot.id,
-                                      );
+                              return (
+                                <button
+                                  key={slot.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedDeliverySlotId(slot.id);
 
-                                      clearFieldError(
-                                        "deliverySlot",
-                                      );
-                                    }}
+                                    clearFieldError("deliverySlot");
+                                  }}
+                                  className={[
+                                    "flex items-start gap-3 rounded-2xl border p-4 text-left transition",
+                                    active
+                                      ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
+                                      : "border-brand-ink/10 bg-white/55 text-brand-ink hover:border-brand-ink/20 hover:bg-white/80",
+                                  ].join(" ")}>
+                                  <span
                                     className={[
-                                      "flex items-start gap-3 rounded-2xl border p-4 text-left transition",
+                                      "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border",
                                       active
-                                        ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
-                                        : "border-brand-ink/10 bg-white/55 text-brand-ink hover:border-brand-ink/20 hover:bg-white/80",
-                                    ].join(" ")}
-                                  >
+                                        ? "border-brand-bg/30 bg-brand-bg text-brand-ink"
+                                        : "border-brand-ink/15 bg-white/60 text-transparent",
+                                    ].join(" ")}>
+                                    <Check size={13} />
+                                  </span>
+
+                                  <span className="min-w-0">
+                                    <span className="block text-sm font-semibold">
+                                      {slot.slot_label}
+                                    </span>
+
                                     <span
                                       className={[
-                                        "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border",
+                                        "mt-1 block text-xs",
                                         active
-                                          ? "border-brand-bg/30 bg-brand-bg text-brand-ink"
-                                          : "border-brand-ink/15 bg-white/60 text-transparent",
-                                      ].join(" ")}
-                                    >
-                                      <Check
-                                        size={13}
-                                      />
+                                          ? "text-brand-bg/70"
+                                          : "text-brand-ink/50",
+                                      ].join(" ")}>
+                                      {slot.start_time.slice(0, 5)} –{" "}
+                                      {slot.end_time.slice(0, 5)}
                                     </span>
 
-                                    <span className="min-w-0">
-                                      <span className="block text-sm font-semibold">
-                                        {
-                                          slot.slot_label
-                                        }
-                                      </span>
-
-                                      <span
-                                        className={[
-                                          "mt-1 block text-xs",
-                                          active
-                                            ? "text-brand-bg/70"
-                                            : "text-brand-ink/50",
-                                        ].join(" ")}
-                                      >
-                                        {slot.start_time.slice(
-                                          0,
-                                          5,
-                                        )}{" "}
-                                        –{" "}
-                                        {slot.end_time.slice(
-                                          0,
-                                          5,
-                                        )}
-                                      </span>
-
-                                      <span
-                                        className={[
-                                          "mt-1.5 block text-[10px] font-medium",
-                                          active
-                                            ? "text-brand-bg/55"
-                                            : "text-brand-ink/35",
-                                        ].join(" ")}
-                                      >
-                                        {
-                                          slot.remaining_orders
-                                        }{" "}
-                                        place
-                                        {slot.remaining_orders ===
-                                        1
-                                          ? ""
-                                          : "s"}{" "}
-                                        remaining
-                                      </span>
+                                    <span
+                                      className={[
+                                        "mt-1.5 block text-[10px] font-medium",
+                                        active
+                                          ? "text-brand-bg/55"
+                                          : "text-brand-ink/35",
+                                      ].join(" ")}>
+                                      {slot.remaining_orders} place
+                                      {slot.remaining_orders === 1
+                                        ? ""
+                                        : "s"}{" "}
+                                      remaining
                                     </span>
-                                  </button>
-                                );
-                              },
-                            )}
+                                  </span>
+                                </button>
+                              );
+                            })}
                           </div>
                         ) : (
-                          <InfoBox
-                            tone="warning"
-                            className="mt-3"
-                          >
-                            No delivery times are
-                            available on this date.
+                          <InfoBox tone="warning" className="mt-3">
+                            No delivery times are available on this date.
                           </InfoBox>
                         )}
                       </div>
                     </>
                   ) : (
                     <InfoBox tone="warning">
-                      There are no delivery sessions
-                      available right now. Please contact
-                      Baura Bakers before placing your
-                      order.
+                      There are no delivery sessions available right now. Please
+                      contact Baura Bakers before placing your order.
                     </InfoBox>
                   )}
 
@@ -2316,10 +1939,7 @@ export default function Order() {
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/60 p-4">
                         <div className="flex items-center gap-2">
-                          <Truck
-                            size={16}
-                            className="text-brand-ink/55"
-                          />
+                          <Truck size={16} className="text-brand-ink/55" />
 
                           <p className="text-xs font-semibold uppercase tracking-wider text-brand-ink/45">
                             Delivery
@@ -2333,16 +1953,11 @@ export default function Order() {
                         ) : checkoutQuote ? (
                           <>
                             <p className="mt-3 text-xl font-bold text-brand-ink">
-                              {formatLkr(
-                                deliveryFeeLkr,
-                              )}
+                              {formatLkr(deliveryFeeLkr)}
                             </p>
 
                             <p className="mt-1 text-xs text-brand-ink/50">
-                              {
-                                checkoutQuote.distance_km
-                              }{" "}
-                              km delivery distance
+                              {checkoutQuote.distance_km} km delivery distance
                             </p>
                           </>
                         ) : (
@@ -2358,9 +1973,7 @@ export default function Order() {
                         </p>
 
                         <p className="mt-3 text-xl font-bold">
-                          {formatLkr(
-                            finalTotalLkr,
-                          )}
+                          {formatLkr(finalTotalLkr)}
                         </p>
 
                         <p className="mt-1 text-xs text-brand-bg/60">
@@ -2372,19 +1985,13 @@ export default function Order() {
 
                   {selectedDeliverySlot && (
                     <InfoBox tone="success">
-                      <span className="font-semibold">
-                        Selected:
-                      </span>{" "}
-                      {formatSlot(
-                        selectedDeliverySlot,
-                      )}
+                      <span className="font-semibold">Selected:</span>{" "}
+                      {formatSlot(selectedDeliverySlot)}
                     </InfoBox>
                   )}
 
                   {distanceNotice && (
-                    <InfoBox tone="warning">
-                      {distanceNotice}
-                    </InfoBox>
+                    <InfoBox tone="warning">{distanceNotice}</InfoBox>
                   )}
                 </div>
               )}
@@ -2398,12 +2005,7 @@ export default function Order() {
                   />
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <ReviewCard
-                      icon={
-                        <UserRound size={17} />
-                      }
-                      title="Customer"
-                    >
+                    <ReviewCard icon={<UserRound size={17} />} title="Customer">
                       <p>{form.senderName}</p>
                       <p className="mt-1 text-brand-ink/55">
                         {form.senderContactNumber}
@@ -2413,48 +2015,24 @@ export default function Order() {
                       </p>
                     </ReviewCard>
 
-                    <ReviewCard
-                      icon={<MapPin size={17} />}
-                      title="Delivery"
-                    >
-                      <p>
-                        {effectiveDelivery.name}
-                      </p>
+                    <ReviewCard icon={<MapPin size={17} />} title="Delivery">
+                      <p>{effectiveDelivery.name}</p>
 
                       <p className="mt-1 text-brand-ink/55">
-                        {
-                          effectiveDelivery.address
-                        }
+                        {effectiveDelivery.address}
                       </p>
                     </ReviewCard>
 
-                    <ReviewCard
-                      icon={<Clock3 size={17} />}
-                      title="Schedule"
-                    >
-                      <p>
-                        {formatSlot(
-                          selectedDeliverySlot,
-                        )}
-                      </p>
+                    <ReviewCard icon={<Clock3 size={17} />} title="Schedule">
+                      <p>{formatSlot(selectedDeliverySlot)}</p>
                     </ReviewCard>
 
-                    <ReviewCard
-                      icon={<Truck size={17} />}
-                      title="Delivery fee"
-                    >
-                      <p>
-                        {formatLkr(
-                          deliveryFeeLkr,
-                        )}
-                      </p>
+                    <ReviewCard icon={<Truck size={17} />} title="Delivery fee">
+                      <p>{formatLkr(deliveryFeeLkr)}</p>
 
                       {checkoutQuote && (
                         <p className="mt-1 text-brand-ink/55">
-                          {
-                            checkoutQuote.distance_km
-                          }{" "}
-                          km
+                          {checkoutQuote.distance_km} km
                         </p>
                       )}
                     </ReviewCard>
@@ -2462,10 +2040,7 @@ export default function Order() {
 
                   {form.isGift && (
                     <div className="flex items-center gap-3 rounded-2xl border border-brand-ink/10 bg-brand-bg/60 px-4 py-3">
-                      <Gift
-                        size={17}
-                        className="shrink-0 text-brand-ink/60"
-                      />
+                      <Gift size={17} className="shrink-0 text-brand-ink/60" />
 
                       <div>
                         <p className="text-sm font-semibold text-brand-ink">
@@ -2473,8 +2048,7 @@ export default function Order() {
                         </p>
 
                         <p className="mt-0.5 text-xs text-brand-ink/55">
-                          Delivering to{" "}
-                          {form.receiverName}.
+                          Delivering to {form.receiverName}.
                         </p>
                       </div>
                     </div>
@@ -2482,29 +2056,19 @@ export default function Order() {
 
                   {form.note.trim() && (
                     <ReviewCard
-                      icon={
-                        <MessageCircle
-                          size={17}
-                        />
-                      }
-                      title="Order note"
-                    >
+                      icon={<MessageCircle size={17} />}
+                      title="Order note">
                       <p>{form.note.trim()}</p>
                     </ReviewCard>
                   )}
 
                   <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/65 p-4 sm:p-5">
                     <div className="space-y-2">
-                      <PriceRow
-                        label="Subtotal"
-                        value={formatLkr(totalLkr)}
-                      />
+                      <PriceRow label="Subtotal" value={formatLkr(totalLkr)} />
 
                       <PriceRow
                         label="Delivery"
-                        value={formatLkr(
-                          deliveryFeeLkr,
-                        )}
+                        value={formatLkr(deliveryFeeLkr)}
                       />
                     </div>
 
@@ -2520,9 +2084,7 @@ export default function Order() {
                       </div>
 
                       <p className="text-xl font-bold text-brand-ink sm:text-2xl">
-                        {formatLkr(
-                          finalTotalLkr,
-                        )}
+                        {formatLkr(finalTotalLkr)}
                       </p>
                     </div>
                   </div>
@@ -2540,12 +2102,10 @@ export default function Order() {
                         </p>
 
                         <p className="mt-1 text-xs leading-5 text-brand-ink/55">
-                          Your order will be saved first.
-                          WhatsApp will then open with
-                          your order details so Baura
-                          Bakers can provide the bank
-                          transfer details and confirm
-                          your order.
+                          Your order will be saved first. WhatsApp will then
+                          open with your order details so Baura Bakers can
+                          provide the bank transfer details and confirm your
+                          order.
                         </p>
                       </div>
                     </div>
@@ -2553,23 +2113,14 @@ export default function Order() {
 
                   <button
                     type="button"
-                    onClick={
-                      bankTransferViaWhatsApp
-                    }
-                    disabled={
-                      isSubmitting ||
-                      !items.length ||
-                      !scheduleValid
-                    }
+                    onClick={bankTransferViaWhatsApp}
+                    disabled={isSubmitting || !items.length || !scheduleValid}
                     className={[
                       "flex min-h-14 w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-semibold transition",
-                      isSubmitting ||
-                      !items.length ||
-                      !scheduleValid
+                      isSubmitting || !items.length || !scheduleValid
                         ? "cursor-not-allowed bg-brand-ink/30 text-brand-bg"
                         : "bg-brand-ink text-brand-bg shadow-sm hover:bg-brand-ink/90",
-                    ].join(" ")}
-                  >
+                    ].join(" ")}>
                     <MessageCircle size={18} />
 
                     {isSubmitting
@@ -2578,8 +2129,8 @@ export default function Order() {
                   </button>
 
                   <p className="text-center text-[11px] leading-5 text-brand-ink/45">
-                    Your cart is cleared only after the
-                    order has been saved successfully.
+                    Your cart is cleared only after the order has been saved
+                    successfully.
                   </p>
                 </div>
               )}
@@ -2594,8 +2145,7 @@ export default function Order() {
                     step === 1
                       ? "cursor-not-allowed border-brand-ink/5 text-brand-ink/25"
                       : "border-brand-ink/15 text-brand-ink hover:bg-brand-ink/[0.04]",
-                  ].join(" ")}
-                >
+                  ].join(" ")}>
                   <ChevronLeft size={16} />
                   Back
                 </button>
@@ -2604,16 +2154,14 @@ export default function Order() {
                   <button
                     type="button"
                     onClick={goNext}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-brand-ink px-5 py-2.5 text-sm font-semibold text-brand-bg transition hover:bg-brand-ink/90"
-                  >
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-brand-ink px-5 py-2.5 text-sm font-semibold text-brand-bg transition hover:bg-brand-ink/90">
                     Continue
                     <ChevronRight size={16} />
                   </button>
                 ) : (
                   <Link
                     to="/cart"
-                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-brand-ink/15 px-4 py-2.5 text-sm font-semibold text-brand-ink transition hover:bg-brand-ink/[0.04]"
-                  >
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-brand-ink/15 px-4 py-2.5 text-sm font-semibold text-brand-ink transition hover:bg-brand-ink/[0.04]">
                     Edit cart
                   </Link>
                 )}
@@ -2630,16 +2178,13 @@ export default function Order() {
 
                 <p className="mt-1 text-sm font-semibold text-brand-ink">
                   {totalQuantity} item
-                  {totalQuantity === 1
-                    ? ""
-                    : "s"}
+                  {totalQuantity === 1 ? "" : "s"}
                 </p>
               </div>
 
               <Link
                 to="/cart"
-                className="rounded-lg border border-brand-ink/10 px-3 py-1.5 text-[11px] font-semibold text-brand-ink/65 transition hover:bg-brand-ink/[0.04]"
-              >
+                className="rounded-lg border border-brand-ink/10 px-3 py-1.5 text-[11px] font-semibold text-brand-ink/65 transition hover:bg-brand-ink/[0.04]">
                 Edit
               </Link>
             </div>
@@ -2648,8 +2193,7 @@ export default function Order() {
               {items.map((item) => (
                 <div
                   key={`${item.productSlug}-${item.size.id}-${item.sugar}`}
-                  className="rounded-xl border border-brand-ink/8 bg-white/45 p-3"
-                >
+                  className="rounded-xl border border-brand-ink/8 bg-white/45 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-xs font-semibold text-brand-ink">
@@ -2657,17 +2201,13 @@ export default function Order() {
                       </p>
 
                       <p className="mt-1 text-[11px] leading-5 text-brand-ink/50">
-                        {item.size.label} ·{" "}
-                        {item.sugar} sugar · Qty{" "}
+                        {item.size.label} · {item.sugar} sugar · Qty{" "}
                         {item.quantity}
                       </p>
                     </div>
 
                     <p className="shrink-0 text-xs font-semibold text-brand-ink">
-                      {formatLkr(
-                        item.unitPriceLkr *
-                          item.quantity,
-                      )}
+                      {formatLkr(item.unitPriceLkr * item.quantity)}
                     </p>
                   </div>
                 </div>
@@ -2676,26 +2216,19 @@ export default function Order() {
 
             <div className="mt-4 border-t border-brand-ink/10 pt-4">
               <div className="space-y-2">
-                <PriceRow
-                  label="Subtotal"
-                  value={formatLkr(totalLkr)}
-                />
+                <PriceRow label="Subtotal" value={formatLkr(totalLkr)} />
 
                 <PriceRow
                   label="Delivery"
                   value={
-                    checkoutQuote
-                      ? formatLkr(deliveryFeeLkr)
-                      : "Not calculated"
+                    checkoutQuote ? formatLkr(deliveryFeeLkr) : "Not calculated"
                   }
                   muted={!checkoutQuote}
                 />
               </div>
 
               <div className="mt-4 flex items-end justify-between gap-3 border-t border-brand-ink/10 pt-4">
-                <p className="text-sm font-bold text-brand-ink">
-                  Total
-                </p>
+                <p className="text-sm font-bold text-brand-ink">Total</p>
 
                 <p className="text-lg font-bold text-brand-ink">
                   {formatLkr(finalTotalLkr)}
@@ -2717,9 +2250,7 @@ export default function Order() {
                     </p>
 
                     <p className="mt-1 text-xs font-semibold leading-5 text-brand-ink/70">
-                      {formatSlot(
-                        selectedDeliverySlot,
-                      )}
+                      {formatSlot(selectedDeliverySlot)}
                     </p>
                   </div>
                 </div>
@@ -2740,10 +2271,8 @@ export default function Order() {
                     </p>
 
                     <p className="mt-1 text-xs font-semibold text-brand-ink/70">
-                      {formatLkr(
-                        deliveryFeeLkr,
-                      )}{" "}
-                      · {checkoutQuote.distance_km} km
+                      {formatLkr(deliveryFeeLkr)} · {checkoutQuote.distance_km}{" "}
+                      km
                     </p>
                   </div>
                 </div>
@@ -2759,8 +2288,7 @@ export default function Order() {
                 type="button"
                 onClick={goBack}
                 className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-brand-ink/15 bg-white/60 text-brand-ink"
-                aria-label="Go back"
-              >
+                aria-label="Go back">
                 <ChevronLeft size={19} />
               </button>
             )}
@@ -2770,36 +2298,24 @@ export default function Order() {
                 <button
                   type="button"
                   onClick={goNext}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-ink px-5 text-sm font-semibold text-brand-bg"
-                >
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-ink px-5 text-sm font-semibold text-brand-bg">
                   Continue
                   <ChevronRight size={17} />
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={
-                    bankTransferViaWhatsApp
-                  }
-                  disabled={
-                    isSubmitting ||
-                    !items.length ||
-                    !scheduleValid
-                  }
+                  onClick={bankTransferViaWhatsApp}
+                  disabled={isSubmitting || !items.length || !scheduleValid}
                   className={[
                     "flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold",
-                    isSubmitting ||
-                    !items.length ||
-                    !scheduleValid
+                    isSubmitting || !items.length || !scheduleValid
                       ? "cursor-not-allowed bg-brand-ink/30 text-brand-bg"
                       : "bg-brand-ink text-brand-bg",
-                  ].join(" ")}
-                >
+                  ].join(" ")}>
                   <MessageCircle size={17} />
 
-                  {isSubmitting
-                    ? "Confirming…"
-                    : "Confirm & WhatsApp"}
+                  {isSubmitting ? "Confirming…" : "Confirm & WhatsApp"}
                 </button>
               )}
             </div>
@@ -2865,7 +2381,10 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div>
+    <div
+      data-checkout-error={error ? "true" : undefined}
+      tabIndex={error ? -1 : undefined}
+      className="scroll-mt-28">
       <label className="mb-1.5 block text-xs font-semibold text-brand-ink/65">
         {label}
       </label>
@@ -2873,9 +2392,7 @@ function Field({
       {children}
 
       {error && (
-        <p className="mt-1.5 text-xs font-medium text-red-600">
-          {error}
-        </p>
+        <p className="mt-1.5 text-xs font-medium text-red-600">{error}</p>
       )}
     </div>
   );
@@ -2908,16 +2425,14 @@ function ToggleCard({
           : active
             ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
             : "border-brand-ink/10 bg-white/50 text-brand-ink hover:border-brand-ink/20 hover:bg-white/75",
-      ].join(" ")}
-    >
+      ].join(" ")}>
       <span
         className={[
           "grid h-8 w-8 shrink-0 place-items-center rounded-xl",
           active
             ? "bg-white/10 text-brand-bg"
             : "bg-brand-ink/[0.05] text-brand-ink/55",
-        ].join(" ")}
-      >
+        ].join(" ")}>
         {icon}
       </span>
 
@@ -2925,22 +2440,14 @@ function ToggleCard({
         <span className="flex items-center gap-2 text-sm font-semibold">
           {title}
 
-          {active && (
-            <Check
-              size={14}
-              className="shrink-0"
-            />
-          )}
+          {active && <Check size={14} className="shrink-0" />}
         </span>
 
         <span
           className={[
             "mt-1 block line-clamp-2 text-xs leading-5",
-            active
-              ? "text-brand-bg/65"
-              : "text-brand-ink/50",
-          ].join(" ")}
-        >
+            active ? "text-brand-bg/65" : "text-brand-ink/50",
+          ].join(" ")}>
           {description}
         </span>
       </span>
@@ -2948,22 +2455,14 @@ function ToggleCard({
   );
 }
 
-function MiniStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-brand-ink/10 bg-white/50 px-3.5 py-3">
       <p className="text-[9px] font-semibold uppercase tracking-wider text-brand-ink/35">
         {label}
       </p>
 
-      <p className="mt-1 text-sm font-semibold text-brand-ink">
-        {value}
-      </p>
+      <p className="mt-1 text-sm font-semibold text-brand-ink">{value}</p>
     </div>
   );
 }
@@ -3005,18 +2504,13 @@ function PriceRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <p className="text-xs font-medium text-brand-ink/55">
-        {label}
-      </p>
+      <p className="text-xs font-medium text-brand-ink/55">{label}</p>
 
       <p
         className={[
           "text-xs font-semibold",
-          muted
-            ? "text-brand-ink/40"
-            : "text-brand-ink",
-        ].join(" ")}
-      >
+          muted ? "text-brand-ink/40" : "text-brand-ink",
+        ].join(" ")}>
         {value}
       </p>
     </div>
@@ -3045,8 +2539,7 @@ function InfoBox({
         "rounded-xl border px-4 py-3 text-xs leading-5 sm:text-sm sm:leading-6",
         toneClass,
         className,
-      ].join(" ")}
-    >
+      ].join(" ")}>
       {children}
     </div>
   );
