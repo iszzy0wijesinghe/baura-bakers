@@ -1,3 +1,5 @@
+/** @format */
+
 export type CloudinaryUploadResult = {
   secureUrl: string;
   publicId: string;
@@ -5,6 +7,18 @@ export type CloudinaryUploadResult = {
   height?: number;
   format?: string;
   bytes?: number;
+};
+
+type CloudinaryApiResponse = {
+  secure_url?: string;
+  public_id?: string;
+  width?: number;
+  height?: number;
+  format?: string;
+  bytes?: number;
+  error?: {
+    message?: string;
+  };
 };
 
 type UploadOptions = {
@@ -35,8 +49,10 @@ function getCloudinaryConfig() {
   };
 }
 
-function normalizeCloudinaryResponse(data: any): CloudinaryUploadResult {
-  if (!data?.secure_url || !data?.public_id) {
+function normalizeCloudinaryResponse(
+  data: CloudinaryApiResponse,
+): CloudinaryUploadResult {
+  if (!data.secure_url || !data.public_id) {
     throw new Error("Cloudinary upload failed. No image URL returned.");
   }
 

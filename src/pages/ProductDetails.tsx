@@ -3,7 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useCart } from "../app/cart";
+import { useCart } from "../app/useCart";
 import DeliveryBadges from "../components/DeliveryBadges";
 import Page from "../components/Page";
 import Section from "../components/Section";

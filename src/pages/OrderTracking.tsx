@@ -1,11 +1,26 @@
 /** @format */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+
 import {
-  ArrowLeft, ArrowUpRight, CalendarClock, Check, ChevronDown, ChevronUp,
-  Clock3, Copy, FileText, MapPin, MessageCircle, Package, RefreshCw,
-  ShieldCheck, Store, Truck, UserRound,
+  ArrowLeft,
+  ArrowUpRight,
+  CalendarClock,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  Copy,
+  FileText,
+  MapPin,
+  MessageCircle,
+  RefreshCw,
+  ShieldCheck,
+  Store,
+  Truck,
+  UserRound,
 } from "lucide-react";
+
 import logoUrl from "../assets/logo1.webp";
 import { getAuthenticatedUser } from "../lib/accountApi";
 import {

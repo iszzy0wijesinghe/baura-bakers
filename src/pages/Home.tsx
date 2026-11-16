@@ -1,30 +1,12 @@
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-} from "framer-motion";
-import {
-  ArrowDown,
-  ArrowRight,
-  ChevronRight,
-  ShoppingBag,
-} from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-} from "react";
-import {
-  Link,
-  useNavigate,
-} from "react-router-dom";
+/** @format */
+
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ArrowDown, ArrowRight, ChevronRight, ShoppingBag } from "lucide-react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
 import ProductCard from "../components/ProductCard";
-import {
-  getActiveItems,
-  type MenuItem,
-} from "../lib/items";
+import { getActiveItems, type MenuItem } from "../lib/items";
 import { getProductClicks } from "../lib/productClicks";
 import {
   getStorefrontBootstrap,
@@ -69,9 +51,7 @@ function getHeroImageUrl(imageUrl: string) {
 }
 
 function getHeroOverlay(overlayStrength: number) {
-  const value = Number.isFinite(overlayStrength)
-    ? overlayStrength
-    : 0;
+  const value = Number.isFinite(overlayStrength) ? overlayStrength : 0;
 
   return Math.min(100, Math.max(0, value)) / 100;
 }
@@ -93,8 +73,7 @@ export default function Home() {
   const reduceMotion = Boolean(useReducedMotion());
 
   const [items, setItems] = useState<MenuItem[]>([]);
-  const [heroSlides, setHeroSlides] =
-    useState<StorefrontHeroSlide[]>([]);
+  const [heroSlides, setHeroSlides] = useState<StorefrontHeroSlide[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -112,10 +91,7 @@ export default function Home() {
         setHeroSlides(storefront.heroSlides ?? []);
         setItems(products);
       } catch (error) {
-        console.error(
-          "Failed to load Baura storefront:",
-          error,
-        );
+        console.error("Failed to load Baura storefront:", error);
       } finally {
         if (active) setLoading(false);
       }
@@ -129,106 +105,68 @@ export default function Home() {
   }, []);
 
   const rankedProducts = useMemo(() => {
-    const activeProducts = items.filter(
-      (item) => item.isActive,
-    );
+    const activeProducts = items.filter((item) => item.isActive);
 
     const clicks = getProductClicks();
 
-    const hasClickData = Object.values(clicks).some(
-      (value) => value > 0,
-    );
+    const hasClickData = Object.values(clicks).some((value) => value > 0);
 
     if (!hasClickData) {
       return activeProducts;
     }
 
     return [...activeProducts].sort(
-      (a, b) =>
-        (clicks[b.slug] ?? 0) -
-        (clicks[a.slug] ?? 0),
+      (a, b) => (clicks[b.slug] ?? 0) - (clicks[a.slug] ?? 0),
     );
   }, [items]);
 
   const freshProducts = useMemo(() => {
-    const regularProducts = rankedProducts.filter(
-      (item) => !isOfferItem(item),
-    );
+    const regularProducts = rankedProducts.filter((item) => !isOfferItem(item));
 
     return (
-      regularProducts.length > 0
-        ? regularProducts
-        : rankedProducts
+      regularProducts.length > 0 ? regularProducts : rankedProducts
     ).slice(0, 3);
   }, [rankedProducts]);
 
   const offerProducts = useMemo(() => {
-    return rankedProducts
-      .filter(isOfferItem)
-      .slice(0, 3);
+    return rankedProducts.filter(isOfferItem).slice(0, 3);
   }, [rankedProducts]);
 
   const featuredProducts = useMemo(() => {
-    const freshSlugs = new Set(
-      freshProducts.map((item) => item.slug),
-    );
+    const freshSlugs = new Set(freshProducts.map((item) => item.slug));
 
     const remainingProducts = rankedProducts.filter(
-      (item) =>
-        !freshSlugs.has(item.slug) &&
-        !isOfferItem(item),
+      (item) => !freshSlugs.has(item.slug) && !isOfferItem(item),
     );
 
     if (remainingProducts.length > 0) {
       return remainingProducts.slice(0, 6);
     }
 
-    const regularProducts = rankedProducts.filter(
-      (item) => !isOfferItem(item),
-    );
+    const regularProducts = rankedProducts.filter((item) => !isOfferItem(item));
 
     return (
-      regularProducts.length > 0
-        ? regularProducts
-        : rankedProducts
+      regularProducts.length > 0 ? regularProducts : rankedProducts
     ).slice(0, 6);
   }, [rankedProducts, freshProducts]);
 
   const visibleHeroSlides =
-    heroSlides.length > 0
-      ? heroSlides
-      : [fallbackHeroSlide];
+    heroSlides.length > 0 ? heroSlides : [fallbackHeroSlide];
 
   return (
     <Page>
       <main className="baura-home">
-        <Hero
-          slides={visibleHeroSlides}
-          reduceMotion={reduceMotion}
-        />
+        <Hero slides={visibleHeroSlides} reduceMotion={reduceMotion} />
 
-        <FreshFromBaura
-          products={freshProducts}
-          loading={loading}
-        />
+        <FreshFromBaura products={freshProducts} loading={loading} />
 
-        <OffersSection
-          products={offerProducts}
-          loading={loading}
-        />
+        <OffersSection products={offerProducts} loading={loading} />
 
-        <FeaturedMenu
-          products={featuredProducts}
-          loading={loading}
-        />
+        <FeaturedMenu products={featuredProducts} loading={loading} />
 
-        <FreshComposition
-          reduceMotion={reduceMotion}
-        />
+        <FreshComposition reduceMotion={reduceMotion} />
 
-        <Celebration
-          reduceMotion={reduceMotion}
-        />
+        <Celebration reduceMotion={reduceMotion} />
 
         <FinalOrder />
       </main>
@@ -249,16 +187,9 @@ function Hero({
 }) {
   const navigate = useNavigate();
 
-  const [activeSlide, setActiveSlide] = useState(0);
+  const [requestedSlide, setActiveSlide] = useState(0);
 
-  useEffect(() => {
-    setActiveSlide((current) =>
-      Math.min(
-        current,
-        Math.max(0, slides.length - 1),
-      ),
-    );
-  }, [slides.length]);
+  const activeSlide = Math.min(requestedSlide, Math.max(0, slides.length - 1));
 
   useEffect(() => {
     if (reduceMotion || slides.length <= 1) {
@@ -266,9 +197,7 @@ function Hero({
     }
 
     const interval = window.setInterval(() => {
-      setActiveSlide(
-        (current) => (current + 1) % slides.length,
-      );
+      setActiveSlide((current) => (current + 1) % slides.length);
     }, HERO_INTERVAL_MS);
 
     return () => {
@@ -280,9 +209,7 @@ function Hero({
 
   if (!slide) return null;
 
-  const overlay = getHeroOverlay(
-    slide.overlayStrength,
-  );
+  const overlay = getHeroOverlay(slide.overlayStrength);
 
   const heroStyle: HeroCSSProperties = {
     "--baura-hero-overlay": overlay.toFixed(3),
@@ -291,10 +218,7 @@ function Hero({
   function openAction(url: string | null) {
     if (!url) return;
 
-    if (
-      url.startsWith("/") &&
-      !url.startsWith("//")
-    ) {
+    if (url.startsWith("/") && !url.startsWith("//")) {
       navigate(url);
       return;
     }
@@ -303,23 +227,13 @@ function Hero({
   }
 
   return (
-    <section
-      className="baura-hero"
-      style={heroStyle}
-    >
+    <section className="baura-hero" style={heroStyle}>
       <div className="baura-hero__slides">
-        <AnimatePresence
-          initial={false}
-          mode="sync"
-        >
+        <AnimatePresence initial={false} mode="sync">
           <motion.div
             key={slide.id}
             className="baura-hero__slide"
-            initial={
-              reduceMotion
-                ? false
-                : { opacity: 0 }
-            }
+            initial={reduceMotion ? false : { opacity: 0 }}
             animate={{
               opacity: 1,
             }}
@@ -329,22 +243,15 @@ function Hero({
             transition={{
               duration: reduceMotion ? 0 : 0.9,
               ease,
-            }}
-          >
+            }}>
             <AdaptiveHeroArtwork slide={slide} />
           </motion.div>
         </AnimatePresence>
       </div>
 
-      <div
-        className="baura-hero__darkness"
-        aria-hidden="true"
-      />
+      <div className="baura-hero__darkness" aria-hidden="true" />
 
-      <div
-        className="baura-hero__header-shade"
-        aria-hidden="true"
-      />
+      <div className="baura-hero__header-shade" aria-hidden="true" />
 
       <div
         className={[
@@ -356,10 +263,7 @@ function Hero({
         aria-hidden="true"
       />
 
-      <div
-        className="baura-hero__bottom-shade"
-        aria-hidden="true"
-      />
+      <div className="baura-hero__bottom-shade" aria-hidden="true" />
 
       <div
         className={[
@@ -367,12 +271,8 @@ function Hero({
           slide.imagePosition === "left"
             ? "baura-hero__content--image-left"
             : "",
-        ].join(" ")}
-      >
-        <AnimatePresence
-          mode="wait"
-          initial={false}
-        >
+        ].join(" ")}>
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={`copy-${slide.id}`}
             className="baura-hero__copy"
@@ -399,56 +299,33 @@ function Hero({
             transition={{
               duration: reduceMotion ? 0 : 0.5,
               ease,
-            }}
-          >
+            }}>
             {slide.eyebrow ? (
-              <span className="baura-hero__eyebrow">
-                {slide.eyebrow}
-              </span>
+              <span className="baura-hero__eyebrow">{slide.eyebrow}</span>
             ) : null}
 
-            <h1>
-              {renderHeroTitle(slide.title)}
-            </h1>
+            <h1>{renderHeroTitle(slide.title)}</h1>
 
-            {slide.description ? (
-              <p>{slide.description}</p>
-            ) : null}
+            {slide.description ? <p>{slide.description}</p> : null}
 
-            {(slide.primaryButtonLabel ||
-              slide.secondaryButtonLabel) && (
+            {(slide.primaryButtonLabel || slide.secondaryButtonLabel) && (
               <div className="baura-hero__actions">
-                {slide.primaryButtonLabel &&
-                slide.primaryButtonUrl ? (
+                {slide.primaryButtonLabel && slide.primaryButtonUrl ? (
                   <button
                     type="button"
                     className="baura-button baura-button--light"
-                    onClick={() =>
-                      openAction(
-                        slide.primaryButtonUrl,
-                      )
-                    }
-                  >
+                    onClick={() => openAction(slide.primaryButtonUrl)}>
                     {slide.primaryButtonLabel}
 
-                    <ArrowRight
-                      size={17}
-                      strokeWidth={1.8}
-                    />
+                    <ArrowRight size={17} strokeWidth={1.8} />
                   </button>
                 ) : null}
 
-                {slide.secondaryButtonLabel &&
-                slide.secondaryButtonUrl ? (
+                {slide.secondaryButtonLabel && slide.secondaryButtonUrl ? (
                   <button
                     type="button"
                     className="baura-hero__secondary"
-                    onClick={() =>
-                      openAction(
-                        slide.secondaryButtonUrl,
-                      )
-                    }
-                  >
+                    onClick={() => openAction(slide.secondaryButtonUrl)}>
                     {slide.secondaryButtonLabel}
 
                     <ChevronRight size={16} />
@@ -471,29 +348,15 @@ function Hero({
                 className="baura-hero__progress"
                 aria-label={`Hero slide ${
                   activeSlide + 1
-                } of ${slides.length}`}
-              >
+                } of ${slides.length}`}>
                 {slides.map((item, index) => (
                   <button
                     key={item.id}
                     type="button"
-                    className={
-                      activeSlide === index
-                        ? "is-active"
-                        : ""
-                    }
-                    onClick={() =>
-                      setActiveSlide(index)
-                    }
-                    aria-label={`Show hero slide ${
-                      index + 1
-                    }`}
-                    aria-current={
-                      activeSlide === index
-                        ? "true"
-                        : undefined
-                    }
-                  >
+                    className={activeSlide === index ? "is-active" : ""}
+                    onClick={() => setActiveSlide(index)}
+                    aria-label={`Show hero slide ${index + 1}`}
+                    aria-current={activeSlide === index ? "true" : undefined}>
                     <span />
                   </button>
                 ))}
@@ -501,23 +364,15 @@ function Hero({
             ) : null}
 
             <span className="baura-hero__number">
-              {String(
-                activeSlide + 1,
-              ).padStart(2, "0")}
+              {String(activeSlide + 1).padStart(2, "0")}
 
               <span>/</span>
 
-              {String(
-                slides.length,
-              ).padStart(2, "0")}
+              {String(slides.length).padStart(2, "0")}
             </span>
 
-            <a
-              href="#discover-baura"
-              className="baura-hero__discover"
-            >
+            <a href="#discover-baura" className="baura-hero__discover">
               Discover
-
               <ArrowDown size={15} />
             </a>
           </div>
@@ -531,11 +386,7 @@ function Hero({
    HERO ARTWORK — FINALIZED / UNCHANGED
 ======================================================= */
 
-function AdaptiveHeroArtwork({
-  slide,
-}: {
-  slide: StorefrontHeroSlide;
-}) {
+function AdaptiveHeroArtwork({ slide }: { slide: StorefrontHeroSlide }) {
   const imagePosition =
     slide.imagePosition === "left"
       ? "left"
@@ -558,13 +409,9 @@ function AdaptiveHeroArtwork({
         : "68% center";
 
   const imageStyle: HeroCSSProperties = {
-    "--baura-hero-image": getHeroImageUrl(
-      slide.imageUrl,
-    ),
-    "--baura-hero-image-position":
-      desktopPosition,
-    "--baura-hero-mobile-position":
-      mobilePosition,
+    "--baura-hero-image": getHeroImageUrl(slide.imageUrl),
+    "--baura-hero-image-position": desktopPosition,
+    "--baura-hero-mobile-position": mobilePosition,
   };
 
   return (
@@ -573,19 +420,13 @@ function AdaptiveHeroArtwork({
         "baura-hero__artwork",
         `baura-hero__artwork--${imagePosition}`,
       ].join(" ")}
-      style={imageStyle}
-    >
-      <div
-        className="baura-hero__photo-blur"
-        aria-hidden="true"
-      />
+      style={imageStyle}>
+      <div className="baura-hero__photo-blur" aria-hidden="true" />
 
       <div
         className="baura-hero__photo"
         role="img"
-        aria-label={
-          slide.imageAlt || slide.name
-        }
+        aria-label={slide.imageAlt || slide.name}
       />
     </div>
   );
@@ -599,10 +440,7 @@ function renderHeroTitle(title: string) {
 
   if (lines.length > 1) {
     return lines.map((line, index) => (
-      <span
-        key={`${line}-${index}`}
-        className="baura-hero__title-line"
-      >
+      <span key={`${line}-${index}`} className="baura-hero__title-line">
         {line}
       </span>
     ));
@@ -648,8 +486,7 @@ function HomeSectionHeading({
 
       <Link
         to={linkTo}
-        className="group inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-brand-ink/15 bg-white/65 px-4 py-2.5 text-xs font-semibold text-brand-ink transition hover:border-brand-ink/25 hover:bg-white sm:self-auto"
-      >
+        className="group inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-brand-ink/15 bg-white/65 px-4 py-2.5 text-xs font-semibold text-brand-ink transition hover:border-brand-ink/25 hover:bg-white sm:self-auto">
         {linkLabel}
 
         <ArrowRight
@@ -678,8 +515,7 @@ function ProductGrid({
         {[0, 1, 2].map((index) => (
           <div
             key={index}
-            className="overflow-hidden rounded-[1.4rem] border border-brand-ink/10 bg-white/50"
-          >
+            className="overflow-hidden rounded-[1.4rem] border border-brand-ink/10 bg-white/50">
             <div className="aspect-[4/3] animate-pulse bg-brand-ink/[0.06]" />
 
             <div className="space-y-3 p-4">
@@ -696,10 +532,7 @@ function ProductGrid({
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {products.map((item) => (
-        <ProductCard
-          key={item.id}
-          item={item}
-        />
+        <ProductCard key={item.id} item={item} />
       ))}
     </div>
   );
@@ -719,8 +552,7 @@ function FreshFromBaura({
   return (
     <section
       id="discover-baura"
-      className="mx-auto w-full max-w-[1540px] px-5 py-12 sm:px-8 sm:py-14 lg:px-12 lg:py-16"
-    >
+      className="mx-auto w-full max-w-[1540px] px-5 py-12 sm:px-8 sm:py-14 lg:px-12 lg:py-16">
       <div className="mb-7 grid gap-4 border-b border-brand-ink/10 pb-7 lg:grid-cols-[1fr_390px] lg:items-end lg:gap-12">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-ink/45">
@@ -735,9 +567,8 @@ function FreshFromBaura({
         </div>
 
         <p className="max-w-md text-sm leading-6 text-brand-ink/65">
-          From an afternoon craving to the cake at
-          the centre of a celebration, we make the
-          sweet part worth looking forward to.
+          From an afternoon craving to the cake at the centre of a celebration,
+          we make the sweet part worth looking forward to.
         </p>
       </div>
 
@@ -754,10 +585,8 @@ function FreshFromBaura({
 
         <Link
           to="/menu"
-          className="group inline-flex items-center gap-2 text-xs font-semibold text-brand-ink sm:text-sm"
-        >
+          className="group inline-flex items-center gap-2 text-xs font-semibold text-brand-ink sm:text-sm">
           See what’s baking
-
           <ArrowRight
             size={16}
             className="transition-transform group-hover:translate-x-0.5"
@@ -765,15 +594,11 @@ function FreshFromBaura({
         </Link>
       </div>
 
-      <ProductGrid
-        products={products}
-        loading={loading}
-      />
+      <ProductGrid products={products} loading={loading} />
 
       {!loading && products.length === 0 && (
         <p className="rounded-2xl border border-brand-ink/10 bg-white/50 px-5 py-6 text-sm text-brand-ink/60">
-          Our menu items will appear here when
-          they become available.
+          Our menu items will appear here when they become available.
         </p>
       )}
     </section>
@@ -802,10 +627,7 @@ function OffersSection({
         />
 
         {loading || products.length > 0 ? (
-          <ProductGrid
-            products={products}
-            loading={loading}
-          />
+          <ProductGrid products={products} loading={loading} />
         ) : (
           <div className="rounded-[1.4rem] border border-brand-ink/10 bg-white/50 px-5 py-7 sm:px-7">
             <p className="text-sm font-semibold text-brand-ink">
@@ -813,16 +635,14 @@ function OffersSection({
             </p>
 
             <p className="mt-1 text-sm leading-6 text-brand-ink/60">
-              Check back for new offers, or explore
-              our complete menu in the meantime.
+              Check back for new offers, or explore our complete menu in the
+              meantime.
             </p>
 
             <Link
               to="/menu"
-              className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-brand-ink"
-            >
+              className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-brand-ink">
               View the menu
-
               <ArrowRight size={15} />
             </Link>
           </div>
@@ -853,15 +673,11 @@ function FeaturedMenu({
       />
 
       {loading || products.length > 0 ? (
-        <ProductGrid
-          products={products}
-          loading={loading}
-        />
+        <ProductGrid products={products} loading={loading} />
       ) : (
         <div className="rounded-[1.4rem] border border-brand-ink/10 bg-white/50 px-5 py-7">
           <p className="text-sm text-brand-ink/60">
-            More featured items will appear here
-            as our menu grows.
+            More featured items will appear here as our menu grows.
           </p>
         </div>
       )}
@@ -870,10 +686,8 @@ function FeaturedMenu({
         <div className="mt-7 flex justify-center">
           <Link
             to="/menu"
-            className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-brand-ink px-6 py-3 text-xs font-semibold text-brand-bg transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(55,38,25,0.16)]"
-          >
+            className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-brand-ink px-6 py-3 text-xs font-semibold text-brand-bg transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(55,38,25,0.16)]">
             View complete menu
-
             <ArrowRight
               size={16}
               className="transition-transform group-hover:translate-x-0.5"
@@ -889,21 +703,13 @@ function FeaturedMenu({
    FRESHNESS — COMPACT DESIGN
 ======================================================= */
 
-function FreshComposition({
-  reduceMotion,
-}: {
-  reduceMotion: boolean;
-}) {
+function FreshComposition({ reduceMotion }: { reduceMotion: boolean }) {
   return (
     <section className="border-y border-brand-ink/10 bg-white/35">
       <div className="mx-auto grid w-full max-w-[1540px] gap-7 px-5 py-12 sm:px-8 sm:py-14 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-14 lg:px-12 lg:py-16">
         <motion.div
           className="relative"
-          initial={
-            reduceMotion
-              ? false
-              : { opacity: 0, y: 18 }
-          }
+          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
           whileInView={{
             opacity: 1,
             y: 0,
@@ -915,8 +721,7 @@ function FreshComposition({
           transition={{
             duration: reduceMotion ? 0 : 0.6,
             ease,
-          }}
-        >
+          }}>
           <div className="overflow-hidden rounded-[1.4rem] bg-[#e9dfca]">
             <img
               src={imageTwo}
@@ -940,11 +745,7 @@ function FreshComposition({
 
         <motion.div
           className="max-w-xl"
-          initial={
-            reduceMotion
-              ? false
-              : { opacity: 0, y: 18 }
-          }
+          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
           whileInView={{
             opacity: 1,
             y: 0,
@@ -956,31 +757,26 @@ function FreshComposition({
           transition={{
             duration: reduceMotion ? 0 : 0.6,
             ease,
-          }}
-        >
+          }}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-ink/45">
             FRESHNESS FIRST
           </p>
 
           <h2 className="mt-2 text-3xl font-semibold leading-tight tracking-tight text-brand-ink sm:text-4xl">
             That first bite should
-            <br className="hidden sm:block" />
-            {" "}be worth it.
+            <br className="hidden sm:block" /> be worth it.
           </h2>
 
           <p className="mt-4 max-w-lg text-sm leading-7 text-brand-ink/65">
-            Soft cake, smooth cream, rich chocolate
-            and freshly finished favourites. We want
-            every Baura order to feel like something
-            you were actually excited to open.
+            Soft cake, smooth cream, rich chocolate and freshly finished
+            favourites. We want every Baura order to feel like something you
+            were actually excited to open.
           </p>
 
           <Link
             to="/about-us"
-            className="group mt-5 inline-flex items-center gap-2 rounded-full border border-brand-ink/15 bg-white/70 px-4 py-2.5 text-xs font-semibold text-brand-ink transition hover:border-brand-ink/25 hover:bg-white"
-          >
+            className="group mt-5 inline-flex items-center gap-2 rounded-full border border-brand-ink/15 bg-white/70 px-4 py-2.5 text-xs font-semibold text-brand-ink transition hover:border-brand-ink/25 hover:bg-white">
             Our story
-
             <ArrowRight
               size={15}
               className="transition-transform group-hover:translate-x-0.5"
@@ -996,11 +792,7 @@ function FreshComposition({
    CELEBRATION — COMPACT DESIGN
 ======================================================= */
 
-function Celebration({
-  reduceMotion,
-}: {
-  reduceMotion: boolean;
-}) {
+function Celebration({ reduceMotion }: { reduceMotion: boolean }) {
   return (
     <section className="relative isolate min-h-[360px] overflow-hidden bg-[#24150e] sm:min-h-[390px]">
       <img
@@ -1015,11 +807,7 @@ function Celebration({
 
       <motion.div
         className="mx-auto flex min-h-[360px] w-full max-w-[1540px] flex-col items-start justify-center px-5 py-12 text-[#f9f4e0] sm:min-h-[390px] sm:px-8 lg:px-12"
-        initial={
-          reduceMotion
-            ? false
-            : { opacity: 0, y: 18 }
-        }
+        initial={reduceMotion ? false : { opacity: 0, y: 18 }}
         whileInView={{
           opacity: 1,
           y: 0,
@@ -1031,8 +819,7 @@ function Celebration({
         transition={{
           duration: reduceMotion ? 0 : 0.6,
           ease,
-        }}
-      >
+        }}>
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#f9f4e0]/65">
           SOMETHING TO CELEBRATE?
         </p>
@@ -1044,17 +831,14 @@ function Celebration({
         </h2>
 
         <p className="mt-3 max-w-md text-sm leading-6 text-[#f9f4e0]/75">
-          Birthdays, surprises, gifts or simply
-          a good day made better.
+          Birthdays, surprises, gifts or simply a good day made better.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-4">
           <Link
             to="/menu"
-            className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#f9f4e0] px-5 py-3 text-xs font-semibold text-[#372619] transition hover:-translate-y-0.5 hover:bg-white"
-          >
+            className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#f9f4e0] px-5 py-3 text-xs font-semibold text-[#372619] transition hover:-translate-y-0.5 hover:bg-white">
             Find your cake
-
             <ArrowRight
               size={16}
               className="transition-transform group-hover:translate-x-0.5"
@@ -1063,10 +847,8 @@ function Celebration({
 
           <Link
             to="/contact"
-            className="group inline-flex items-center gap-1 text-xs font-semibold text-[#f9f4e0]"
-          >
+            className="group inline-flex items-center gap-1 text-xs font-semibold text-[#f9f4e0]">
             Talk to Baura
-
             <ChevronRight
               size={16}
               className="transition-transform group-hover:translate-x-0.5"
@@ -1092,19 +874,15 @@ function FinalOrder() {
 
         <h2 className="mt-2 max-w-2xl text-3xl font-semibold leading-tight tracking-tight text-brand-ink sm:text-4xl">
           Your next favourite might
-          <br className="hidden sm:block" />
-          {" "}be one bite away.
+          <br className="hidden sm:block" /> be one bite away.
         </h2>
       </div>
 
       <Link
         to="/menu"
-        className="group inline-flex min-h-12 shrink-0 items-center justify-center gap-2 self-start rounded-full bg-brand-ink px-6 py-3 text-sm font-semibold text-brand-bg transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(55,38,25,0.16)] lg:self-auto"
-      >
+        className="group inline-flex min-h-12 shrink-0 items-center justify-center gap-2 self-start rounded-full bg-brand-ink px-6 py-3 text-sm font-semibold text-brand-bg transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(55,38,25,0.16)] lg:self-auto">
         <ShoppingBag size={17} />
-
         Explore the menu
-
         <ArrowRight
           size={17}
           className="transition-transform group-hover:translate-x-0.5"

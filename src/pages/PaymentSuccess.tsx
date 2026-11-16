@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useCart } from "../app/cart";
+import { useCart } from "../app/useCart";
 import Page from "../components/Page";
 import {
   getPayHerePaymentStatus,

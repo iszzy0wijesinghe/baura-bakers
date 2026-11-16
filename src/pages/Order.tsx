@@ -1,12 +1,18 @@
 /** @format */
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Link } from "react-router-dom";
 import {
   Check,
   CheckCircle2,
   Copy,
-  ExternalLink,
   ArrowRight,
   ShieldCheck,
   ChevronLeft,
@@ -22,7 +28,7 @@ import {
   Truck,
   UserRound,
 } from "lucide-react";
-import { useCart } from "../app/cart";
+import { useCart } from "../app/useCart";
 import Page from "../components/Page";
 import {
   checkCustomerEmailExists,
@@ -50,13 +56,28 @@ const COURIER_LABELS: Record<CourierProvider, string> = {
   PICKME_FLASH: "PickMe Flash",
   UBER_PARCEL: "Uber Parcel",
 };
-function CourierBrand({ provider, compact = false }: { provider: CourierProvider; compact?: boolean }) {
-  return <span className="inline-flex min-w-0 items-center gap-2">
-    <span className={`grid shrink-0 place-items-center overflow-hidden rounded-lg border border-brand-ink/10 bg-white ${compact ? "h-6 w-6 sm:h-7 sm:w-7" : "h-8 w-8 sm:h-10 sm:w-10"}`}>
-      <img src={COURIER_LOGOS[provider]} alt="" className="h-full w-full object-contain p-1" />
+function CourierBrand({
+  provider,
+  compact = false,
+}: {
+  provider: CourierProvider;
+  compact?: boolean;
+}) {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <span
+        className={`grid shrink-0 place-items-center overflow-hidden rounded-lg border border-brand-ink/10 bg-white ${compact ? "h-6 w-6 sm:h-7 sm:w-7" : "h-8 w-8 sm:h-10 sm:w-10"}`}>
+        <img
+          src={COURIER_LOGOS[provider]}
+          alt=""
+          className="h-full w-full object-contain p-1"
+        />
+      </span>
+      <span className="text-[10px] font-semibold sm:text-xs">
+        {COURIER_LABELS[provider]}
+      </span>
     </span>
-    <span className="text-[10px] font-semibold sm:text-xs">{COURIER_LABELS[provider]}</span>
-  </span>;
+  );
 }
 
 type StepNo = 1 | 2 | 3 | 4;
@@ -193,7 +214,8 @@ export default function Order() {
   const { items, clear } = useCart();
 
   const [step, setStep] = useState<StepNo>(1);
-  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>("PICKUP");
+  const [fulfillmentType, setFulfillmentType] =
+    useState<FulfillmentType>("PICKUP");
   const [deliveryEnabled, setDeliveryEnabled] = useState(false);
   const [checkoutReady, setCheckoutReady] = useState(false);
   const [pickupEnabled, setPickupEnabled] = useState(false);
@@ -224,12 +246,20 @@ export default function Order() {
   const [savedOrderNo, setSavedOrderNo] = useState<string | null>(null);
   const [completedTrackingUrl, setCompletedTrackingUrl] = useState("");
   const [completedWhatsappUrl, setCompletedWhatsappUrl] = useState("");
-  const [courierArrangement, setCourierArrangement] = useState<"SELF_PICKUP" | "CUSTOMER_COURIER" | "BAKERY_ASSISTED_COURIER">("SELF_PICKUP");
-  const [courierProvider, setCourierProvider] = useState<CourierProvider | null>(null);
+  const [courierArrangement, setCourierArrangement] = useState<
+    "SELF_PICKUP" | "CUSTOMER_COURIER" | "BAKERY_ASSISTED_COURIER"
+  >("SELF_PICKUP");
+  const [courierProvider, setCourierProvider] =
+    useState<CourierProvider | null>(null);
   const [successDetailsVisible, setSuccessDetailsVisible] = useState(false);
   const [successSheetOpen, setSuccessSheetOpen] = useState(true);
   const [copiedOrderNo, setCopiedOrderNo] = useState(false);
-  const [completedReceipt, setCompletedReceipt] = useState<{ subtotal: number; deliveryFee: number; total: number; itemCount: number } | null>(null);
+  const [completedReceipt, setCompletedReceipt] = useState<{
+    subtotal: number;
+    deliveryFee: number;
+    total: number;
+    itemCount: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!savedOrderNo || !successSheetOpen) return;
@@ -414,13 +444,14 @@ export default function Order() {
 
   const deliveryFeeLkr = isPickup ? 0 : checkoutQuote?.delivery_fee_lkr || 0;
   const pickupToday = sriLankaToday();
-  const pickupLastDate = pickupCalendar[pickupCalendar.length - 1]?.date || pickupToday;
+  const pickupLastDate =
+    pickupCalendar[pickupCalendar.length - 1]?.date || pickupToday;
   const selectedPickupDay = useMemo(
     () => pickupCalendar.find((day) => day.date === pickupDate) || null,
     [pickupCalendar, pickupDate],
   );
   const pickupTimeChoices = useMemo(
-    () => selectedPickupDay ? pickupTimeOptions(selectedPickupDay) : [],
+    () => (selectedPickupDay ? pickupTimeOptions(selectedPickupDay) : []),
     [selectedPickupDay],
   );
   const pickupScheduleValid = Boolean(
@@ -432,7 +463,8 @@ export default function Order() {
     pickupDate >= pickupToday &&
     pickupDate <= pickupLastDate &&
     pickupTimeChoices.includes(pickupStartTime) &&
-    new Date(`${pickupDate}T${pickupStartTime}:00+05:30`).getTime() > Date.now() &&
+    new Date(`${pickupDate}T${pickupStartTime}:00+05:30`).getTime() >
+      Date.now() &&
     pickupEndTime === addTenMinutes(pickupStartTime),
   );
 
@@ -440,7 +472,9 @@ export default function Order() {
 
   const deliveryCostValid = Boolean(checkoutQuote);
 
-  const scheduleValid = isPickup ? pickupScheduleValid : Boolean(selectedDeliverySlot) && deliveryCostValid;
+  const scheduleValid = isPickup
+    ? pickupScheduleValid
+    : Boolean(selectedDeliverySlot) && deliveryCostValid;
 
   const currentLocationUrl =
     form.deliveryTarget === "RECEIVER"
@@ -451,12 +485,16 @@ export default function Order() {
     ? `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}&z=16&output=embed`
     : "";
 
-  const courierLabel = courierArrangement === "SELF_PICKUP"
-    ? "I'll collect in person"
-    : courierArrangement === "CUSTOMER_COURIER"
-      ? `My courier · ${courierProvider ? COURIER_LABELS[courierProvider] : "Not selected"}`
-      : `Baura-assisted courier · ${courierProvider ? COURIER_LABELS[courierProvider] : "Not selected"}`;
-  const courierValid = !isPickup || courierArrangement === "SELF_PICKUP" || Boolean(courierProvider);
+  const courierLabel =
+    courierArrangement === "SELF_PICKUP"
+      ? "I'll collect in person"
+      : courierArrangement === "CUSTOMER_COURIER"
+        ? `My courier · ${courierProvider ? COURIER_LABELS[courierProvider] : "Not selected"}`
+        : `Baura-assisted courier · ${courierProvider ? COURIER_LABELS[courierProvider] : "Not selected"}`;
+  const courierValid =
+    !isPickup ||
+    courierArrangement === "SELF_PICKUP" ||
+    Boolean(courierProvider);
 
   const cartLines = useMemo(() => {
     return items.map((item, index) => {
@@ -559,13 +597,21 @@ export default function Order() {
         const erpDays = checkout.pickup_calendar || [];
         setPickupCalendar(erpDays);
         setPickupDate((current) =>
-          erpDays.some((day) => day.date === current && day.isOpen) ? current : "",
+          erpDays.some((day) => day.date === current && day.isOpen)
+            ? current
+            : "",
         );
         setPickupStartTime("");
         setPickupPreviewDays(Math.max(1, checkout.pickup_preview_days || 14));
         setFulfillmentType((current) => {
-          if (current === "DELIVERY" && !checkout.delivery_enabled) return "PICKUP";
-          if (current === "PICKUP" && !checkout.pickup_enabled && checkout.delivery_enabled) return "DELIVERY";
+          if (current === "DELIVERY" && !checkout.delivery_enabled)
+            return "PICKUP";
+          if (
+            current === "PICKUP" &&
+            !checkout.pickup_enabled &&
+            checkout.delivery_enabled
+          )
+            return "DELIVERY";
           return current;
         });
         setCheckoutReady(true);
@@ -675,7 +721,12 @@ export default function Order() {
     let ignore = false;
 
     async function calculateDeliveryQuote() {
-      if (isPickup || !deliveryEnabled || !deliveryLocationCoords || totalQuantity < 1) {
+      if (
+        isPickup ||
+        !deliveryEnabled ||
+        !deliveryLocationCoords ||
+        totalQuantity < 1
+      ) {
         setCheckoutQuote(null);
         setDistanceNotice("");
         setIsCalculatingDistance(false);
@@ -757,12 +808,18 @@ export default function Order() {
           ].join("\n")
         : "",
       isPickup ? "🏬 *Store Pickup*" : "🚚 *Delivery*",
-      isPickup ? `Collection: ${pickupDate} at ${formatHour(pickupStartTime)}` : "",
+      isPickup
+        ? `Collection: ${pickupDate} at ${formatHour(pickupStartTime)}`
+        : "",
       isPickup ? `Collection arrangement: ${courierLabel}` : "",
-      isPickup && courierArrangement !== "SELF_PICKUP" ? "Courier charges are payable by the customer separately." : "",
-      !isPickup ? `Deliver To: ${
-        form.deliveryTarget === "RECEIVER" ? "Receiver" : "Sender"
-      }` : "",
+      isPickup && courierArrangement !== "SELF_PICKUP"
+        ? "Courier charges are payable by the customer separately."
+        : "",
+      !isPickup
+        ? `Deliver To: ${
+            form.deliveryTarget === "RECEIVER" ? "Receiver" : "Sender"
+          }`
+        : "",
       !isPickup ? `Address: ${effectiveDelivery.address || "-"}` : "",
       !isPickup && locationUrl ? `Location: ${locationUrl}` : "",
       !isPickup && selectedDeliverySlot
@@ -773,8 +830,12 @@ export default function Order() {
       "🛍️ *Items*",
       cartLines.length ? cartLines.join("\n") : "(No items)",
       "",
-      !isPickup && checkoutQuote ? `📍 *Distance:* ${checkoutQuote.distance_km}km` : "",
-      isPickup ? "🏬 *Collection Fee:* FREE" : `🚚 *Delivery Fee:* ${formatLkr(deliveryFeeLkr)}`,
+      !isPickup && checkoutQuote
+        ? `📍 *Distance:* ${checkoutQuote.distance_km}km`
+        : "",
+      isPickup
+        ? "🏬 *Collection Fee:* FREE"
+        : `🚚 *Delivery Fee:* ${formatLkr(deliveryFeeLkr)}`,
       `💰 *Order Total:* ${formatLkr(finalTotalLkr)}`,
       "",
       "🏦 *Payment:* Bank transfer / WhatsApp confirmation",
@@ -793,7 +854,11 @@ export default function Order() {
     cartLines,
     checkoutQuote,
     deliveryLocationCoords,
-    isPickup, pickupDate, pickupStartTime, pickupEndTime, courierArrangement, courierLabel,
+    isPickup,
+    pickupDate,
+    pickupStartTime,
+    courierArrangement,
+    courierLabel,
   ]);
 
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -885,7 +950,9 @@ export default function Order() {
   function validateDelivery() {
     if (isPickup) {
       if (!courierValid) {
-        setSubmitError("Choose PickMe Flash or Uber Parcel for your courier arrangement.");
+        setSubmitError(
+          "Choose PickMe Flash or Uber Parcel for your courier arrangement.",
+        );
         return false;
       }
       return true;
@@ -917,11 +984,17 @@ export default function Order() {
   function validateSchedule() {
     if (isPickup) {
       const errors: FieldErrors = {};
-      if (!selectedPickupDay?.isOpen || pickupDate < pickupToday || pickupDate > pickupLastDate) {
-        errors.pickupDate = "Choose an open collection date from the ERP calendar.";
+      if (
+        !selectedPickupDay?.isOpen ||
+        pickupDate < pickupToday ||
+        pickupDate > pickupLastDate
+      ) {
+        errors.pickupDate =
+          "Choose an open collection date from the ERP calendar.";
       }
       if (!pickupScheduleValid) {
-        errors.pickupTime = "Choose a future collection time within the hours for that date.";
+        errors.pickupTime =
+          "Choose a future collection time within the hours for that date.";
       }
       setFieldErrors(errors);
       if (Object.keys(errors).length) requestErrorFocus();
@@ -958,7 +1031,9 @@ export default function Order() {
     }
 
     if (step === 2 && !checkoutReady) {
-      setSubmitError("Loading collection and delivery availability. Please try again.");
+      setSubmitError(
+        "Loading collection and delivery availability. Please try again.",
+      );
       return;
     }
     if (step === 2 && !detailsValid) {
@@ -1041,7 +1116,7 @@ export default function Order() {
     }));
   }
 
-  function useCurrentLocation(target: DeliveryTarget) {
+  function handleCurrentLocation(target: DeliveryTarget) {
     if (!navigator.geolocation) {
       setSubmitError(
         "Location sharing isn't supported by this browser. Please paste your Google Maps location instead.",
@@ -1128,13 +1203,27 @@ export default function Order() {
       return saveOrderPromiseRef.current;
     }
 
-    if (!checkoutReady) throw new Error("Checkout availability has not loaded. Please refresh and try again.");
-    if (isPickup && !pickupEnabled) throw new Error("Store pickup is currently unavailable.");
-    if (!isPickup && !deliveryEnabled) throw new Error("Delivery is currently unavailable.");
-    if (isPickup && !pickupScheduleValid) throw new Error("Please choose an available pickup time.");
-    if (!courierValid) throw new Error("Choose the courier service for your collection arrangement.");
-    if (!isPickup && (!selectedDeliverySlot || !deliveryLocationCoords || !checkoutQuote)) {
-      throw new Error("Please finish your delivery location, quote and schedule.");
+    if (!checkoutReady)
+      throw new Error(
+        "Checkout availability has not loaded. Please refresh and try again.",
+      );
+    if (isPickup && !pickupEnabled)
+      throw new Error("Store pickup is currently unavailable.");
+    if (!isPickup && !deliveryEnabled)
+      throw new Error("Delivery is currently unavailable.");
+    if (isPickup && !pickupScheduleValid)
+      throw new Error("Please choose an available pickup time.");
+    if (!courierValid)
+      throw new Error(
+        "Choose the courier service for your collection arrangement.",
+      );
+    if (
+      !isPickup &&
+      (!selectedDeliverySlot || !deliveryLocationCoords || !checkoutQuote)
+    ) {
+      throw new Error(
+        "Please finish your delivery location, quote and schedule.",
+      );
     }
     const fallbackLocationUrl = deliveryLocationCoords
       ? `https://www.google.com/maps?q=${deliveryLocationCoords.lat},${deliveryLocationCoords.lng}`
@@ -1147,7 +1236,10 @@ export default function Order() {
       pickupStartTime: isPickup ? pickupStartTime : undefined,
       pickupEndTime: isPickup ? pickupEndTime : undefined,
       collectionArrangement: isPickup ? courierArrangement : null,
-      courierProvider: isPickup && courierArrangement !== "SELF_PICKUP" ? courierProvider : null,
+      courierProvider:
+        isPickup && courierArrangement !== "SELF_PICKUP"
+          ? courierProvider
+          : null,
 
       senderName: form.senderName,
       senderEmail: form.senderEmail,
@@ -1169,7 +1261,9 @@ export default function Order() {
 
       deliveryTarget: form.deliveryTarget,
       deliveryAddress: effectiveDelivery.address,
-      deliveryLocationUrl: isPickup ? "" : effectiveDelivery.locationUrl || fallbackLocationUrl,
+      deliveryLocationUrl: isPickup
+        ? ""
+        : effectiveDelivery.locationUrl || fallbackLocationUrl,
       deliveryLat: isPickup ? null : deliveryLocationCoords?.lat,
       deliveryLng: isPickup ? null : deliveryLocationCoords?.lng,
       deliverySlotId: isPickup ? undefined : selectedDeliverySlot?.id,
@@ -1188,9 +1282,13 @@ export default function Order() {
       paymentMethod,
       note: [
         isPickup ? `Collection arrangement: ${courierLabel}.` : "",
-        isPickup && courierArrangement !== "SELF_PICKUP" ? `Courier service: ${courierProvider ? COURIER_LABELS[courierProvider] : "Not selected"}. Third-party courier fees are the customer's responsibility and are not included in the order total.` : "",
+        isPickup && courierArrangement !== "SELF_PICKUP"
+          ? `Courier service: ${courierProvider ? COURIER_LABELS[courierProvider] : "Not selected"}. Third-party courier fees are the customer's responsibility and are not included in the order total.`
+          : "",
         form.note.trim(),
-      ].filter(Boolean).join("\n"),
+      ]
+        .filter(Boolean)
+        .join("\n"),
       items,
     })
       .then((savedOrder) => {
@@ -1270,7 +1368,12 @@ export default function Order() {
       )}`;
 
       // Keep the receipt independent of cart state; clear() empties items immediately.
-      setCompletedReceipt({ subtotal: totalLkr, deliveryFee: deliveryFeeLkr, total: finalTotalLkr, itemCount: totalQuantity });
+      setCompletedReceipt({
+        subtotal: totalLkr,
+        deliveryFee: deliveryFeeLkr,
+        total: finalTotalLkr,
+        itemCount: totalQuantity,
+      });
       setCompletedTrackingUrl(trackingUrl);
       setCompletedWhatsappUrl(whatsappUrl);
       setSavedOrderNo(savedOrderNoForTracking);
@@ -1283,7 +1386,8 @@ export default function Order() {
       setSubmitError(
         /items\.\d+\.sugar_level_id/.test(message)
           ? "One item has an unavailable sugar selection. Please return to your cart and select a valid option, or try again after the catalogue is updated."
-          : message || "We couldn't save your order. Your cart is still safe — please try again.",
+          : message ||
+              "We couldn't save your order. Your cart is still safe — please try again.",
       );
       requestErrorFocus();
 
@@ -1291,14 +1395,6 @@ export default function Order() {
     }
   }
 
-  const canGoNext =
-    step === 1
-      ? detailsValid
-      : step === 2
-        ? (isPickup ? courierValid : deliveryAddressValid)
-        : step === 3
-          ? scheduleValid
-          : true;
 
   const stepMeta: Array<{
     id: StepNo;
@@ -1329,7 +1425,8 @@ export default function Order() {
 
   if (savedOrderNo) {
     const trackPath = completedTrackingUrl
-      ? new URL(completedTrackingUrl).pathname + new URL(completedTrackingUrl).search
+      ? new URL(completedTrackingUrl).pathname +
+        new URL(completedTrackingUrl).search
       : `/track/${encodeURIComponent(savedOrderNo)}`;
     const receiptTotal = completedReceipt?.total ?? 0;
     const receiptSubtotal = completedReceipt?.subtotal ?? 0;
@@ -1339,35 +1436,119 @@ export default function Order() {
         <div className="mx-auto max-w-5xl pb-20 pt-6 sm:pt-12">
           <div className="mb-7 flex flex-wrap items-center justify-between gap-3 border-b border-brand-ink/10 pb-5">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-ink/40">Baura Bakers / Checkout</p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-brand-ink">Order received</h1>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-ink/40">
+                Baura Bakers / Checkout
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-brand-ink">
+                Order received
+              </h1>
             </div>
-            <span className="rounded-full bg-white/65 px-3 py-2 text-xs font-semibold text-brand-ink/70">{savedOrderNo}</span>
+            <span className="rounded-full bg-white/65 px-3 py-2 text-xs font-semibold text-brand-ink/70">
+              {savedOrderNo}
+            </span>
           </div>
           <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_290px]">
             <section className="rounded-[1.5rem] border border-brand-ink/10 bg-white/65 p-5 sm:p-7">
               <div className="flex items-center gap-3">
-                <CheckCircle2 className="text-brand-ink" size={22} strokeWidth={1.8} />
-                <div><h2 className="text-base font-semibold text-brand-ink">Your order is safely received</h2><p className="mt-1 text-xs text-brand-ink/55">Awaiting payment verification before preparation</p></div>
+                <CheckCircle2
+                  className="text-brand-ink"
+                  size={22}
+                  strokeWidth={1.8}
+                />
+                <div>
+                  <h2 className="text-base font-semibold text-brand-ink">
+                    Your order is safely received
+                  </h2>
+                  <p className="mt-1 text-xs text-brand-ink/55">
+                    Awaiting payment verification before preparation
+                  </p>
+                </div>
               </div>
               <div className="mt-6 divide-y divide-brand-ink/10 border-t border-brand-ink/10">
-                <div className="grid grid-cols-[110px_1fr] gap-4 py-4 text-sm sm:grid-cols-[150px_1fr]"><span className="text-brand-ink/50">Collection</span><div className="font-medium text-brand-ink">{isPickup ? courierLabel : 'Baura delivery'}{isPickup && courierProvider && courierArrangement !== 'SELF_PICKUP' && <div className="mt-2"><CourierBrand provider={courierProvider} compact /></div>}</div></div>
-                <div className="grid grid-cols-[110px_1fr] gap-4 py-4 text-sm sm:grid-cols-[150px_1fr]"><span className="text-brand-ink/50">Scheduled for</span><strong className="font-medium text-brand-ink">{isPickup ? `${formatCalendarDate(pickupDate)} · ${formatHour(pickupStartTime)}` : formatSlot(selectedDeliverySlot)}</strong></div>
-                <div className="grid grid-cols-[110px_1fr] gap-4 py-4 text-sm sm:grid-cols-[150px_1fr]"><span className="text-brand-ink/50">Items</span><strong className="font-medium text-brand-ink">{completedReceipt?.itemCount ?? 0}</strong></div>
+                <div className="grid grid-cols-[110px_1fr] gap-4 py-4 text-sm sm:grid-cols-[150px_1fr]">
+                  <span className="text-brand-ink/50">Collection</span>
+                  <div className="font-medium text-brand-ink">
+                    {isPickup ? courierLabel : "Baura delivery"}
+                    {isPickup &&
+                      courierProvider &&
+                      courierArrangement !== "SELF_PICKUP" && (
+                        <div className="mt-2">
+                          <CourierBrand provider={courierProvider} compact />
+                        </div>
+                      )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-[110px_1fr] gap-4 py-4 text-sm sm:grid-cols-[150px_1fr]">
+                  <span className="text-brand-ink/50">Scheduled for</span>
+                  <strong className="font-medium text-brand-ink">
+                    {isPickup
+                      ? `${formatCalendarDate(pickupDate)} · ${formatHour(pickupStartTime)}`
+                      : formatSlot(selectedDeliverySlot)}
+                  </strong>
+                </div>
+                <div className="grid grid-cols-[110px_1fr] gap-4 py-4 text-sm sm:grid-cols-[150px_1fr]">
+                  <span className="text-brand-ink/50">Items</span>
+                  <strong className="font-medium text-brand-ink">
+                    {completedReceipt?.itemCount ?? 0}
+                  </strong>
+                </div>
               </div>
-              <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-brand-ink/10 pt-5"><span className="text-sm font-medium text-brand-ink/60">Bakery order total</span><strong className="text-2xl font-semibold tracking-tight text-brand-ink">{formatLkr(receiptTotal)}</strong></div>
+              <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-brand-ink/10 pt-5">
+                <span className="text-sm font-medium text-brand-ink/60">
+                  Bakery order total
+                </span>
+                <strong className="text-2xl font-semibold tracking-tight text-brand-ink">
+                  {formatLkr(receiptTotal)}
+                </strong>
+              </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <a href={completedWhatsappUrl || `https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-ink px-4 text-xs font-semibold text-brand-bg"><MessageCircle size={16}/> Confirm payment on WhatsApp</a>
-                <Link to={trackPath} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-brand-ink/15 px-4 text-xs font-semibold text-brand-ink"><PackageCheck size={16}/> Track order</Link>
+                <a
+                  href={
+                    completedWhatsappUrl || `https://wa.me/${WHATSAPP_NUMBER}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-ink px-4 text-xs font-semibold text-brand-bg">
+                  <MessageCircle size={16} /> Confirm payment on WhatsApp
+                </a>
+                <Link
+                  to={trackPath}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-brand-ink/15 px-4 text-xs font-semibold text-brand-ink">
+                  <PackageCheck size={16} /> Track order
+                </Link>
               </div>
-              {isPickup && courierArrangement !== 'SELF_PICKUP' && <p className="mt-3 text-xs leading-5 text-brand-ink/55">Third-party courier charges are paid separately by the customer.</p>}
+              {isPickup && courierArrangement !== "SELF_PICKUP" && (
+                <p className="mt-3 text-xs leading-5 text-brand-ink/55">
+                  Third-party courier charges are paid separately by the
+                  customer.
+                </p>
+              )}
             </section>
             <aside className="hidden lg:block h-fit rounded-[1.5rem] border border-brand-ink/10 bg-white/45 p-5 sm:p-6">
-              <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-brand-ink/40">Next steps</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-brand-ink/40">
+                Next steps
+              </p>
               <ol className="mt-5 space-y-5">
-                {[['01', 'Arrange your payment'], ['02', 'Send the slip via WhatsApp'], ['03', 'Wait for payment confirmation']].map(([number, label]) => <li key={number} className="flex items-start gap-3"><span className="text-xs font-bold text-brand-ink/40">{number}</span><span className="text-sm leading-5 text-brand-ink/80">{label}</span></li>)}
+                {[
+                  ["01", "Arrange your payment"],
+                  ["02", "Send the slip via WhatsApp"],
+                  ["03", "Wait for payment confirmation"],
+                ].map(([number, label]) => (
+                  <li key={number} className="flex items-start gap-3">
+                    <span className="text-xs font-bold text-brand-ink/40">
+                      {number}
+                    </span>
+                    <span className="text-sm leading-5 text-brand-ink/80">
+                      {label}
+                    </span>
+                  </li>
+                ))}
               </ol>
-              <Link to={trackPath} className="mt-6 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-brand-ink/15 text-xs font-semibold text-brand-ink transition hover:bg-white sm:text-sm"><PackageCheck size={16} /> Track order</Link>
+              <Link
+                to={trackPath}
+                className="mt-6 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-brand-ink/15 text-xs font-semibold text-brand-ink transition hover:bg-white sm:text-sm">
+                <PackageCheck size={16} /> Track order
+              </Link>
             </aside>
           </div>
         </div>
@@ -1393,8 +1574,7 @@ export default function Order() {
               aria-modal="true"
               aria-labelledby="checkout-success-title"
               aria-describedby="checkout-success-description"
-              className="baura-sheet-enter relative z-10 flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-[24px] border border-brand-ink/10 bg-[#fffdf8] shadow-[0_-15px_60px_rgba(30,18,10,.15)] sm:max-h-[min(760px,calc(100dvh-40px))] sm:max-w-[470px] sm:rounded-[22px] sm:shadow-[0_25px_85px_rgba(30,18,10,.24)]"
-            >
+              className="baura-sheet-enter relative z-10 flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-[24px] border border-brand-ink/10 bg-[#fffdf8] shadow-[0_-15px_60px_rgba(30,18,10,.15)] sm:max-h-[min(760px,calc(100dvh-40px))] sm:max-w-[470px] sm:rounded-[22px] sm:shadow-[0_25px_85px_rgba(30,18,10,.24)]">
               <div className="relative shrink-0 px-4 pt-3 sm:px-7 sm:pt-5">
                 <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-brand-ink/20 sm:hidden" />
                 <div className="flex items-center justify-between gap-2">
@@ -1402,41 +1582,200 @@ export default function Order() {
                     <span className="relative grid h-6 w-6 place-items-center rounded-full bg-brand-ink text-brand-bg">
                       <Check size={14} strokeWidth={2.2} />
                       {Array.from({ length: 14 }, (_, index) => {
-                        const angle = index * (Math.PI * 2 / 14);
-                        const distance = 65 + index % 3 * 11;
-                        return <i key={index} aria-hidden="true" className="baura-sheet-confetti" style={{ '--dx': `${Math.cos(angle) * distance}px`, '--dy': `${Math.sin(angle) * distance}px`, backgroundColor: ['#bc9457', '#a46b4d', '#6c8867', '#d7bb85'][index % 4], animationDelay: `${index % 4 * 50}ms` } as CSSProperties} />;
+                        const angle = index * ((Math.PI * 2) / 14);
+                        const distance = 65 + (index % 3) * 11;
+                        return (
+                          <i
+                            key={index}
+                            aria-hidden="true"
+                            className="baura-sheet-confetti"
+                            style={
+                              {
+                                "--dx": `${Math.cos(angle) * distance}px`,
+                                "--dy": `${Math.sin(angle) * distance}px`,
+                                backgroundColor: [
+                                  "#bc9457",
+                                  "#a46b4d",
+                                  "#6c8867",
+                                  "#d7bb85",
+                                ][index % 4],
+                                animationDelay: `${(index % 4) * 50}ms`,
+                              } as CSSProperties
+                            }
+                          />
+                        );
                       })}
                     </span>
                     Order received
                   </span>
-                  <button type="button" onClick={() => setSuccessSheetOpen(false)} className="min-h-9 rounded-lg px-3 text-[11px] font-medium text-brand-ink/55 transition hover:bg-brand-ink/5 hover:text-brand-ink" aria-label="View full receipt">View receipt <span aria-hidden="true">×</span></button>
+                  <button
+                    type="button"
+                    onClick={() => setSuccessSheetOpen(false)}
+                    className="min-h-9 rounded-lg px-3 text-[11px] font-medium text-brand-ink/55 transition hover:bg-brand-ink/5 hover:text-brand-ink"
+                    aria-label="View full receipt">
+                    View receipt <span aria-hidden="true">×</span>
+                  </button>
                 </div>
-                <h2 id="checkout-success-title" className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-brand-ink sm:mt-3 sm:text-[30px]">Your order is in!</h2>
-                <p id="checkout-success-description" className="mt-1 text-[11px] leading-[1.5] text-brand-ink/60 sm:mt-2 sm:text-[13px]">Order saved. Send your payment slip on WhatsApp to have it confirmed.</p>
+                <h2
+                  id="checkout-success-title"
+                  className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-brand-ink sm:mt-3 sm:text-[30px]">
+                  Your order is in!
+                </h2>
+                <p
+                  id="checkout-success-description"
+                  className="mt-1 text-[11px] leading-[1.5] text-brand-ink/60 sm:mt-2 sm:text-[13px]">
+                  Order saved. Send your payment slip on WhatsApp to have it
+                  confirmed.
+                </p>
               </div>
 
               <div className="baura-hide-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3 pt-3 sm:px-7 sm:pb-4 sm:pt-5">
                 <div className="flex items-center justify-between gap-3 border-y border-brand-ink/10 py-2.5 sm:py-3">
-                  <div className="min-w-0"><p className="text-[10px] text-brand-ink/45">Order number</p><p className="mt-0.5 text-[14px] font-bold text-brand-ink sm:text-base">{savedOrderNo}</p></div>
-                  <button type="button" onClick={() => { void navigator.clipboard?.writeText(savedOrderNo); setCopiedOrderNo(true); }} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-brand-ink/15 px-3 text-[11px] font-semibold text-brand-ink"><Copy size={13}/>{copiedOrderNo ? 'Copied' : 'Copy'}</button>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-brand-ink/45">
+                      Order number
+                    </p>
+                    <p className="mt-0.5 text-[14px] font-bold text-brand-ink sm:text-base">
+                      {savedOrderNo}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(savedOrderNo);
+                      setCopiedOrderNo(true);
+                    }}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-brand-ink/15 px-3 text-[11px] font-semibold text-brand-ink">
+                    <Copy size={13} />
+                    {copiedOrderNo ? "Copied" : "Copy"}
+                  </button>
                 </div>
                 <div className="flex items-end justify-between gap-3 py-3">
-                  <div><p className="text-[10px] text-brand-ink/50">Bakery order total</p><p className="mt-0.5 text-[22px] font-semibold tracking-tight text-brand-ink sm:text-[26px]">{formatLkr(receiptTotal)}</p></div>
-                  <div className="pb-0.5 text-right"><p className="text-[10px] text-brand-ink/50">Payment</p><p className="mt-0.5 text-[11px] font-semibold text-brand-ink">Awaiting verification</p></div>
+                  <div>
+                    <p className="text-[10px] text-brand-ink/50">
+                      Bakery order total
+                    </p>
+                    <p className="mt-0.5 text-[22px] font-semibold tracking-tight text-brand-ink sm:text-[26px]">
+                      {formatLkr(receiptTotal)}
+                    </p>
+                  </div>
+                  <div className="pb-0.5 text-right">
+                    <p className="text-[10px] text-brand-ink/50">Payment</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-brand-ink">
+                      Awaiting verification
+                    </p>
+                  </div>
                 </div>
-                {isPickup && courierArrangement !== 'SELF_PICKUP' && courierProvider && <div className="flex items-center justify-between gap-2 border-t border-brand-ink/10 py-2.5"><div className="min-w-0"><p className="text-[10px] text-brand-ink/50">Collection</p><p className="mt-0.5 text-[11px] font-medium text-brand-ink">{courierArrangement === 'CUSTOMER_COURIER' ? 'You arrange the courier' : 'Baura helps arrange'}</p></div><CourierBrand provider={courierProvider} compact /></div>}
+                {isPickup &&
+                  courierArrangement !== "SELF_PICKUP" &&
+                  courierProvider && (
+                    <div className="flex items-center justify-between gap-2 border-t border-brand-ink/10 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-brand-ink/50">
+                          Collection
+                        </p>
+                        <p className="mt-0.5 text-[11px] font-medium text-brand-ink">
+                          {courierArrangement === "CUSTOMER_COURIER"
+                            ? "You arrange the courier"
+                            : "Baura helps arrange"}
+                        </p>
+                      </div>
+                      <CourierBrand provider={courierProvider} compact />
+                    </div>
+                  )}
                 <div className="flex items-start gap-2.5 rounded-lg bg-[#f4eedf] px-3 py-2.5 sm:py-3">
-                  <ShieldCheck size={16} className="mt-0.5 shrink-0 text-brand-ink/75" strokeWidth={1.8}/>
-                  <div><p className="text-[12px] font-semibold text-brand-ink">Payment required to confirm</p><p className="mt-0.5 text-[11px] leading-[1.5] text-brand-ink/65">Preparation begins after payment verification. Please send your bank-transfer slip to Baura Bakers.</p></div>
+                  <ShieldCheck
+                    size={16}
+                    className="mt-0.5 shrink-0 text-brand-ink/75"
+                    strokeWidth={1.8}
+                  />
+                  <div>
+                    <p className="text-[12px] font-semibold text-brand-ink">
+                      Payment required to confirm
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-[1.5] text-brand-ink/65">
+                      Preparation begins after payment verification. Please send
+                      your bank-transfer slip to Baura Bakers.
+                    </p>
+                  </div>
                 </div>
-                <button type="button" aria-expanded={successDetailsVisible} onClick={() => setSuccessDetailsVisible(visible => !visible)} className="mt-3 flex min-h-9 w-full items-center justify-between border-b border-brand-ink/10 pb-1 text-left text-[11px] font-medium text-brand-ink/65"><span>{successDetailsVisible ? 'Hide' : 'View'} order breakdown</span><ChevronRight size={15} className={successDetailsVisible ? 'rotate-90' : ''}/></button>
-                {successDetailsVisible && <div className="space-y-2 py-3 text-[11px] leading-5 text-brand-ink/75"><div className="flex justify-between gap-3"><span>Items subtotal</span><strong>{formatLkr(receiptSubtotal)}</strong></div><div className="flex justify-between gap-3"><span>{isPickup ? "Bakery collection fee" : "Baura delivery fee"}</span><strong>{formatLkr(receiptDelivery)}</strong></div><div className="flex justify-between gap-3 border-t border-brand-ink/10 pt-2"><span>Total</span><strong>{formatLkr(receiptTotal)}</strong></div><p><strong>Collection:</strong> {isPickup ? courierLabel : 'Baura delivery'}</p><p><strong>When:</strong> {isPickup ? `${formatCalendarDate(pickupDate)} at ${formatHour(pickupStartTime)}` : formatSlot(selectedDeliverySlot)}</p>{isPickup && courierArrangement !== 'SELF_PICKUP' && <p>Third-party courier charges are paid separately by the customer.</p>}</div>}
+                <button
+                  type="button"
+                  aria-expanded={successDetailsVisible}
+                  onClick={() =>
+                    setSuccessDetailsVisible((visible) => !visible)
+                  }
+                  className="mt-3 flex min-h-9 w-full items-center justify-between border-b border-brand-ink/10 pb-1 text-left text-[11px] font-medium text-brand-ink/65">
+                  <span>
+                    {successDetailsVisible ? "Hide" : "View"} order breakdown
+                  </span>
+                  <ChevronRight
+                    size={15}
+                    className={successDetailsVisible ? "rotate-90" : ""}
+                  />
+                </button>
+                {successDetailsVisible && (
+                  <div className="space-y-2 py-3 text-[11px] leading-5 text-brand-ink/75">
+                    <div className="flex justify-between gap-3">
+                      <span>Items subtotal</span>
+                      <strong>{formatLkr(receiptSubtotal)}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>
+                        {isPickup
+                          ? "Bakery collection fee"
+                          : "Baura delivery fee"}
+                      </span>
+                      <strong>{formatLkr(receiptDelivery)}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3 border-t border-brand-ink/10 pt-2">
+                      <span>Total</span>
+                      <strong>{formatLkr(receiptTotal)}</strong>
+                    </div>
+                    <p>
+                      <strong>Collection:</strong>{" "}
+                      {isPickup ? courierLabel : "Baura delivery"}
+                    </p>
+                    <p>
+                      <strong>When:</strong>{" "}
+                      {isPickup
+                        ? `${formatCalendarDate(pickupDate)} at ${formatHour(pickupStartTime)}`
+                        : formatSlot(selectedDeliverySlot)}
+                    </p>
+                    {isPickup && courierArrangement !== "SELF_PICKUP" && (
+                      <p>
+                        Third-party courier charges are paid separately by the
+                        customer.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="shrink-0 border-t border-brand-ink/10 bg-[#fffdf8] px-4 pb-[max(14px,env(safe-area-inset-bottom))] pt-3 sm:px-7 sm:pb-5">
-                <a href={completedWhatsappUrl || `https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-ink px-3 text-[12px] font-semibold text-brand-bg transition hover:bg-brand-ink/90 sm:text-sm"><MessageCircle size={16} strokeWidth={1.8}/> Confirm payment on WhatsApp <ArrowRight size={15} className="ml-auto"/></a>
-                <Link to={trackPath} className="mt-2 flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand-ink/15 text-[12px] font-semibold text-brand-ink transition hover:bg-brand-ink/5 sm:text-sm"><PackageCheck size={16} strokeWidth={1.8}/> Track my order</Link>
-                <p className="mt-2 text-center text-[10px] leading-4 text-brand-ink/45">WhatsApp opens only when tapped · <Link to="/order-policies" className="underline underline-offset-2">Ordering policies</Link></p>
+                <a
+                  href={
+                    completedWhatsappUrl || `https://wa.me/${WHATSAPP_NUMBER}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-ink px-3 text-[12px] font-semibold text-brand-bg transition hover:bg-brand-ink/90 sm:text-sm">
+                  <MessageCircle size={16} strokeWidth={1.8} /> Confirm payment
+                  on WhatsApp <ArrowRight size={15} className="ml-auto" />
+                </a>
+                <Link
+                  to={trackPath}
+                  className="mt-2 flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand-ink/15 text-[12px] font-semibold text-brand-ink transition hover:bg-brand-ink/5 sm:text-sm">
+                  <PackageCheck size={16} strokeWidth={1.8} /> Track my order
+                </Link>
+                <p className="mt-2 text-center text-[10px] leading-4 text-brand-ink/45">
+                  WhatsApp opens only when tapped ·{" "}
+                  <Link
+                    to="/order-policies"
+                    className="underline underline-offset-2">
+                    Ordering policies
+                  </Link>
+                </p>
               </div>
             </section>
           </div>
@@ -1479,7 +1818,9 @@ export default function Order() {
 
   return (
     <Page>
-      <div ref={stepTopRef} className="mx-auto max-w-[1120px] scroll-mt-20 pb-20 lg:pb-12">
+      <div
+        ref={stepTopRef}
+        className="mx-auto max-w-[1120px] scroll-mt-20 pb-20 lg:pb-12">
         <header className="mb-3 flex flex-col gap-1.5 sm:mb-5 sm:gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-brand-ink/40">
@@ -1504,20 +1845,30 @@ export default function Order() {
           </div>
         </header>
 
-        <nav aria-label="Checkout steps" className="mb-3 border-b border-brand-ink/10 sm:mb-4">
+        <nav
+          aria-label="Checkout steps"
+          className="mb-3 border-b border-brand-ink/10 sm:mb-4">
           <ol className="grid grid-cols-4 gap-1 sm:gap-2">
             {stepMeta.map((item) => {
               const active = step === item.id;
               const done = step > item.id;
-              return <li key={item.id} className="min-w-0">
-                <button type="button" onClick={() => goToStep(item.id)} aria-current={active ? 'step' : undefined}
-                  className={`flex min-h-[40px] w-full items-center justify-center gap-1 border-b-2 px-0.5 pb-1.5 pt-1 text-[11px] font-semibold transition sm:min-h-[46px] sm:justify-start sm:gap-2 sm:border-b-[3px] sm:px-3 sm:pb-2 sm:text-xs ${active ? 'border-brand-ink text-brand-ink' : done ? 'border-brand-ink/30 text-brand-ink/75 hover:border-brand-ink/60' : 'border-transparent text-brand-ink/40 hover:text-brand-ink/65'}`}>
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] sm:h-6 sm:w-6 sm:text-xs ${active ? 'bg-brand-ink text-brand-bg' : done ? 'bg-brand-ink/10 text-brand-ink' : 'bg-white/60 text-brand-ink/40'}`}>
-                    {done ? <Check size={15} strokeWidth={2}/> : item.id}
-                  </span>
-                  <span className="truncate text-[10px] sm:text-[13px]">{item.label}</span>
-                </button>
-              </li>;
+              return (
+                <li key={item.id} className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => goToStep(item.id)}
+                    aria-current={active ? "step" : undefined}
+                    className={`flex min-h-[40px] w-full items-center justify-center gap-1 border-b-2 px-0.5 pb-1.5 pt-1 text-[11px] font-semibold transition sm:min-h-[46px] sm:justify-start sm:gap-2 sm:border-b-[3px] sm:px-3 sm:pb-2 sm:text-xs ${active ? "border-brand-ink text-brand-ink" : done ? "border-brand-ink/30 text-brand-ink/75 hover:border-brand-ink/60" : "border-transparent text-brand-ink/40 hover:text-brand-ink/65"}`}>
+                    <span
+                      className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] sm:h-6 sm:w-6 sm:text-xs ${active ? "bg-brand-ink text-brand-bg" : done ? "bg-brand-ink/10 text-brand-ink" : "bg-white/60 text-brand-ink/40"}`}>
+                      {done ? <Check size={15} strokeWidth={2} /> : item.id}
+                    </span>
+                    <span className="truncate text-[10px] sm:text-[13px]">
+                      {item.label}
+                    </span>
+                  </button>
+                </li>
+              );
             })}
           </ol>
         </nav>
@@ -1538,10 +1889,36 @@ export default function Order() {
               {step === 1 && (
                 <div className="space-y-3 sm:space-y-4">
                   <div className="rounded-xl bg-brand-bg/40 px-2.5 py-3 sm:rounded-2xl sm:border sm:border-brand-ink/10 sm:bg-brand-bg/55 sm:p-5">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-ink/45">Receive your order</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-ink/45">
+                      Receive your order
+                    </p>
                     <div className="mt-2 grid gap-2 sm:mt-3 sm:grid-cols-2">
-                      <ToggleCard active={isPickup} icon={<Store size={17} />} title="Store pickup / parcel collection" description="Collect yourself or arrange a courier" disabled={!pickupEnabled} onClick={() => { setFulfillmentType("PICKUP"); setFieldErrors({}); }} />
-                      <ToggleCard active={!isPickup} icon={<Truck size={17} />} title="Delivery" description={deliveryEnabled ? "Address-based delivery" : "Currently unavailable"} disabled={!deliveryEnabled} onClick={() => { setFulfillmentType("DELIVERY"); setFieldErrors({}); }} />
+                      <ToggleCard
+                        active={isPickup}
+                        icon={<Store size={17} />}
+                        title="Store pickup / parcel collection"
+                        description="Collect yourself or arrange a courier"
+                        disabled={!pickupEnabled}
+                        onClick={() => {
+                          setFulfillmentType("PICKUP");
+                          setFieldErrors({});
+                        }}
+                      />
+                      <ToggleCard
+                        active={!isPickup}
+                        icon={<Truck size={17} />}
+                        title="Delivery"
+                        description={
+                          deliveryEnabled
+                            ? "Address-based delivery"
+                            : "Currently unavailable"
+                        }
+                        disabled={!deliveryEnabled}
+                        onClick={() => {
+                          setFulfillmentType("DELIVERY");
+                          setFieldErrors({});
+                        }}
+                      />
                     </div>
                   </div>
                   <StepHeader
@@ -1585,16 +1962,20 @@ export default function Order() {
                         placeholder="07X XXX XXXX"
                         inputMode="tel"
                         maxLength={16}
-                          aria-invalid={Boolean(fieldErrors.senderContactNumber)}
-                          onBlur={() => {
-                            if (form.senderContactNumber.trim() && !isValidSriLankanMobile(form.senderContactNumber)) {
-                              setFieldErrors((current) => ({
-                                ...current,
-                                senderContactNumber: "Enter a valid Sri Lankan mobile number.",
-                              }));
-                            }
-                          }}
-                          autoComplete="tel"
+                        aria-invalid={Boolean(fieldErrors.senderContactNumber)}
+                        onBlur={() => {
+                          if (
+                            form.senderContactNumber.trim() &&
+                            !isValidSriLankanMobile(form.senderContactNumber)
+                          ) {
+                            setFieldErrors((current) => ({
+                              ...current,
+                              senderContactNumber:
+                                "Enter a valid Sri Lankan mobile number.",
+                            }));
+                          }
+                        }}
+                        autoComplete="tel"
                       />
                     </Field>
                   </div>
@@ -1648,51 +2029,57 @@ export default function Order() {
                     </div>
                   )}
 
-                  {!isPickup && <Field label="Your address" error={fieldErrors.senderAddress}>
-                    <textarea
-                      value={form.senderAddress}
-                      onChange={(event) => {
-                        updateForm("senderAddress", event.target.value);
-                        clearFieldError("senderAddress");
-                      }}
-                      className={`${inputClass(
-                        Boolean(fieldErrors.senderAddress),
-                      )} min-h-[88px] resize-y`}
-                      placeholder="House number, street, city"
-                      autoComplete="street-address"
-                    />
-                  </Field>}
-
-                  {!isPickup && <div className="border-t border-brand-ink/10 pt-5">
-                    <p className="text-sm font-semibold text-brand-ink">
-                      Is someone else receiving it?
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-brand-ink/55">
-                      Add receiver details for gifts or deliveries to another
-                      person.
-                    </p>
-
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <ToggleCard
-                        active={form.hasDifferentReceiver}
-                        icon={<UserRound size={17} />}
-                        title="Different receiver"
-                        description="Send the order to someone else."
-                        onClick={() =>
-                          toggleDifferentReceiver(!form.hasDifferentReceiver)
-                        }
+                  {!isPickup && (
+                    <Field
+                      label="Your address"
+                      error={fieldErrors.senderAddress}>
+                      <textarea
+                        value={form.senderAddress}
+                        onChange={(event) => {
+                          updateForm("senderAddress", event.target.value);
+                          clearFieldError("senderAddress");
+                        }}
+                        className={`${inputClass(
+                          Boolean(fieldErrors.senderAddress),
+                        )} min-h-[88px] resize-y`}
+                        placeholder="House number, street, city"
+                        autoComplete="street-address"
                       />
+                    </Field>
+                  )}
 
-                      <ToggleCard
-                        active={form.isGift}
-                        icon={<Gift size={17} />}
-                        title="This is a gift"
-                        description="We'll use the receiver's details."
-                        onClick={() => toggleGift(!form.isGift)}
-                      />
+                  {!isPickup && (
+                    <div className="border-t border-brand-ink/10 pt-5">
+                      <p className="text-sm font-semibold text-brand-ink">
+                        Is someone else receiving it?
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-brand-ink/55">
+                        Add receiver details for gifts or deliveries to another
+                        person.
+                      </p>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <ToggleCard
+                          active={form.hasDifferentReceiver}
+                          icon={<UserRound size={17} />}
+                          title="Different receiver"
+                          description="Send the order to someone else."
+                          onClick={() =>
+                            toggleDifferentReceiver(!form.hasDifferentReceiver)
+                          }
+                        />
+
+                        <ToggleCard
+                          active={form.isGift}
+                          icon={<Gift size={17} />}
+                          title="This is a gift"
+                          description="We'll use the receiver's details."
+                          onClick={() => toggleGift(!form.isGift)}
+                        />
+                      </div>
                     </div>
-                  </div>}
+                  )}
 
                   {!isPickup && needsReceiver && (
                     <div className="rounded-xl bg-brand-bg/40 px-2.5 py-3 sm:rounded-2xl sm:border sm:border-brand-ink/10 sm:bg-brand-bg/55 sm:p-5">
@@ -1751,16 +2138,24 @@ export default function Order() {
                             placeholder="07X XXX XXXX"
                             inputMode="tel"
                             maxLength={16}
-                          aria-invalid={Boolean(fieldErrors.receiverContactNumber)}
-                          onBlur={() => {
-                            if (form.receiverContactNumber.trim() && !isValidSriLankanMobile(form.receiverContactNumber)) {
-                              setFieldErrors((current) => ({
-                                ...current,
-                                receiverContactNumber: "Enter a valid Sri Lankan mobile number.",
-                              }));
-                            }
-                          }}
-                          autoComplete="off"
+                            aria-invalid={Boolean(
+                              fieldErrors.receiverContactNumber,
+                            )}
+                            onBlur={() => {
+                              if (
+                                form.receiverContactNumber.trim() &&
+                                !isValidSriLankanMobile(
+                                  form.receiverContactNumber,
+                                )
+                              ) {
+                                setFieldErrors((current) => ({
+                                  ...current,
+                                  receiverContactNumber:
+                                    "Enter a valid Sri Lankan mobile number.",
+                                }));
+                              }
+                            }}
+                            autoComplete="off"
                           />
                         </Field>
                       </div>
@@ -1789,549 +2184,727 @@ export default function Order() {
 
               {step === 2 && (
                 <div className="space-y-3 sm:space-y-4">
-                  {!checkoutReady && <InfoBox tone="warning">Checkout availability has not loaded. Check that the Laravel API is running and refresh this page.</InfoBox>}
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-ink/10 pb-2 sm:pb-3">
-                    <div><p className="text-base font-semibold text-brand-ink">{isPickup ? 'Collection method' : 'Delivery details'}</p><p className="mt-0.5 text-xs text-brand-ink/55">{isPickup ? 'Choose who will collect your bakery order.' : 'Confirm the delivery recipient and exact location.'}</p></div>
-                    <button type="button" onClick={() => setStep(1)} className="min-h-9 rounded-lg border border-brand-ink/15 px-3 text-xs font-semibold text-brand-ink">Change method</button>
-                  </div>
-                  {isPickup && <div>
-                    <div className="mb-3"><p className="text-sm font-semibold text-brand-ink">Who will collect your order?</p><p className="mt-1 text-xs leading-5 text-brand-ink/55">Bakery collection is free. Courier fees are paid separately.</p></div>
-                    <div className="overflow-hidden rounded-lg border border-brand-ink/15 bg-white/55 sm:rounded-xl">
-                      {([
-                        { id: "SELF_PICKUP", title: "I'll collect", detail: "Collect at the bakery", icon: <Store size={18} strokeWidth={1.7}/> },
-                        { id: "CUSTOMER_COURIER", title: "My courier", detail: "I book and pay the driver", icon: <Truck size={18} strokeWidth={1.7}/> },
-                        { id: "BAKERY_ASSISTED_COURIER", title: "Help me arrange", detail: "Baura coordinates; I pay", icon: <PackageCheck size={18} strokeWidth={1.7}/> },
-                      ] as const).map((option, index) => {
-                        const active = courierArrangement === option.id;
-                        return <button key={option.id} type="button" aria-pressed={active} onClick={() => { setCourierArrangement(option.id); if (option.id === 'SELF_PICKUP') setCourierProvider(null); setSubmitError(''); }} className={`flex w-full min-h-[54px] items-center gap-2.5 px-3 py-2 text-left transition sm:min-h-[64px] sm:gap-3 sm:px-3.5 sm:py-2.5 ${index ? 'border-t border-brand-ink/10' : ''} ${active ? 'bg-[#f4eddf]' : 'hover:bg-white/80'}`}>
-                          <span className="shrink-0 text-brand-ink/70">{option.icon}</span>
-                          <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-brand-ink">{option.title}</span><span className="mt-0.5 block text-[11px] leading-[1.4] text-brand-ink/55 sm:text-xs">{option.detail}</span></span>
-                          <span className={`grid h-[19px] w-[19px] shrink-0 place-items-center rounded-full border ${active ? 'border-brand-ink bg-brand-ink text-brand-bg' : 'border-brand-ink/25'}`}>{active && <Check size={12}/>}</span>
-                        </button>;
-                      })}
-                    </div>
-                    {courierArrangement !== 'SELF_PICKUP' && <div className="mt-4">
-                      <p className="text-sm font-semibold text-brand-ink">Courier service</p>
-                      <div className="mt-2 grid grid-cols-2 gap-1.5 sm:gap-2">
-                        {(['PICKME_FLASH', 'UBER_PARCEL'] as const).map(provider => {
-                          const active = courierProvider === provider;
-                          return <button key={provider} type="button" aria-pressed={active} onClick={() => { setCourierProvider(provider); setSubmitError(''); }} className={`flex min-h-[46px] min-w-0 items-center justify-between gap-1 rounded-lg border px-2 py-1.5 text-left transition sm:min-h-[52px] sm:rounded-xl sm:px-3 sm:py-2 ${active ? 'border-brand-ink bg-[#f4eddf]' : 'border-brand-ink/15 bg-white/60 hover:bg-white'}`}><CourierBrand provider={provider}/><span className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border ${active ? 'border-brand-ink bg-brand-ink text-brand-bg' : 'border-brand-ink/25'}`}>{active && <Check size={11}/>}</span></button>;
-                        })}
-                      </div>
-                      <p className="mt-2 text-xs leading-5 text-brand-ink/55">{courierArrangement === 'CUSTOMER_COURIER' ? 'Book your driver only after payment is confirmed. You pay the driver.' : 'Baura can help coordinate a driver, subject to availability. Courier charges are yours to pay.'}</p>
-                    </div>}
-                  </div>}
-                  {isPickup && <Field label="Order note — optional"><textarea value={form.note} onChange={(e) => updateForm("note", e.target.value)} className={`${inputClass(false)} min-h-[82px] resize-y`} placeholder="Collection instructions or other notes" /></Field>}
-                  {!isPickup && <div className="space-y-5 border-t border-brand-ink/10 pt-5">
-                  <StepHeader
-                    eyebrow="Delivery"
-                    title="Where should we deliver?"
-                    description="Choose the recipient and pin the exact delivery location."
-                  />
-
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <ToggleCard
-                      active={form.deliveryTarget === "SENDER"}
-                      icon={<UserRound size={17} />}
-                      title="My address"
-                      description={form.senderAddress || "Sender address"}
-                      onClick={() => {
-                        updateForm("deliveryTarget", "SENDER");
-                        clearFieldError("deliveryLocation");
-                      }}
-                    />
-
-                    <ToggleCard
-                      active={form.deliveryTarget === "RECEIVER"}
-                      disabled={!needsReceiver}
-                      icon={<Gift size={17} />}
-                      title="Receiver address"
-                      description={
-                        needsReceiver
-                          ? form.receiverAddress || "Receiver address"
-                          : "Add a receiver in step 1 first."
-                      }
-                      onClick={() => {
-                        if (!needsReceiver) return;
-
-                        updateForm("deliveryTarget", "RECEIVER");
-
-                        clearFieldError("deliveryLocation");
-                      }}
-                    />
-                  </div>
-
-                  <div className="rounded-xl bg-brand-bg/40 px-2.5 py-3 sm:rounded-2xl sm:border sm:border-brand-ink/10 sm:bg-brand-bg/55 sm:p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-ink text-brand-bg">
-                        <MapPin size={17} />
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-brand-ink/40">
-                          Delivery address
-                        </p>
-
-                        <p className="mt-1 text-sm font-semibold leading-6 text-brand-ink">
-                          {effectiveDelivery.address || "No address added"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-brand-ink">
-                          Exact map location
-                        </p>
-
-                        <p className="mt-1 text-xs leading-5 text-brand-ink/55">
-                          Use your device location or paste a Google Maps
-                          coordinate link.
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => useCurrentLocation(form.deliveryTarget)}
-                        disabled={isLocating}
-                        className={[
-                          "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition",
-                          isLocating
-                            ? "cursor-not-allowed bg-brand-ink/30 text-brand-bg"
-                            : "bg-brand-ink text-brand-bg hover:bg-brand-ink/90",
-                        ].join(" ")}>
-                        <LocateFixed size={15} />
-
-                        {isLocating ? "Locating…" : "Use my location"}
-                      </button>
-                    </div>
-
-                    <div className="mt-3">
-                      <input
-                        value={currentLocationUrl}
-                        onChange={(event) =>
-                          updateLocationUrl(event.target.value)
-                        }
-                        className={inputClass(
-                          Boolean(fieldErrors.deliveryLocation),
-                        )}
-                        placeholder="Google Maps coordinate link"
-                        inputMode="url"
-                      />
-
-                      {fieldErrors.deliveryLocation && (
-                        <p className="mt-1.5 text-xs font-medium text-red-600">
-                          {fieldErrors.deliveryLocation}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {deliveryLocationCoords ? (
-                    <div className="overflow-hidden rounded-2xl border border-brand-ink/10 bg-white">
-                      <iframe
-                        title="Delivery location"
-                        className="h-56 w-full sm:h-64"
-                        loading="lazy"
-                        src={currentMapUrl}
-                      />
-
-                      <div className="flex flex-col gap-2 border-t border-brand-ink/10 bg-white/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-2 text-xs font-medium text-brand-ink/65">
-                          <Check size={14} className="text-green-700" />
-                          Location added
-                        </div>
-
-                        <span className="text-[11px] text-brand-ink/40">
-                          {deliveryLocationCoords.lat.toFixed(5)},{" "}
-                          {deliveryLocationCoords.lng.toFixed(5)}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-brand-ink/15 bg-white/35 px-5 py-8 text-center">
-                      <MapPin size={22} className="mx-auto text-brand-ink/30" />
-
-                      <p className="mt-2 text-sm font-semibold text-brand-ink/70">
-                        No map location yet
-                      </p>
-
-                      <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-brand-ink/50">
-                        An exact location is needed to calculate your delivery
-                        fee.
-                      </p>
-                    </div>
-                  )}
-
-                  {isCalculatingDistance && (
-                    <InfoBox tone="neutral">
-                      Calculating delivery to this location…
+                  {!checkoutReady && (
+                    <InfoBox tone="warning">
+                      Checkout availability has not loaded. Check that the
+                      Laravel API is running and refresh this page.
                     </InfoBox>
                   )}
-
-                  {!isCalculatingDistance && checkoutQuote && (
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <MiniStat
-                        label="Distance"
-                        value={`${checkoutQuote.distance_km} km`}
-                      />
-
-                      <MiniStat
-                        label="Delivery"
-                        value={formatLkr(checkoutQuote.delivery_fee_lkr)}
-                      />
-
-                      <MiniStat
-                        label="Vehicle"
-                        value={checkoutQuote.vehicle_type}
-                      />
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-ink/10 pb-2 sm:pb-3">
+                    <div>
+                      <p className="text-base font-semibold text-brand-ink">
+                        {isPickup ? "Collection method" : "Delivery details"}
+                      </p>
+                      <p className="mt-0.5 text-xs text-brand-ink/55">
+                        {isPickup
+                          ? "Choose who will collect your bakery order."
+                          : "Confirm the delivery recipient and exact location."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      className="min-h-9 rounded-lg border border-brand-ink/15 px-3 text-xs font-semibold text-brand-ink">
+                      Change method
+                    </button>
+                  </div>
+                  {isPickup && (
+                    <div>
+                      <div className="mb-3">
+                        <p className="text-sm font-semibold text-brand-ink">
+                          Who will collect your order?
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-brand-ink/55">
+                          Bakery collection is free. Courier fees are paid
+                          separately.
+                        </p>
+                      </div>
+                      <div className="overflow-hidden rounded-lg border border-brand-ink/15 bg-white/55 sm:rounded-xl">
+                        {(
+                          [
+                            {
+                              id: "SELF_PICKUP",
+                              title: "I'll collect",
+                              detail: "Collect at the bakery",
+                              icon: <Store size={18} strokeWidth={1.7} />,
+                            },
+                            {
+                              id: "CUSTOMER_COURIER",
+                              title: "My courier",
+                              detail: "I book and pay the driver",
+                              icon: <Truck size={18} strokeWidth={1.7} />,
+                            },
+                            {
+                              id: "BAKERY_ASSISTED_COURIER",
+                              title: "Help me arrange",
+                              detail: "Baura coordinates; I pay",
+                              icon: (
+                                <PackageCheck size={18} strokeWidth={1.7} />
+                              ),
+                            },
+                          ] as const
+                        ).map((option, index) => {
+                          const active = courierArrangement === option.id;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => {
+                                setCourierArrangement(option.id);
+                                if (option.id === "SELF_PICKUP")
+                                  setCourierProvider(null);
+                                setSubmitError("");
+                              }}
+                              className={`flex w-full min-h-[54px] items-center gap-2.5 px-3 py-2 text-left transition sm:min-h-[64px] sm:gap-3 sm:px-3.5 sm:py-2.5 ${index ? "border-t border-brand-ink/10" : ""} ${active ? "bg-[#f4eddf]" : "hover:bg-white/80"}`}>
+                              <span className="shrink-0 text-brand-ink/70">
+                                {option.icon}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-semibold text-brand-ink">
+                                  {option.title}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] leading-[1.4] text-brand-ink/55 sm:text-xs">
+                                  {option.detail}
+                                </span>
+                              </span>
+                              <span
+                                className={`grid h-[19px] w-[19px] shrink-0 place-items-center rounded-full border ${active ? "border-brand-ink bg-brand-ink text-brand-bg" : "border-brand-ink/25"}`}>
+                                {active && <Check size={12} />}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {courierArrangement !== "SELF_PICKUP" && (
+                        <div className="mt-4">
+                          <p className="text-sm font-semibold text-brand-ink">
+                            Courier service
+                          </p>
+                          <div className="mt-2 grid grid-cols-2 gap-1.5 sm:gap-2">
+                            {(["PICKME_FLASH", "UBER_PARCEL"] as const).map(
+                              (provider) => {
+                                const active = courierProvider === provider;
+                                return (
+                                  <button
+                                    key={provider}
+                                    type="button"
+                                    aria-pressed={active}
+                                    onClick={() => {
+                                      setCourierProvider(provider);
+                                      setSubmitError("");
+                                    }}
+                                    className={`flex min-h-[46px] min-w-0 items-center justify-between gap-1 rounded-lg border px-2 py-1.5 text-left transition sm:min-h-[52px] sm:rounded-xl sm:px-3 sm:py-2 ${active ? "border-brand-ink bg-[#f4eddf]" : "border-brand-ink/15 bg-white/60 hover:bg-white"}`}>
+                                    <CourierBrand provider={provider} />
+                                    <span
+                                      className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border ${active ? "border-brand-ink bg-brand-ink text-brand-bg" : "border-brand-ink/25"}`}>
+                                      {active && <Check size={11} />}
+                                    </span>
+                                  </button>
+                                );
+                              },
+                            )}
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-brand-ink/55">
+                            {courierArrangement === "CUSTOMER_COURIER"
+                              ? "Book your driver only after payment is confirmed. You pay the driver."
+                              : "Baura can help coordinate a driver, subject to availability. Courier charges are yours to pay."}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
-
-                  {distanceNotice && (
-                    <InfoBox tone="warning">{distanceNotice}</InfoBox>
+                  {isPickup && (
+                    <Field label="Order note — optional">
+                      <textarea
+                        value={form.note}
+                        onChange={(e) => updateForm("note", e.target.value)}
+                        className={`${inputClass(false)} min-h-[82px] resize-y`}
+                        placeholder="Collection instructions or other notes"
+                      />
+                    </Field>
                   )}
+                  {!isPickup && (
+                    <div className="space-y-5 border-t border-brand-ink/10 pt-5">
+                      <StepHeader
+                        eyebrow="Delivery"
+                        title="Where should we deliver?"
+                        description="Choose the recipient and pin the exact delivery location."
+                      />
 
-                  {maxDeliveryDistanceKm && (
-                    <p className="text-xs leading-5 text-brand-ink/45">
-                      Delivery is currently available within{" "}
-                      {maxDeliveryDistanceKm} km of Baura Bakers.
-                    </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <ToggleCard
+                          active={form.deliveryTarget === "SENDER"}
+                          icon={<UserRound size={17} />}
+                          title="My address"
+                          description={form.senderAddress || "Sender address"}
+                          onClick={() => {
+                            updateForm("deliveryTarget", "SENDER");
+                            clearFieldError("deliveryLocation");
+                          }}
+                        />
+
+                        <ToggleCard
+                          active={form.deliveryTarget === "RECEIVER"}
+                          disabled={!needsReceiver}
+                          icon={<Gift size={17} />}
+                          title="Receiver address"
+                          description={
+                            needsReceiver
+                              ? form.receiverAddress || "Receiver address"
+                              : "Add a receiver in step 1 first."
+                          }
+                          onClick={() => {
+                            if (!needsReceiver) return;
+
+                            updateForm("deliveryTarget", "RECEIVER");
+
+                            clearFieldError("deliveryLocation");
+                          }}
+                        />
+                      </div>
+
+                      <div className="rounded-xl bg-brand-bg/40 px-2.5 py-3 sm:rounded-2xl sm:border sm:border-brand-ink/10 sm:bg-brand-bg/55 sm:p-5">
+                        <div className="flex items-start gap-3">
+                          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-ink text-brand-bg">
+                            <MapPin size={17} />
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-brand-ink/40">
+                              Delivery address
+                            </p>
+
+                            <p className="mt-1 text-sm font-semibold leading-6 text-brand-ink">
+                              {effectiveDelivery.address || "No address added"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-brand-ink">
+                              Exact map location
+                            </p>
+
+                            <p className="mt-1 text-xs leading-5 text-brand-ink/55">
+                              Use your device location or paste a Google Maps
+                              coordinate link.
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleCurrentLocation(form.deliveryTarget)
+                            }
+                            disabled={isLocating}
+                            className={[
+                              "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition",
+                              isLocating
+                                ? "cursor-not-allowed bg-brand-ink/30 text-brand-bg"
+                                : "bg-brand-ink text-brand-bg hover:bg-brand-ink/90",
+                            ].join(" ")}>
+                            <LocateFixed size={15} />
+
+                            {isLocating ? "Locating…" : "Use my location"}
+                          </button>
+                        </div>
+
+                        <div className="mt-3">
+                          <input
+                            value={currentLocationUrl}
+                            onChange={(event) =>
+                              updateLocationUrl(event.target.value)
+                            }
+                            className={inputClass(
+                              Boolean(fieldErrors.deliveryLocation),
+                            )}
+                            placeholder="Google Maps coordinate link"
+                            inputMode="url"
+                          />
+
+                          {fieldErrors.deliveryLocation && (
+                            <p className="mt-1.5 text-xs font-medium text-red-600">
+                              {fieldErrors.deliveryLocation}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {deliveryLocationCoords ? (
+                        <div className="overflow-hidden rounded-2xl border border-brand-ink/10 bg-white">
+                          <iframe
+                            title="Delivery location"
+                            className="h-56 w-full sm:h-64"
+                            loading="lazy"
+                            src={currentMapUrl}
+                          />
+
+                          <div className="flex flex-col gap-2 border-t border-brand-ink/10 bg-white/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-2 text-xs font-medium text-brand-ink/65">
+                              <Check size={14} className="text-green-700" />
+                              Location added
+                            </div>
+
+                            <span className="text-[11px] text-brand-ink/40">
+                              {deliveryLocationCoords.lat.toFixed(5)},{" "}
+                              {deliveryLocationCoords.lng.toFixed(5)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-brand-ink/15 bg-white/35 px-5 py-8 text-center">
+                          <MapPin
+                            size={22}
+                            className="mx-auto text-brand-ink/30"
+                          />
+
+                          <p className="mt-2 text-sm font-semibold text-brand-ink/70">
+                            No map location yet
+                          </p>
+
+                          <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-brand-ink/50">
+                            An exact location is needed to calculate your
+                            delivery fee.
+                          </p>
+                        </div>
+                      )}
+
+                      {isCalculatingDistance && (
+                        <InfoBox tone="neutral">
+                          Calculating delivery to this location…
+                        </InfoBox>
+                      )}
+
+                      {!isCalculatingDistance && checkoutQuote && (
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <MiniStat
+                            label="Distance"
+                            value={`${checkoutQuote.distance_km} km`}
+                          />
+
+                          <MiniStat
+                            label="Delivery"
+                            value={formatLkr(checkoutQuote.delivery_fee_lkr)}
+                          />
+
+                          <MiniStat
+                            label="Vehicle"
+                            value={checkoutQuote.vehicle_type}
+                          />
+                        </div>
+                      )}
+
+                      {distanceNotice && (
+                        <InfoBox tone="warning">{distanceNotice}</InfoBox>
+                      )}
+
+                      {maxDeliveryDistanceKm && (
+                        <p className="text-xs leading-5 text-brand-ink/45">
+                          Delivery is currently available within{" "}
+                          {maxDeliveryDistanceKm} km of Baura Bakers.
+                        </p>
+                      )}
+
+                      <Field label="Order note — optional">
+                        <textarea
+                          value={form.note}
+                          onChange={(event) =>
+                            updateForm("note", event.target.value)
+                          }
+                          className={`${inputClass(false)} min-h-[82px] resize-y`}
+                          placeholder="Landmark, gift message or special delivery instruction"
+                        />
+                      </Field>
+                    </div>
                   )}
-
-                  <Field label="Order note — optional">
-                    <textarea
-                      value={form.note}
-                      onChange={(event) =>
-                        updateForm("note", event.target.value)
-                      }
-                      className={`${inputClass(false)} min-h-[82px] resize-y`}
-                      placeholder="Landmark, gift message or special delivery instruction"
-                    />
-                  </Field>
-                  </div>}
                 </div>
               )}
 
               {step === 3 && (
                 <div className="space-y-3 sm:space-y-4">
-                  {isPickup ? <>
-                    <StepHeader eyebrow="COLLECTION" title="Choose your pickup time" description="Select a convenient collection window during our opening hours." />
-                    <div className="border-b border-brand-ink/10 bg-transparent px-0 pb-3 pt-1 sm:rounded-[1.4rem] sm:border sm:border-brand-ink/10 sm:bg-white/65 sm:p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-brand-ink">Choose a collection day</p>
-                          <p className="mt-1 text-xs text-brand-ink/50">Only available dates in the next {pickupPreviewDays} days</p>
-                        </div>
-                        <span className="inline-flex items-center gap-2 rounded-full border border-brand-ink/10 bg-brand-bg px-3 py-2 text-xs font-semibold text-brand-ink/70">
-                          <Clock3 size={14} /> {selectedPickupDay?.isOpen && selectedPickupDay.openingTime && selectedPickupDay.closingTime ? `${formatHour(selectedPickupDay.openingTime)} – ${formatHour(selectedPickupDay.closingTime)}` : "Hours vary by day"}
-                        </span>
-                      </div>
-                      <PickupCalendar
-                        days={pickupCalendar}
-                        selected={pickupDate}
-                        onSelect={(value) => {
-                          setPickupDate(value);
-                          setPickupStartTime("");
-                          clearFieldError("pickupDate");
-                          clearFieldError("pickupTime");
-                        }}
-                      />
-                      {pickupCalendar.length === 0 && (
-                        <InfoBox tone="warning" className="mt-3">
-                          Collection dates are unavailable. Please try again when the bakery calendar is connected.
-                        </InfoBox>
-                      )}
-                      {selectedPickupDay?.source === "EXCEPTION" && (
-                        <InfoBox tone="neutral" className="mt-3">
-                          Special opening hours apply{selectedPickupDay.reason ? `: ${selectedPickupDay.reason}` : "."}
-                        </InfoBox>
-                      )}
-                      {fieldErrors.pickupDate && <p data-checkout-error="true" className="mt-2 text-xs font-semibold text-red-600">{fieldErrors.pickupDate}</p>}
-                    </div>
-                    <div className="border-b border-brand-ink/10 bg-transparent px-0 pb-3 pt-1 sm:rounded-[1.4rem] sm:border sm:border-brand-ink/10 sm:bg-white/65 sm:p-5">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-brand-ink">Select your pickup time</p>
-                          <p className="mt-1 text-xs text-brand-ink/50">Times are shown in Sri Lanka time</p>
-                        </div>
-                        <Clock3 size={18} className="text-brand-ink/45" />
-                      </div>
-                      {!pickupDate ? (
-                        <p className="mt-4 rounded-xl bg-brand-bg/70 p-4 text-sm text-brand-ink/60">Select an open day above to see collection times.</p>
-                      ) : pickupTimeChoices.length === 0 ? (
-                        <p className="mt-4 rounded-xl bg-brand-bg/70 p-4 text-sm text-brand-ink/60">No collection times remain on this day. Choose another date.</p>
-                      ) : (
-                        <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-4 sm:grid-cols-4 sm:gap-2 lg:grid-cols-5">
-                          {pickupTimeChoices.map((time) => (
-                            <button key={time} type="button" onClick={() => { setPickupStartTime(time); clearFieldError("pickupTime"); }}
-                              aria-pressed={pickupStartTime === time}
-                              className={`min-h-10 rounded-lg border px-1 py-2 text-[11px] font-semibold transition sm:min-h-11 sm:rounded-xl sm:px-2 sm:py-2.5 sm:text-sm ${pickupStartTime === time ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm" : "border-brand-ink/10 bg-brand-bg/45 text-brand-ink hover:border-brand-ink/30 hover:bg-white"}`}>
-                              {formatHour(time)}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {fieldErrors.pickupTime && <p data-checkout-error="true" className="mt-3 text-xs font-semibold text-red-600">{fieldErrors.pickupTime}</p>}
-                      {pickupScheduleValid && (
-                        <div className="mt-4 flex items-start gap-2 rounded-xl bg-brand-bg/75 px-3 py-3 text-xs leading-5 text-brand-ink/75">
-                          <Check size={16} className="mt-0.5 shrink-0" />
-                          <span>Your collection time is <strong>{formatHour(pickupStartTime)}</strong>. Please arrive on time.</span>
-                        </div>
-                      )}
-                    </div>
-                    <InfoBox tone={pickupScheduleValid ? "success" : "neutral"}>
-                      {pickupScheduleValid ? `Collection: ${formatCalendarDate(pickupDate)} at ${formatHour(pickupStartTime)} (10-minute window)` : "Choose a collection date and time above. Pickup is free."}
-                    </InfoBox>
-                    <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/60 p-4">
-                      <PriceRow label="Store pickup" value="FREE" />
-                      <div className="mt-3 border-t border-brand-ink/10 pt-3"><PriceRow label="Order total" value={formatLkr(totalLkr)} /></div>
-                    </div>
-                  </> : <>
-                  <StepHeader
-                    eyebrow="Schedule"
-                    title="When should it arrive?"
-                    description="Choose one of the currently available delivery sessions."
-                  />
-
-                  {fieldErrors.deliverySlot && (
-                    <div
-                      data-checkout-error="true"
-                      tabIndex={-1}
-                      role="alert"
-                      className="scroll-mt-28 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 outline-none">
-                      {fieldErrors.deliverySlot}
-                    </div>
-                  )}
-
-                  {isLoadingSlots ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {[1, 2, 3, 4].map((item) => (
-                        <div
-                          key={item}
-                          className="h-24 animate-pulse rounded-2xl border border-brand-ink/5 bg-brand-ink/[0.04]"
-                        />
-                      ))}
-                    </div>
-                  ) : deliveryCalendarDays.length ? (
+                  {isPickup ? (
                     <>
-                      <div>
-                        <div className="flex items-center justify-between gap-3">
+                      <StepHeader
+                        eyebrow="COLLECTION"
+                        title="Choose your pickup time"
+                        description="Select a convenient collection window during our opening hours."
+                      />
+                      <div className="border-b border-brand-ink/10 bg-transparent px-0 pb-3 pt-1 sm:rounded-[1.4rem] sm:border sm:border-brand-ink/10 sm:bg-white/65 sm:p-5">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
                             <p className="text-sm font-semibold text-brand-ink">
-                              Delivery day
+                              Choose a collection day
                             </p>
-
                             <p className="mt-1 text-xs text-brand-ink/50">
-                              Choose an available date.
+                              Only available dates in the next{" "}
+                              {pickupPreviewDays} days
                             </p>
                           </div>
-
-                          <span className="rounded-lg bg-brand-ink/[0.05] px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-ink/45">
-                            {deliveryCalendarDays.length} days
+                          <span className="inline-flex items-center gap-2 rounded-full border border-brand-ink/10 bg-brand-bg px-3 py-2 text-xs font-semibold text-brand-ink/70">
+                            <Clock3 size={14} />{" "}
+                            {selectedPickupDay?.isOpen &&
+                            selectedPickupDay.openingTime &&
+                            selectedPickupDay.closingTime
+                              ? `${formatHour(selectedPickupDay.openingTime)} – ${formatHour(selectedPickupDay.closingTime)}`
+                              : "Hours vary by day"}
                           </span>
                         </div>
-
-                        <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
-                          {deliveryCalendarDays.map((day) => {
-                            const active = selectedDeliveryDate === day.date;
-
-                            return (
+                        <PickupCalendar
+                          days={pickupCalendar}
+                          selected={pickupDate}
+                          onSelect={(value) => {
+                            setPickupDate(value);
+                            setPickupStartTime("");
+                            clearFieldError("pickupDate");
+                            clearFieldError("pickupTime");
+                          }}
+                        />
+                        {pickupCalendar.length === 0 && (
+                          <InfoBox tone="warning" className="mt-3">
+                            Collection dates are unavailable. Please try again
+                            when the bakery calendar is connected.
+                          </InfoBox>
+                        )}
+                        {selectedPickupDay?.source === "EXCEPTION" && (
+                          <InfoBox tone="neutral" className="mt-3">
+                            Special opening hours apply
+                            {selectedPickupDay.reason
+                              ? `: ${selectedPickupDay.reason}`
+                              : "."}
+                          </InfoBox>
+                        )}
+                        {fieldErrors.pickupDate && (
+                          <p
+                            data-checkout-error="true"
+                            className="mt-2 text-xs font-semibold text-red-600">
+                            {fieldErrors.pickupDate}
+                          </p>
+                        )}
+                      </div>
+                      <div className="border-b border-brand-ink/10 bg-transparent px-0 pb-3 pt-1 sm:rounded-[1.4rem] sm:border sm:border-brand-ink/10 sm:bg-white/65 sm:p-5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-brand-ink">
+                              Select your pickup time
+                            </p>
+                            <p className="mt-1 text-xs text-brand-ink/50">
+                              Times are shown in Sri Lanka time
+                            </p>
+                          </div>
+                          <Clock3 size={18} className="text-brand-ink/45" />
+                        </div>
+                        {!pickupDate ? (
+                          <p className="mt-4 rounded-xl bg-brand-bg/70 p-4 text-sm text-brand-ink/60">
+                            Select an open day above to see collection times.
+                          </p>
+                        ) : pickupTimeChoices.length === 0 ? (
+                          <p className="mt-4 rounded-xl bg-brand-bg/70 p-4 text-sm text-brand-ink/60">
+                            No collection times remain on this day. Choose
+                            another date.
+                          </p>
+                        ) : (
+                          <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-4 sm:grid-cols-4 sm:gap-2 lg:grid-cols-5">
+                            {pickupTimeChoices.map((time) => (
                               <button
-                                key={day.date}
+                                key={time}
                                 type="button"
                                 onClick={() => {
-                                  setSelectedDeliveryDate(day.date);
-
-                                  setSelectedDeliverySlotId("");
-
-                                  clearFieldError("deliverySlot");
+                                  setPickupStartTime(time);
+                                  clearFieldError("pickupTime");
                                 }}
-                                className={[
-                                  "rounded-2xl border p-3 text-left transition",
-                                  active
-                                    ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
-                                    : "border-brand-ink/10 bg-white/55 text-brand-ink hover:border-brand-ink/20 hover:bg-white/80",
-                                ].join(" ")}>
-                                <span
-                                  className={[
-                                    "text-[9px] font-semibold uppercase tracking-[0.18em]",
-                                    active
-                                      ? "text-brand-bg/55"
-                                      : "text-brand-ink/35",
-                                  ].join(" ")}>
-                                  {formatCalendarMonth(day.date)}
-                                </span>
-
-                                <span className="mt-1 block text-2xl font-bold leading-none">
-                                  {formatCalendarDayNumber(day.date)}
-                                </span>
-
-                                <span
-                                  className={[
-                                    "mt-2 block text-[11px] font-medium",
-                                    active
-                                      ? "text-brand-bg/75"
-                                      : "text-brand-ink/55",
-                                  ].join(" ")}>
-                                  {formatCalendarDate(day.date)}
-                                </span>
+                                aria-pressed={pickupStartTime === time}
+                                className={`min-h-10 rounded-lg border px-1 py-2 text-[11px] font-semibold transition sm:min-h-11 sm:rounded-xl sm:px-2 sm:py-2.5 sm:text-sm ${pickupStartTime === time ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm" : "border-brand-ink/10 bg-brand-bg/45 text-brand-ink hover:border-brand-ink/30 hover:bg-white"}`}>
+                                {formatHour(time)}
                               </button>
-                            );
-                          })}
+                            ))}
+                          </div>
+                        )}
+                        {fieldErrors.pickupTime && (
+                          <p
+                            data-checkout-error="true"
+                            className="mt-3 text-xs font-semibold text-red-600">
+                            {fieldErrors.pickupTime}
+                          </p>
+                        )}
+                        {pickupScheduleValid && (
+                          <div className="mt-4 flex items-start gap-2 rounded-xl bg-brand-bg/75 px-3 py-3 text-xs leading-5 text-brand-ink/75">
+                            <Check size={16} className="mt-0.5 shrink-0" />
+                            <span>
+                              Your collection time is{" "}
+                              <strong>{formatHour(pickupStartTime)}</strong>.
+                              Please arrive on time.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <InfoBox
+                        tone={pickupScheduleValid ? "success" : "neutral"}>
+                        {pickupScheduleValid
+                          ? `Collection: ${formatCalendarDate(pickupDate)} at ${formatHour(pickupStartTime)} (10-minute window)`
+                          : "Choose a collection date and time above. Pickup is free."}
+                      </InfoBox>
+                      <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/60 p-4">
+                        <PriceRow label="Store pickup" value="FREE" />
+                        <div className="mt-3 border-t border-brand-ink/10 pt-3">
+                          <PriceRow
+                            label="Order total"
+                            value={formatLkr(totalLkr)}
+                          />
                         </div>
                       </div>
+                    </>
+                  ) : (
+                    <>
+                      <StepHeader
+                        eyebrow="Schedule"
+                        title="When should it arrive?"
+                        description="Choose one of the currently available delivery sessions."
+                      />
 
-                      <div className="border-t border-brand-ink/10 pt-5">
-                        <p className="text-sm font-semibold text-brand-ink">
-                          Available times
-                        </p>
+                      {fieldErrors.deliverySlot && (
+                        <div
+                          data-checkout-error="true"
+                          tabIndex={-1}
+                          role="alert"
+                          className="scroll-mt-28 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 outline-none">
+                          {fieldErrors.deliverySlot}
+                        </div>
+                      )}
 
-                        <p className="mt-1 text-xs text-brand-ink/50">
-                          {selectedDeliveryDate
-                            ? formatCalendarDate(selectedDeliveryDate)
-                            : "Select a delivery day"}
-                        </p>
+                      {isLoadingSlots ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {[1, 2, 3, 4].map((item) => (
+                            <div
+                              key={item}
+                              className="h-24 animate-pulse rounded-2xl border border-brand-ink/5 bg-brand-ink/[0.04]"
+                            />
+                          ))}
+                        </div>
+                      ) : deliveryCalendarDays.length ? (
+                        <>
+                          <div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-brand-ink">
+                                  Delivery day
+                                </p>
 
-                        {selectedDateSlots.length ? (
-                          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-                            {selectedDateSlots.map((slot) => {
-                              const active = selectedDeliverySlotId === slot.id;
+                                <p className="mt-1 text-xs text-brand-ink/50">
+                                  Choose an available date.
+                                </p>
+                              </div>
 
-                              return (
-                                <button
-                                  key={slot.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedDeliverySlotId(slot.id);
+                              <span className="rounded-lg bg-brand-ink/[0.05] px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-ink/45">
+                                {deliveryCalendarDays.length} days
+                              </span>
+                            </div>
 
-                                    clearFieldError("deliverySlot");
-                                  }}
-                                  className={[
-                                    "flex items-start gap-3 rounded-2xl border p-4 text-left transition",
-                                    active
-                                      ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
-                                      : "border-brand-ink/10 bg-white/55 text-brand-ink hover:border-brand-ink/20 hover:bg-white/80",
-                                  ].join(" ")}>
-                                  <span
+                            <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+                              {deliveryCalendarDays.map((day) => {
+                                const active =
+                                  selectedDeliveryDate === day.date;
+
+                                return (
+                                  <button
+                                    key={day.date}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedDeliveryDate(day.date);
+
+                                      setSelectedDeliverySlotId("");
+
+                                      clearFieldError("deliverySlot");
+                                    }}
                                     className={[
-                                      "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border",
+                                      "rounded-2xl border p-3 text-left transition",
                                       active
-                                        ? "border-brand-bg/30 bg-brand-bg text-brand-ink"
-                                        : "border-brand-ink/15 bg-white/60 text-transparent",
+                                        ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
+                                        : "border-brand-ink/10 bg-white/55 text-brand-ink hover:border-brand-ink/20 hover:bg-white/80",
                                     ].join(" ")}>
-                                    <Check size={13} />
-                                  </span>
-
-                                  <span className="min-w-0">
-                                    <span className="block text-sm font-semibold">
-                                      {slot.slot_label}
-                                    </span>
-
                                     <span
                                       className={[
-                                        "mt-1 block text-xs",
-                                        active
-                                          ? "text-brand-bg/70"
-                                          : "text-brand-ink/50",
-                                      ].join(" ")}>
-                                      {slot.start_time.slice(0, 5)} –{" "}
-                                      {slot.end_time.slice(0, 5)}
-                                    </span>
-
-                                    <span
-                                      className={[
-                                        "mt-1.5 block text-[10px] font-medium",
+                                        "text-[9px] font-semibold uppercase tracking-[0.18em]",
                                         active
                                           ? "text-brand-bg/55"
                                           : "text-brand-ink/35",
                                       ].join(" ")}>
-                                      {slot.remaining_orders} place
-                                      {slot.remaining_orders === 1
-                                        ? ""
-                                        : "s"}{" "}
-                                      remaining
+                                      {formatCalendarMonth(day.date)}
                                     </span>
-                                  </span>
-                                </button>
-                              );
-                            })}
+
+                                    <span className="mt-1 block text-2xl font-bold leading-none">
+                                      {formatCalendarDayNumber(day.date)}
+                                    </span>
+
+                                    <span
+                                      className={[
+                                        "mt-2 block text-[11px] font-medium",
+                                        active
+                                          ? "text-brand-bg/75"
+                                          : "text-brand-ink/55",
+                                      ].join(" ")}>
+                                      {formatCalendarDate(day.date)}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
-                        ) : (
-                          <InfoBox tone="warning" className="mt-3">
-                            No delivery times are available on this date.
-                          </InfoBox>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <InfoBox tone="warning">
-                      There are no delivery sessions available right now. Please
-                      contact Baura Bakers before placing your order.
-                    </InfoBox>
-                  )}
 
-                  <div className="border-t border-brand-ink/10 pt-5">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/60 p-4">
-                        <div className="flex items-center gap-2">
-                          <Truck size={16} className="text-brand-ink/55" />
-
-                          <p className="text-xs font-semibold uppercase tracking-wider text-brand-ink/45">
-                            Delivery
-                          </p>
-                        </div>
-
-                        {isCalculatingDistance ? (
-                          <p className="mt-3 text-sm font-semibold text-brand-ink/60">
-                            Calculating…
-                          </p>
-                        ) : checkoutQuote ? (
-                          <>
-                            <p className="mt-3 text-xl font-bold text-brand-ink">
-                              {formatLkr(deliveryFeeLkr)}
+                          <div className="border-t border-brand-ink/10 pt-5">
+                            <p className="text-sm font-semibold text-brand-ink">
+                              Available times
                             </p>
 
                             <p className="mt-1 text-xs text-brand-ink/50">
-                              {checkoutQuote.distance_km} km delivery distance
+                              {selectedDeliveryDate
+                                ? formatCalendarDate(selectedDeliveryDate)
+                                : "Select a delivery day"}
                             </p>
-                          </>
-                        ) : (
-                          <p className="mt-3 text-sm text-brand-ink/55">
-                            Delivery quote unavailable
-                          </p>
-                        )}
+
+                            {selectedDateSlots.length ? (
+                              <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                                {selectedDateSlots.map((slot) => {
+                                  const active =
+                                    selectedDeliverySlotId === slot.id;
+
+                                  return (
+                                    <button
+                                      key={slot.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedDeliverySlotId(slot.id);
+
+                                        clearFieldError("deliverySlot");
+                                      }}
+                                      className={[
+                                        "flex items-start gap-3 rounded-2xl border p-4 text-left transition",
+                                        active
+                                          ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
+                                          : "border-brand-ink/10 bg-white/55 text-brand-ink hover:border-brand-ink/20 hover:bg-white/80",
+                                      ].join(" ")}>
+                                      <span
+                                        className={[
+                                          "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-lg border",
+                                          active
+                                            ? "border-brand-bg/30 bg-brand-bg text-brand-ink"
+                                            : "border-brand-ink/15 bg-white/60 text-transparent",
+                                        ].join(" ")}>
+                                        <Check size={13} />
+                                      </span>
+
+                                      <span className="min-w-0">
+                                        <span className="block text-sm font-semibold">
+                                          {slot.slot_label}
+                                        </span>
+
+                                        <span
+                                          className={[
+                                            "mt-1 block text-xs",
+                                            active
+                                              ? "text-brand-bg/70"
+                                              : "text-brand-ink/50",
+                                          ].join(" ")}>
+                                          {slot.start_time.slice(0, 5)} –{" "}
+                                          {slot.end_time.slice(0, 5)}
+                                        </span>
+
+                                        <span
+                                          className={[
+                                            "mt-1.5 block text-[10px] font-medium",
+                                            active
+                                              ? "text-brand-bg/55"
+                                              : "text-brand-ink/35",
+                                          ].join(" ")}>
+                                          {slot.remaining_orders} place
+                                          {slot.remaining_orders === 1
+                                            ? ""
+                                            : "s"}{" "}
+                                          remaining
+                                        </span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <InfoBox tone="warning" className="mt-3">
+                                No delivery times are available on this date.
+                              </InfoBox>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <InfoBox tone="warning">
+                          There are no delivery sessions available right now.
+                          Please contact Baura Bakers before placing your order.
+                        </InfoBox>
+                      )}
+
+                      <div className="border-t border-brand-ink/10 pt-5">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="rounded-2xl border border-brand-ink/10 bg-brand-bg/60 p-4">
+                            <div className="flex items-center gap-2">
+                              <Truck size={16} className="text-brand-ink/55" />
+
+                              <p className="text-xs font-semibold uppercase tracking-wider text-brand-ink/45">
+                                Delivery
+                              </p>
+                            </div>
+
+                            {isCalculatingDistance ? (
+                              <p className="mt-3 text-sm font-semibold text-brand-ink/60">
+                                Calculating…
+                              </p>
+                            ) : checkoutQuote ? (
+                              <>
+                                <p className="mt-3 text-xl font-bold text-brand-ink">
+                                  {formatLkr(deliveryFeeLkr)}
+                                </p>
+
+                                <p className="mt-1 text-xs text-brand-ink/50">
+                                  {checkoutQuote.distance_km} km delivery
+                                  distance
+                                </p>
+                              </>
+                            ) : (
+                              <p className="mt-3 text-sm text-brand-ink/55">
+                                Delivery quote unavailable
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="rounded-2xl border border-brand-ink/10 bg-brand-ink p-4 text-brand-bg">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-brand-bg/50">
+                              Order total
+                            </p>
+
+                            <p className="mt-3 text-xl font-bold">
+                              {formatLkr(finalTotalLkr)}
+                            </p>
+
+                            <p className="mt-1 text-xs text-brand-bg/60">
+                              Including delivery
+                            </p>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="rounded-2xl border border-brand-ink/10 bg-brand-ink p-4 text-brand-bg">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-brand-bg/50">
-                          Order total
-                        </p>
+                      {!isPickup && selectedDeliverySlot && (
+                        <InfoBox tone="success">
+                          <span className="font-semibold">Selected:</span>{" "}
+                          {formatSlot(selectedDeliverySlot)}
+                        </InfoBox>
+                      )}
 
-                        <p className="mt-3 text-xl font-bold">
-                          {formatLkr(finalTotalLkr)}
-                        </p>
-
-                        <p className="mt-1 text-xs text-brand-bg/60">
-                          Including delivery
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {!isPickup && selectedDeliverySlot && (
-                    <InfoBox tone="success">
-                      <span className="font-semibold">Selected:</span>{" "}
-                      {formatSlot(selectedDeliverySlot)}
-                    </InfoBox>
+                      {distanceNotice && (
+                        <InfoBox tone="warning">{distanceNotice}</InfoBox>
+                      )}
+                    </>
                   )}
-
-                  {distanceNotice && (
-                    <InfoBox tone="warning">{distanceNotice}</InfoBox>
-                  )}
-                  </>}
                 </div>
               )}
 
@@ -2354,17 +2927,64 @@ export default function Order() {
                       </p>
                     </ReviewCard>
 
-                    <ReviewCard icon={isPickup ? <Store size={17} /> : <MapPin size={17} />} title={isPickup ? "Collection" : "Delivery"}>
-                      {isPickup ? <><p>{courierLabel}</p>{courierProvider && courierArrangement !== "SELF_PICKUP" && <div className="mt-2"><CourierBrand provider={courierProvider} compact /></div>}<p className="mt-2 text-xs text-brand-ink/50">{courierArrangement === "SELF_PICKUP" ? "Collect at Baura Bakers" : courierArrangement === "CUSTOMER_COURIER" ? "Courier booked and paid by customer" : "Baura assists; customer pays courier"}</p></> : <><p>{effectiveDelivery.name}</p><p className="mt-1 text-brand-ink/55">{effectiveDelivery.address}</p></>}
+                    <ReviewCard
+                      icon={
+                        isPickup ? <Store size={17} /> : <MapPin size={17} />
+                      }
+                      title={isPickup ? "Collection" : "Delivery"}>
+                      {isPickup ? (
+                        <>
+                          <p>{courierLabel}</p>
+                          {courierProvider &&
+                            courierArrangement !== "SELF_PICKUP" && (
+                              <div className="mt-2">
+                                <CourierBrand
+                                  provider={courierProvider}
+                                  compact
+                                />
+                              </div>
+                            )}
+                          <p className="mt-2 text-xs text-brand-ink/50">
+                            {courierArrangement === "SELF_PICKUP"
+                              ? "Collect at Baura Bakers"
+                              : courierArrangement === "CUSTOMER_COURIER"
+                                ? "Courier booked and paid by customer"
+                                : "Baura assists; customer pays courier"}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p>{effectiveDelivery.name}</p>
+                          <p className="mt-1 text-brand-ink/55">
+                            {effectiveDelivery.address}
+                          </p>
+                        </>
+                      )}
                     </ReviewCard>
 
                     <ReviewCard icon={<Clock3 size={17} />} title="Schedule">
-                      <p>{isPickup ? `${formatCalendarDate(pickupDate)} at ${formatHour(pickupStartTime)}` : formatSlot(selectedDeliverySlot)}</p>
+                      <p>
+                        {isPickup
+                          ? `${formatCalendarDate(pickupDate)} at ${formatHour(pickupStartTime)}`
+                          : formatSlot(selectedDeliverySlot)}
+                      </p>
                     </ReviewCard>
 
-                    <ReviewCard icon={isPickup ? <Store size={17} /> : <Truck size={17} />} title={isPickup ? "Collection fee" : "Delivery fee"}>
-                      <p>{isPickup ? "FREE bakery pickup" : formatLkr(deliveryFeeLkr)}</p>
-                      {isPickup && courierArrangement !== "SELF_PICKUP" && <p className="mt-1 text-xs text-brand-ink/50">Courier charge paid separately by you</p>}
+                    <ReviewCard
+                      icon={
+                        isPickup ? <Store size={17} /> : <Truck size={17} />
+                      }
+                      title={isPickup ? "Collection fee" : "Delivery fee"}>
+                      <p>
+                        {isPickup
+                          ? "FREE bakery pickup"
+                          : formatLkr(deliveryFeeLkr)}
+                      </p>
+                      {isPickup && courierArrangement !== "SELF_PICKUP" && (
+                        <p className="mt-1 text-xs text-brand-ink/50">
+                          Courier charge paid separately by you
+                        </p>
+                      )}
 
                       {checkoutQuote && (
                         <p className="mt-1 text-brand-ink/55">
@@ -2447,8 +3067,21 @@ export default function Order() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-amber-200 bg-amber-50/75 px-4 py-3 text-xs leading-5 text-amber-950">Your order is confirmed for preparation only after we verify successful payment. After placing it, use the WhatsApp button on the success screen to send your bank-transfer slip.</div>
-                  <p className="text-xs leading-6 text-brand-ink/55">Please read our <Link to="/order-policies" className="font-semibold underline underline-offset-4">ordering, payment and courier policies</Link> before placing your order.</p>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/75 px-4 py-3 text-xs leading-5 text-amber-950">
+                    Your order is confirmed for preparation only after we verify
+                    successful payment. After placing it, use the WhatsApp
+                    button on the success screen to send your bank-transfer
+                    slip.
+                  </div>
+                  <p className="text-xs leading-6 text-brand-ink/55">
+                    Please read our{" "}
+                    <Link
+                      to="/order-policies"
+                      className="font-semibold underline underline-offset-4">
+                      ordering, payment and courier policies
+                    </Link>{" "}
+                    before placing your order.
+                  </p>
                   <button
                     type="button"
                     onClick={bankTransferViaWhatsApp}
@@ -2461,13 +3094,12 @@ export default function Order() {
                     ].join(" ")}>
                     <MessageCircle size={18} />
 
-                    {isSubmitting
-                      ? "Confirming your order…"
-                      : "Place order"}
+                    {isSubmitting ? "Confirming your order…" : "Place order"}
                   </button>
 
                   <p className="text-center text-[11px] leading-5 text-brand-ink/45">
-                    Placing an order does not confirm payment. Your cart clears only after the order is saved.
+                    Placing an order does not confirm payment. Your cart clears
+                    only after the order is saved.
                   </p>
                 </div>
               )}
@@ -2538,7 +3170,8 @@ export default function Order() {
                       </p>
 
                       <p className="mt-1 text-[11px] leading-5 text-brand-ink/50">
-                        {item.size.label} · {item.sugar ? `${item.sugar} sugar · ` : ""}Qty{" "}
+                        {item.size.label} ·{" "}
+                        {item.sugar ? `${item.sugar} sugar · ` : ""}Qty{" "}
                         {item.quantity}
                       </p>
                     </div>
@@ -2558,7 +3191,11 @@ export default function Order() {
                 <PriceRow
                   label={isPickup ? "Bakery collection" : "Baura delivery"}
                   value={
-                    isPickup ? "FREE" : checkoutQuote ? formatLkr(deliveryFeeLkr) : "Not calculated"
+                    isPickup
+                      ? "FREE"
+                      : checkoutQuote
+                        ? formatLkr(deliveryFeeLkr)
+                        : "Not calculated"
                   }
                   muted={!isPickup && !checkoutQuote}
                 />
@@ -2615,10 +3252,28 @@ export default function Order() {
                 </div>
               </div>
             )}
-            {isPickup && courierArrangement !== "SELF_PICKUP" && courierProvider && <div className="mt-3 rounded-xl border border-brand-ink/10 bg-white/65 p-3"><p className="mb-2 text-[10px] uppercase tracking-wider text-brand-ink/40">Courier arrangement</p><CourierBrand provider={courierProvider} compact /><p className="mt-1 text-[11px] text-brand-ink/50">{courierArrangement === "CUSTOMER_COURIER" ? "You will arrange and pay" : "Baura can assist; you pay"}</p></div>}
-            {isPickup && pickupScheduleValid && <div className="mt-4 rounded-xl bg-brand-bg/70 p-3 text-xs font-medium text-brand-ink/70">
-              <Store size={15} className="mb-2" /> Collect {formatCalendarDate(pickupDate)} at {formatHour(pickupStartTime)}
-            </div>}
+            {isPickup &&
+              courierArrangement !== "SELF_PICKUP" &&
+              courierProvider && (
+                <div className="mt-3 rounded-xl border border-brand-ink/10 bg-white/65 p-3">
+                  <p className="mb-2 text-[10px] uppercase tracking-wider text-brand-ink/40">
+                    Courier arrangement
+                  </p>
+                  <CourierBrand provider={courierProvider} compact />
+                  <p className="mt-1 text-[11px] text-brand-ink/50">
+                    {courierArrangement === "CUSTOMER_COURIER"
+                      ? "You will arrange and pay"
+                      : "Baura can assist; you pay"}
+                  </p>
+                </div>
+              )}
+            {isPickup && pickupScheduleValid && (
+              <div className="mt-4 rounded-xl bg-brand-bg/70 p-3 text-xs font-medium text-brand-ink/70">
+                <Store size={15} className="mb-2" /> Collect{" "}
+                {formatCalendarDate(pickupDate)} at{" "}
+                {formatHour(pickupStartTime)}
+              </div>
+            )}
           </aside>
         </div>
 
@@ -2912,7 +3567,9 @@ function sriLankaToday(): string {
     month: "2-digit",
     day: "2-digit",
   }).formatToParts(new Date());
-  const lookup = Object.fromEntries(values.map((part) => [part.type, part.value]));
+  const lookup = Object.fromEntries(
+    values.map((part) => [part.type, part.value]),
+  );
   return `${lookup.year}-${lookup.month}-${lookup.day}`;
 }
 
@@ -2920,11 +3577,17 @@ function pickupTimeOptions(day: CheckoutPickupDay): string[] {
   if (!day.isOpen || !day.openingTime || !day.closingTime) return [];
   const open = minutesOfDay(day.openingTime);
   const close = minutesOfDay(day.closingTime);
-  if (!Number.isFinite(open) || !Number.isFinite(close) || open >= close) return [];
+  if (!Number.isFinite(open) || !Number.isFinite(close) || open >= close)
+    return [];
   const choices: string[] = [];
-  for (let minute = Math.ceil(open / 15) * 15; minute + 10 <= close; minute += 15) {
+  for (
+    let minute = Math.ceil(open / 15) * 15;
+    minute + 10 <= close;
+    minute += 15
+  ) {
     const time = minuteToTime(minute);
-    if (new Date(`${day.date}T${time}:00+05:30`).getTime() > Date.now()) choices.push(time);
+    if (new Date(`${day.date}T${time}:00+05:30`).getTime() > Date.now())
+      choices.push(time);
   }
   return choices;
 }
@@ -2938,9 +3601,12 @@ function PickupCalendar({
   selected: string;
   onSelect: (value: string) => void;
 }) {
-  const groups = days.reduce<Array<{ month: string; days: CheckoutPickupDay[] }>>((result, day) => {
+  const groups = days.reduce<
+    Array<{ month: string; days: CheckoutPickupDay[] }>
+  >((result, day) => {
     const month = day.date.slice(0, 7);
-    if (result[result.length - 1]?.month !== month) result.push({ month, days: [] });
+    if (result[result.length - 1]?.month !== month)
+      result.push({ month, days: [] });
     result[result.length - 1].days.push(day);
     return result;
   }, []);
@@ -2950,19 +3616,29 @@ function PickupCalendar({
       {groups.map((group) => {
         const first = group.days[0].date;
         const offset = new Date(`${first}T00:00:00Z`).getUTCDay();
-        const monthLabel = new Date(`${first}T12:00:00+05:30`).toLocaleDateString("en-US", {
+        const monthLabel = new Date(
+          `${first}T12:00:00+05:30`,
+        ).toLocaleDateString("en-US", {
           month: "long",
           year: "numeric",
           timeZone: "Asia/Colombo",
         });
         return (
           <div key={group.month}>
-            <p className="mb-3 text-sm font-semibold text-brand-ink">{monthLabel}</p>
+            <p className="mb-3 text-sm font-semibold text-brand-ink">
+              {monthLabel}
+            </p>
             <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((name) => (
-                <div key={name} className="py-1 text-center text-[10px] font-semibold text-brand-ink/40">{name}</div>
+                <div
+                  key={name}
+                  className="py-1 text-center text-[10px] font-semibold text-brand-ink/40">
+                  {name}
+                </div>
               ))}
-              {Array.from({ length: offset }, (_, index) => <div key={`offset-${index}`} />)}
+              {Array.from({ length: offset }, (_, index) => (
+                <div key={`offset-${index}`} />
+              ))}
               {group.days.map((day) => {
                 const active = selected === day.date;
                 const today = day.date === sriLankaToday();
@@ -2983,20 +3659,37 @@ function PickupCalendar({
                     onClick={() => onSelect(day.date)}
                     aria-pressed={active}
                     aria-label={`${label}${available ? "" : " unavailable"}${day.reason ? `, ${day.reason}` : ""}`}
-                    title={!day.isOpen ? day.reason || "Bakery closed" : !hasTime ? "No remaining collection times" : day.source === "EXCEPTION" ? "Special opening hours" : undefined}
+                    title={
+                      !day.isOpen
+                        ? day.reason || "Bakery closed"
+                        : !hasTime
+                          ? "No remaining collection times"
+                          : day.source === "EXCEPTION"
+                            ? "Special opening hours"
+                            : undefined
+                    }
                     className={`flex aspect-square min-h-9 flex-col items-center justify-center rounded-lg border px-0.5 text-[11px] font-semibold transition sm:min-h-12 sm:rounded-xl sm:text-sm ${
                       active
                         ? "border-brand-ink bg-brand-ink text-brand-bg shadow-sm"
                         : available
                           ? "border-brand-ink/10 bg-brand-bg/35 text-brand-ink hover:border-brand-ink/30 hover:bg-white"
                           : "cursor-not-allowed border-brand-ink/5 bg-brand-ink/[0.03] text-brand-ink/25"
-                    }`}
-                  >
+                    }`}>
                     <span>{date.getUTCDate()}</span>
-                    {today && <span className={`mt-0.5 text-[8px] ${active ? "text-brand-bg/75" : "text-brand-ink/40"}`}>Today</span>}
-                    {!day.isOpen && <span className="mt-0.5 text-[8px]">Closed</span>}
+                    {today && (
+                      <span
+                        className={`mt-0.5 text-[8px] ${active ? "text-brand-bg/75" : "text-brand-ink/40"}`}>
+                        Today
+                      </span>
+                    )}
+                    {!day.isOpen && (
+                      <span className="mt-0.5 text-[8px]">Closed</span>
+                    )}
                     {available && day.source === "EXCEPTION" && (
-                      <span className={`mt-0.5 text-[8px] ${active ? "text-brand-bg/75" : "text-brand-ink/50"}`}>Special</span>
+                      <span
+                        className={`mt-0.5 text-[8px] ${active ? "text-brand-bg/75" : "text-brand-ink/50"}`}>
+                        Special
+                      </span>
                     )}
                   </button>
                 );

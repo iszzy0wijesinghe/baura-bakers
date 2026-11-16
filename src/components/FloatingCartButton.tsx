@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ShoppingBag } from "lucide-react";
-import { useCart } from "../app/cart";
+import { useCart } from "../app/useCart";
 
 export default function FloatingCartButton() {
   // ✅ Always call hooks first (never return before hooks)

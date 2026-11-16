@@ -1,6 +1,6 @@
 /** @format */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
 import { getCurrentUser } from "../lib/auth";
@@ -42,104 +42,91 @@ export default function AdminSiteSettings() {
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
 
+  const verifyAdmin = useCallback(async (): Promise<boolean> => {
+    const user = await getCurrentUser();
 
-async function verifyAdmin() {
-  const user = await getCurrentUser();
+    if (!user) {
+      navigate("/login");
+      return false;
+    }
 
-  if (!user) {
-    navigate("/login");
-    return false;
-  }
+    if (user.role !== "admin" || !user.is_active) {
+      navigate("/account");
+      return false;
+    }
 
-  if (user.role !== "admin" || !user.is_active) {
-    navigate("/account");
-    return false;
-  }
+    return true;
+  }, [navigate]);
 
-  return true;
-}
+  const loadModes = useCallback(async () => {
+    setLoading(true);
+    setErrorText("");
 
+    try {
+      const isAdmin = await verifyAdmin();
 
-async function loadModes() {
-  setLoading(true);
-  setErrorText("");
+      if (!isAdmin) return;
 
-  try {
-    const isAdmin = await verifyAdmin();
-    if (!isAdmin) return;
-
-    setModes(await getAdminSiteModes());
-  } catch (error) {
-    setErrorText(
-      error instanceof Error
-        ? error.message
-        : "Could not load site modes.",
-    );
-  } finally {
-    setLoading(false);
-  }
-}
+      setModes(await getAdminSiteModes());
+    } catch (error) {
+      setErrorText(
+        error instanceof Error ? error.message : "Could not load site modes.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [verifyAdmin]);
 
   useEffect(() => {
-    loadModes();
-  }, []);
+    void loadModes();
+  }, [loadModes]);
 
+  async function toggleMode(mode: SiteMode) {
+    setSavingMode(mode.mode);
+    setErrorText("");
+    setSuccessText("");
 
-async function sendModeEmail(
-  _mode: SiteMode["mode"],
-  _enabled: boolean,
-) {
-  // Site-mode persistence is now handled entirely by Laravel/MySQL.
-}
+    const nextEnabled = !mode.is_enabled;
 
+    try {
+      await updateAdminSiteMode(mode.mode, nextEnabled);
 
-async function toggleMode(mode: SiteMode) {
-  setSavingMode(mode.mode);
-  setErrorText("");
-  setSuccessText("");
+      setSuccessText(
+        `${modeLabels[mode.mode]} ${nextEnabled ? "enabled" : "disabled"}.`,
+      );
 
-  const nextEnabled = !mode.is_enabled;
-
-  try {
-    await updateAdminSiteMode(mode.mode, nextEnabled);
-
-    setSuccessText(
-      `${modeLabels[mode.mode]} ${nextEnabled ? "enabled" : "disabled"}.`,
-    );
-
-    await loadModes();
-  } catch (error) {
-    setErrorText(
-      error instanceof Error
-        ? error.message
-        : "Could not update the site mode.",
-    );
-  } finally {
-    setSavingMode("");
+      await loadModes();
+    } catch (error) {
+      setErrorText(
+        error instanceof Error
+          ? error.message
+          : "Could not update the site mode.",
+      );
+    } finally {
+      setSavingMode("");
+    }
   }
-}
 
+  async function resetAllModes() {
+    if (!window.confirm("Turn off all site modes?")) return;
 
-async function resetAllModes() {
-  if (!window.confirm("Turn off all site modes?")) return;
+    setSavingMode("RESET_ALL");
+    setErrorText("");
+    setSuccessText("");
 
-  setSavingMode("RESET_ALL");
-  setErrorText("");
-  setSuccessText("");
-
-  try {
-    setModes(await resetAdminSiteModes());
-    setSuccessText("All site modes turned off.");
-  } catch (error) {
-    setErrorText(
-      error instanceof Error
-        ? error.message
-        : "Could not reset the site modes.",
-    );
-  } finally {
-    setSavingMode("");
+    try {
+      setModes(await resetAdminSiteModes());
+      setSuccessText("All site modes turned off.");
+    } catch (error) {
+      setErrorText(
+        error instanceof Error
+          ? error.message
+          : "Could not reset the site modes.",
+      );
+    } finally {
+      setSavingMode("");
+    }
   }
-}
 
   return (
     <Page>
@@ -258,7 +245,9 @@ async function resetAllModes() {
                 disabled={savingMode === "RESET_ALL"}
                 onClick={resetAllModes}
                 className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100">
-                {savingMode === "RESET_ALL" ? "Resetting..." : "Turn off all modes"}
+                {savingMode === "RESET_ALL"
+                  ? "Resetting..."
+                  : "Turn off all modes"}
               </button>
             </section>
           </>
