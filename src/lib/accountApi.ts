@@ -6,6 +6,7 @@ import {
   laravelPatch,
   laravelPost,
 } from "./laravelApi";
+import type { FulfillmentType, CollectionArrangement, CourierProvider } from "./checkoutApi";
 
 export type LaravelUserRole =
   | "admin"
@@ -78,6 +79,12 @@ export type AccountOrderItem = {
 export type AccountOrder = {
   id: string;
   order_no: string;
+  fulfillment_type?: FulfillmentType | null;
+  collection_arrangement?: CollectionArrangement | null;
+  courier_provider?: CourierProvider | null;
+  pickup_date?: string | null;
+  pickup_start_time?: string | null;
+  pickup_end_time?: string | null;
   customer_name: string;
   customer_email: string | null;
   contact_number: string;

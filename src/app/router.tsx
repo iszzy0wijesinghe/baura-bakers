@@ -10,6 +10,7 @@ import Menu from "../pages/Menu";
 import ProductDetails from "../pages/ProductDetails";
 import Cart from "../pages/Cart";
 import Order from "../pages/Order";
+import OrderPolicies from "../pages/OrderPolicies";
 import Contact from "../pages/Contact";
 import About from "../pages/About";
 import PaymentSuccess from "../pages/PaymentSuccess";
@@ -134,6 +135,11 @@ export const router = createBrowserRouter([
       {
         path: "/order",
         element: <Order />,
+      },
+
+      {
+        path: "/order-policies",
+        element: <OrderPolicies />,
       },
 
       {

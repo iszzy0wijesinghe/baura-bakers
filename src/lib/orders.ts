@@ -1,32 +1,32 @@
 /** @format */
-
 import type { CartItem } from "../app/cart";
-import {
-  claimAccountOrders,
-} from "./accountApi";
-import {
-  checkCheckoutEmailExists,
-  createCheckoutOrder,
-} from "./checkoutApi";
+import { claimAccountOrders } from "./accountApi";
+import { checkCheckoutEmailExists, createCheckoutOrder, type FulfillmentType, type CollectionArrangement, type CourierProvider } from "./checkoutApi";
 import { getBauraDeviceId } from "./device";
 import { laravelGet } from "./laravelApi";
 
 export type DeliveryTarget = "SENDER" | "RECEIVER";
-
+export type { CollectionArrangement, CourierProvider } from "./checkoutApi";
 export type PublicOrderItem = {
   product_name: string;
   size_label: string;
-  sugar_level: string;
+  sugar_level: string | null;
   quantity: number;
   unit_price_lkr: number;
   line_total_lkr: number;
 };
-
 export type PublicOrderTracking = {
   id: string;
   order_no: string;
+  fulfillment_type?: FulfillmentType;
+  // Optional for legacy orders and API responses that predate the collection feature.
+  collection_arrangement?: CollectionArrangement | null;
+  courier_provider?: CourierProvider | null;
+  pickup_date?: string | null;
+  pickup_start_time?: string | null;
+  pickup_end_time?: string | null;
   customer_name: string;
-  delivery_address: string;
+  delivery_address: string | null;
   delivery_location_url: string | null;
   delivery_date?: string | null;
   delivery_slot_label?: string | null;
@@ -50,6 +50,13 @@ export type PublicOrderTracking = {
 
 type CreateGuestOrderInput = {
   orderNo: string;
+  fulfillmentType: FulfillmentType;
+  pickupDate?: string;
+  pickupStartTime?: string;
+  pickupEndTime?: string;
+  // These are sent as structured order fields, not merely stored in notes.
+  collectionArrangement?: CollectionArrangement | null;
+  courierProvider?: CourierProvider | null;
   senderName: string;
   senderEmail?: string;
   senderContactNumber: string;
@@ -66,11 +73,11 @@ type CreateGuestOrderInput = {
   receiverLat?: number | null;
   receiverLng?: number | null;
   deliveryTarget: DeliveryTarget;
-  deliveryAddress: string;
+  deliveryAddress?: string;
   deliveryLocationUrl?: string;
   deliveryLat?: number | null;
   deliveryLng?: number | null;
-  deliverySlotId: string;
+  deliverySlotId?: string;
   deliveryDate?: string;
   deliverySlotLabel?: string;
   deliverySlotStart?: string;
@@ -79,63 +86,63 @@ type CreateGuestOrderInput = {
   deliveryVehicleType?: string | null;
   deliveryFeeLkr?: number;
   deliveryPricingMode?: string | null;
-  deliveryApp: string;
+  deliveryApp?: string;
   paymentMethod?: string;
   note?: string;
   items: CartItem[];
 };
 
 export async function createGuestOrder(input: CreateGuestOrderInput) {
-  if (!input.items.length) {
-    throw new Error("Cart is empty.");
+  if (!input.items.length) throw new Error("Cart is empty.");
+  const pickup = input.fulfillmentType === "PICKUP";
+  if (pickup && (!input.pickupDate || !input.pickupStartTime || !input.pickupEndTime)) {
+    throw new Error("Choose your pickup date and collection time.");
   }
-
-  if (input.deliveryLat === null || input.deliveryLat === undefined) {
-    throw new Error("Please add the exact delivery location.");
+  if (!pickup && (input.deliveryLat == null || input.deliveryLng == null || !input.deliverySlotId)) {
+    throw new Error("Add your exact delivery location and choose a delivery time.");
   }
-
-  if (input.deliveryLng === null || input.deliveryLng === undefined) {
-    throw new Error("Please add the exact delivery location.");
+  if (pickup) {
+    if (!input.collectionArrangement) {
+      throw new Error("Choose who will collect your order.");
+    }
+    const courierPickup = input.collectionArrangement !== "SELF_PICKUP";
+    if (courierPickup && !input.courierProvider) {
+      throw new Error("Choose PickMe Flash or Uber Parcel for collection.");
+    }
+    if (!courierPickup && input.courierProvider) {
+      throw new Error("Personal collection cannot have a courier provider.");
+    }
   }
-
+  const needsReceiver = !pickup && (input.hasDifferentReceiver || input.isGift);
   const result = await createCheckoutOrder({
     order_no: input.orderNo,
     idempotency_key: input.orderNo,
     device_id: getBauraDeviceId(),
+    fulfillment_type: input.fulfillmentType,
+    pickup_date: pickup ? input.pickupDate : null,
+    pickup_start_time: pickup ? input.pickupStartTime : null,
+    pickup_end_time: pickup ? input.pickupEndTime : null,
+    collection_arrangement: pickup ? input.collectionArrangement : null,
+    courier_provider: pickup && input.collectionArrangement !== "SELF_PICKUP" ? input.courierProvider : null,
     sender_name: input.senderName.trim(),
     sender_email: input.senderEmail?.trim().toLowerCase() || "",
     sender_contact_number: input.senderContactNumber.trim(),
     sender_address: input.senderAddress.trim(),
-    has_different_receiver: input.hasDifferentReceiver,
-    is_gift: input.isGift,
-    delivery_target: input.deliveryTarget,
-    receiver_name: input.hasDifferentReceiver
-      ? input.receiverName?.trim() || null
-      : null,
-    receiver_contact_number: input.hasDifferentReceiver
-      ? input.receiverContactNumber?.trim() || null
-      : null,
-    receiver_address: input.hasDifferentReceiver
-      ? input.receiverAddress?.trim() || null
-      : null,
-    receiver_location_url: input.hasDifferentReceiver
-      ? input.receiverLocationUrl?.trim() || null
-      : null,
-    receiver_lat: input.hasDifferentReceiver
-      ? input.receiverLat ?? null
-      : null,
-    receiver_lng: input.hasDifferentReceiver
-      ? input.receiverLng ?? null
-      : null,
-    delivery_address: input.deliveryAddress.trim(),
-    delivery_location_url: input.deliveryLocationUrl?.trim() || null,
-    delivery_lat: input.deliveryLat,
-    delivery_lng: input.deliveryLng,
-    delivery_slot_id: input.deliverySlotId,
-    payment_method:
-      input.paymentMethod === "PAYHERE"
-        ? "PAYHERE"
-        : "BANK_TRANSFER_WHATSAPP",
+    has_different_receiver: needsReceiver,
+    is_gift: needsReceiver && input.isGift,
+    delivery_target: needsReceiver && input.deliveryTarget === "RECEIVER" ? "RECEIVER" : "SENDER",
+    receiver_name: needsReceiver ? input.receiverName?.trim() || null : null,
+    receiver_contact_number: needsReceiver ? input.receiverContactNumber?.trim() || null : null,
+    receiver_address: needsReceiver ? input.receiverAddress?.trim() || null : null,
+    receiver_location_url: needsReceiver ? input.receiverLocationUrl?.trim() || null : null,
+    receiver_lat: needsReceiver ? input.receiverLat ?? null : null,
+    receiver_lng: needsReceiver ? input.receiverLng ?? null : null,
+    delivery_address: pickup ? null : input.deliveryAddress?.trim() || null,
+    delivery_location_url: pickup ? null : input.deliveryLocationUrl?.trim() || null,
+    delivery_lat: pickup ? null : input.deliveryLat,
+    delivery_lng: pickup ? null : input.deliveryLng,
+    delivery_slot_id: pickup ? null : input.deliverySlotId,
+    payment_method: input.paymentMethod === "PAYHERE" ? "PAYHERE" : "BANK_TRANSFER_WHATSAPP",
     note: input.note?.trim() || null,
     items: input.items.map((item) => ({
       product_id: item.itemId,
@@ -144,7 +151,6 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
       quantity: item.quantity,
     })),
   });
-
   return {
     orderId: result.order.id,
     orderNo: result.order.order_no,
@@ -165,31 +171,18 @@ export async function claimDeviceOrdersForCurrentUser() {
 export async function getOrderTracking(orderNo: string, token?: string | null) {
   const params = new URLSearchParams();
   const deviceId = getBauraDeviceId();
-
   if (deviceId) params.set("device_id", deviceId);
   if (token) params.set("token", token);
-
   const query = params.toString();
-  const response = await laravelGet<{
-    data: {
-      order: PublicOrderTracking;
-    };
-  }>(
-    `/api/v1/orders/${encodeURIComponent(orderNo)}/track${
-      query ? `?${query}` : ""
-    }`,
+  const response = await laravelGet<{ data: { order: PublicOrderTracking } }>(
+    `/api/v1/orders/${encodeURIComponent(orderNo)}/track${query ? `?${query}` : ""}`,
   );
-
   return response.data.order;
 }
 
 export async function checkCustomerEmailExists(email: string) {
   const cleanEmail = email.trim().toLowerCase();
-
-  if (!cleanEmail || !cleanEmail.includes("@")) {
-    return false;
-  }
-
+  if (!cleanEmail || !cleanEmail.includes("@")) return false;
   try {
     return await checkCheckoutEmailExists(cleanEmail);
   } catch (error) {
