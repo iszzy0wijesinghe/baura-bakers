@@ -7,7 +7,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useCart } from "../app/cart";
+import { useCart } from "../app/useCart";
 import Page from "../components/Page";
 
 function formatLkr(value: number) {

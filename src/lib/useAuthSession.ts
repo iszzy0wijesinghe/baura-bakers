@@ -1,19 +1,10 @@
 /** @format */
 
-import {
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 
-import type {
-  LaravelUser,
-} from "./accountApi";
+import type { LaravelUser } from "./accountApi";
 
-import {
-  AUTH_CHANGED_EVENT,
-  getCurrentUser,
-} from "./auth";
+import { AUTH_CHANGED_EVENT, getCurrentUser } from "./auth";
 
 export type AuthProfile = {
   id: string;
@@ -27,9 +18,7 @@ export type AuthProfile = {
    * Never use this value for new authorization
    * decisions.
    */
-  legacyRole:
-    | "customer"
-    | "admin";
+  legacyRole: "customer" | "admin";
 
   /**
    * Legacy role metadata retained while the
@@ -56,8 +45,7 @@ type SessionSnapshot = {
   isLoading: boolean;
 };
 
-const SESSION_REFRESH_MS =
-  60_000;
+const SESSION_REFRESH_MS = 60_000;
 
 let snapshot: SessionSnapshot = {
   user: null,
@@ -67,386 +55,237 @@ let snapshot: SessionSnapshot = {
 
 let lastLoadedAt = 0;
 
-let sessionRequest:
-  | Promise<void>
-  | null = null;
+let sessionRequest: Promise<void> | null = null;
 
-let globalListenersAttached =
-  false;
+let globalListenersAttached = false;
 
-const listeners = new Set<
-  (
-    next: SessionSnapshot,
-  ) => void
->();
+const listeners = new Set<() => void>();
 
-function normalizePermissions(
-  permissions: unknown,
-): string[] {
-  if (
-    !Array.isArray(
-      permissions,
-    )
-  ) {
+function subscribeToSession(onStoreChange: () => void): () => void {
+  listeners.add(onStoreChange);
+
+  return () => {
+    listeners.delete(onStoreChange);
+  };
+}
+
+function getSessionSnapshot(): SessionSnapshot {
+  return snapshot;
+}
+
+function normalizePermissions(permissions: unknown): string[] {
+  if (!Array.isArray(permissions)) {
     return [];
   }
 
   return Array.from(
     new Set(
       permissions.filter(
-        (
-          permission,
-        ): permission is string =>
-          typeof permission ===
-            "string" &&
-          permission.trim()
-            .length > 0,
+        (permission): permission is string =>
+          typeof permission === "string" && permission.trim().length > 0,
       ),
     ),
   );
 }
 
-function profileFromUser(
-  user: LaravelUser | null,
-): AuthProfile | null {
+function profileFromUser(user: LaravelUser | null): AuthProfile | null {
   if (!user) {
     return null;
   }
 
   return {
-    id:
-      String(user.id),
+    id: String(user.id),
 
-    fullName:
-      user.name || null,
+    fullName: user.name || null,
 
-    email:
-      user.email || null,
+    email: user.email || null,
 
-    phone:
-      user.phone,
+    phone: user.phone,
 
-    legacyRole:
-      user.role,
+    legacyRole: user.role,
 
-    roleValue:
-      user.role_value,
+    roleValue: user.role_value,
 
-    roleName:
-      user.role_name,
+    roleName: user.role_name,
 
-    roleLabel:
-      user.role_label,
+    roleLabel: user.role_label,
 
-    isStaff:
-      user.is_staff === true,
+    isStaff: user.is_staff === true,
 
-    isActive:
-      user.is_active === true,
+    isActive: user.is_active === true,
 
-    canAccessWebsiteAdmin:
-      user
-        .can_access_website_admin ===
-      true,
+    canAccessWebsiteAdmin: user.can_access_website_admin === true,
 
-    canAccessErp:
-      user.can_access_erp ===
-      true,
+    canAccessErp: user.can_access_erp === true,
 
-    permissions:
-      normalizePermissions(
-        user.permissions,
-      ),
+    permissions: normalizePermissions(user.permissions),
   };
 }
 
-function publish(
-  next: SessionSnapshot,
-): void {
+function publish(next: SessionSnapshot): void {
   snapshot = next;
 
-  for (
-    const listener
-    of listeners
-  ) {
-    listener(snapshot);
+  for (const listener of listeners) {
+    listener();
   }
 }
 
-async function loadSharedSession(
-  forceRefresh = false,
-): Promise<void> {
-  if (
-    !forceRefresh &&
-    sessionRequest
-  ) {
+async function loadSharedSession(forceRefresh = false): Promise<void> {
+  if (!forceRefresh && sessionRequest) {
     return sessionRequest;
   }
 
   if (
     !forceRefresh &&
     lastLoadedAt > 0 &&
-    Date.now() -
-      lastLoadedAt <
-      SESSION_REFRESH_MS
+    Date.now() - lastLoadedAt < SESSION_REFRESH_MS
   ) {
     return;
   }
 
-  const initialLoad =
-    lastLoadedAt === 0;
+  const initialLoad = lastLoadedAt === 0;
 
-  if (
-    initialLoad &&
-    !snapshot.isLoading
-  ) {
+  if (initialLoad && !snapshot.isLoading) {
     publish({
       ...snapshot,
       isLoading: true,
     });
   }
 
-  sessionRequest =
-    getCurrentUser(
-      forceRefresh,
-    )
-      .then((user) => {
-        lastLoadedAt =
-          Date.now();
+  sessionRequest = getCurrentUser(forceRefresh)
+    .then((user) => {
+      lastLoadedAt = Date.now();
 
-        publish({
-          user,
-          profile:
-            profileFromUser(
-              user,
-            ),
-          isLoading: false,
-        });
-      })
-      .catch(() => {
-        lastLoadedAt =
-          Date.now();
-
-        publish({
-          user: null,
-          profile: null,
-          isLoading: false,
-        });
-      })
-      .finally(() => {
-        sessionRequest =
-          null;
+      publish({
+        user,
+        profile: profileFromUser(user),
+        isLoading: false,
       });
+    })
+    .catch(() => {
+      lastLoadedAt = Date.now();
+
+      publish({
+        user: null,
+        profile: null,
+        isLoading: false,
+      });
+    })
+    .finally(() => {
+      sessionRequest = null;
+    });
 
   return sessionRequest;
 }
 
 function attachGlobalListeners(): void {
-  if (
-    globalListenersAttached ||
-    typeof window ===
-      "undefined"
-  ) {
+  if (globalListenersAttached || typeof window === "undefined") {
     return;
   }
 
-  globalListenersAttached =
-    true;
+  globalListenersAttached = true;
 
-  window.addEventListener(
-    AUTH_CHANGED_EVENT,
-    () => {
-      lastLoadedAt = 0;
+  window.addEventListener(AUTH_CHANGED_EVENT, () => {
+    lastLoadedAt = 0;
 
-      void loadSharedSession(
-        true,
-      );
-    },
-  );
+    void loadSharedSession(true);
+  });
 
-  window.addEventListener(
-    "focus",
-    () => {
-      if (
-        Date.now() -
-          lastLoadedAt >=
-        SESSION_REFRESH_MS
-      ) {
-        void loadSharedSession(
-          true,
-        );
-      }
-    },
-  );
+  window.addEventListener("focus", () => {
+    if (Date.now() - lastLoadedAt >= SESSION_REFRESH_MS) {
+      void loadSharedSession(true);
+    }
+  });
 }
 
 function profileHasPermission(
-  profile:
-    | AuthProfile
-    | null,
+  profile: AuthProfile | null,
   permission: string,
 ): boolean {
-  if (
-    !profile ||
-    !profile.isActive
-  ) {
+  if (!profile || !profile.isActive) {
     return false;
   }
 
-  return profile.permissions.includes(
-    permission,
-  );
+  return profile.permissions.includes(permission);
 }
 
 function profileHasAnyPermission(
-  profile:
-    | AuthProfile
-    | null,
+  profile: AuthProfile | null,
   permissions: string[],
 ): boolean {
-  if (
-    !profile ||
-    !profile.isActive
-  ) {
+  if (!profile || !profile.isActive) {
     return false;
   }
 
-  return permissions.some(
-    (permission) =>
-      profile.permissions.includes(
-        permission,
-      ),
+  return permissions.some((permission) =>
+    profile.permissions.includes(permission),
   );
 }
 
 function profileHasAllPermissions(
-  profile:
-    | AuthProfile
-    | null,
+  profile: AuthProfile | null,
   permissions: string[],
 ): boolean {
-  if (
-    !profile ||
-    !profile.isActive
-  ) {
+  if (!profile || !profile.isActive) {
     return false;
   }
 
-  return permissions.every(
-    (permission) =>
-      profile.permissions.includes(
-        permission,
-      ),
+  return permissions.every((permission) =>
+    profile.permissions.includes(permission),
   );
 }
 
 export function useAuthSession() {
-  const [
-    state,
-    setState,
-  ] =
-    useState<SessionSnapshot>(
-      snapshot,
-    );
+  const state = useSyncExternalStore(
+    subscribeToSession,
+    getSessionSnapshot,
+    getSessionSnapshot,
+  );
 
   useEffect(() => {
     attachGlobalListeners();
-
-    listeners.add(
-      setState,
-    );
-
-    setState(snapshot);
-
     void loadSharedSession();
-
-    return () => {
-      listeners.delete(
-        setState,
-      );
-    };
   }, []);
 
-  const profile =
-    state.profile;
+  const profile = state.profile;
 
-  const hasPermission =
-    useCallback(
-      (
-        permission: string,
-      ): boolean =>
-        profileHasPermission(
-          profile,
-          permission,
-        ),
-      [profile],
-    );
+  const hasPermission = useCallback(
+    (permission: string): boolean => profileHasPermission(profile, permission),
+    [profile],
+  );
 
-  const hasAnyPermission =
-    useCallback(
-      (
-        permissions: string[],
-      ): boolean =>
-        profileHasAnyPermission(
-          profile,
-          permissions,
-        ),
-      [profile],
-    );
+  const hasAnyPermission = useCallback(
+    (permissions: string[]): boolean =>
+      profileHasAnyPermission(profile, permissions),
+    [profile],
+  );
 
-  const hasAllPermissions =
-    useCallback(
-      (
-        permissions: string[],
-      ): boolean =>
-        profileHasAllPermissions(
-          profile,
-          permissions,
-        ),
-      [profile],
-    );
+  const hasAllPermissions = useCallback(
+    (permissions: string[]): boolean =>
+      profileHasAllPermissions(profile, permissions),
+    [profile],
+  );
 
-  const refresh =
-    useCallback(
-      () =>
-        loadSharedSession(
-          true,
-        ),
-      [],
-    );
+  const refresh = useCallback(() => loadSharedSession(true), []);
 
   return {
-    user:
-      state.user,
+    user: state.user,
 
     profile,
 
-    permissions:
-      profile?.permissions ?? [],
+    permissions: profile?.permissions ?? [],
 
-    isLoading:
-      state.isLoading,
+    isLoading: state.isLoading,
 
-    isAuthenticated:
-      state.user !== null,
+    isAuthenticated: state.user !== null,
 
-    isActive:
-      profile?.isActive ===
-      true,
+    isActive: profile?.isActive === true,
 
-    isStaff:
-      profile?.isStaff ===
-      true,
+    isStaff: profile?.isStaff === true,
 
-    canAccessWebsiteAdmin:
-      profile
-        ?.canAccessWebsiteAdmin ===
-      true,
+    canAccessWebsiteAdmin: profile?.canAccessWebsiteAdmin === true,
 
-    canAccessErp:
-      profile
-        ?.canAccessErp ===
-      true,
+    canAccessErp: profile?.canAccessErp === true,
 
     hasPermission,
     hasAnyPermission,

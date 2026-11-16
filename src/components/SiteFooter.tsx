@@ -1,8 +1,5 @@
 import { APP_VERSION } from "../lib/appVersion";
 
-function short(thing: string, n: number) {
-  return thing ? thing.slice(0, n) : "";
-}
 
 export default function SiteFooter() {
   return (

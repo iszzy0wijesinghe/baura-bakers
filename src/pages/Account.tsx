@@ -1,3 +1,5 @@
+/** @format */
+
 import {
   CheckCircle2,
   ChevronRight,
@@ -12,7 +14,7 @@ import {
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
 import {
@@ -65,17 +67,14 @@ export default function Account() {
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
 
-  useEffect(() => {
-    void loadAccount();
-  }, []);
-
-  async function loadAccount() {
+  const loadAccount = useCallback(async () => {
     setIsLoading(true);
     setErrorText("");
     setSuccessText("");
 
     try {
       await claimAccountOrders(getBauraDeviceId());
+
       const account = await getAccountSummary();
 
       if (account.user.role === "admin") {
@@ -102,7 +101,11 @@ export default function Account() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [navigate]);
+
+  useEffect(() => {
+    void loadAccount();
+  }, [loadAccount]);
 
   async function handleSaveProfile() {
     if (!user) return;
@@ -124,8 +127,7 @@ export default function Account() {
       const updatedUser = await updateAccountProfile({
         name: cleanName,
         phone: cleanPhone || null,
-        default_delivery_address:
-          profile?.default_delivery_address || null,
+        default_delivery_address: profile?.default_delivery_address || null,
       });
 
       const updatedProfile = toProfile(updatedUser);
@@ -185,8 +187,7 @@ export default function Account() {
             type="button"
             onClick={handleLogout}
             className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-red-200 bg-red-50 text-red-700 sm:h-auto sm:w-auto sm:gap-2 sm:rounded-full sm:px-3 sm:py-2 sm:text-xs sm:font-semibold"
-            aria-label="Logout"
-          >
+            aria-label="Logout">
             <LogOut size={15} />
             <span className="hidden sm:inline">Logout</span>
           </button>
@@ -233,8 +234,7 @@ export default function Account() {
                 e.preventDefault();
                 handleSaveProfile();
               }}
-              className="rounded-[1.35rem] border border-black/10 bg-white/75 p-3 shadow-[0_14px_36px_rgba(47,31,22,0.07)] backdrop-blur sm:rounded-[1.6rem] sm:p-5 sm:shadow-[0_18px_45px_rgba(47,31,22,0.08)]"
-            >
+              className="rounded-[1.35rem] border border-black/10 bg-white/75 p-3 shadow-[0_14px_36px_rgba(47,31,22,0.07)] backdrop-blur sm:rounded-[1.6rem] sm:p-5 sm:shadow-[0_18px_45px_rgba(47,31,22,0.08)]">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-brand-ink/45 sm:text-[10px] sm:tracking-[0.22em]">
@@ -298,8 +298,7 @@ export default function Account() {
                     isSaving
                       ? "cursor-not-allowed bg-brand-ink/50"
                       : "bg-brand-ink hover:bg-brand-ink/95",
-                  ].join(" ")}
-                >
+                  ].join(" ")}>
                   <Save size={16} />
                   {isSaving ? "Saving..." : "Save changes"}
                 </button>
@@ -352,11 +351,7 @@ export default function Account() {
 
                 <StatCard label="Pending" value={stats.pending} icon={Clock3} />
 
-                <StatCard
-                  label="Paid"
-                  value={stats.paid}
-                  icon={CheckCircle2}
-                />
+                <StatCard label="Paid" value={stats.paid} icon={CheckCircle2} />
 
                 <StatCard
                   label="Completed"
@@ -428,15 +423,15 @@ function ActionLink({
         dark
           ? "border-brand-ink bg-brand-ink text-brand-bg hover:bg-brand-ink/95"
           : "border-black/10 bg-white text-brand-ink hover:bg-white/90",
-      ].join(" ")}
-    >
+      ].join(" ")}>
       <span className="flex min-w-0 items-center gap-2.5 sm:gap-3">
         <span
           className={[
             "grid h-9 w-9 shrink-0 place-items-center rounded-2xl sm:h-10 sm:w-10",
-            dark ? "bg-brand-bg/10 text-brand-bg" : "bg-brand-bg text-brand-ink",
-          ].join(" ")}
-        >
+            dark
+              ? "bg-brand-bg/10 text-brand-bg"
+              : "bg-brand-bg text-brand-ink",
+          ].join(" ")}>
           <Icon size={17} />
         </span>
 
@@ -449,8 +444,7 @@ function ActionLink({
             className={[
               "mt-0.5 block truncate text-[11px] sm:text-xs",
               dark ? "text-brand-bg/60" : "text-brand-ink/50",
-            ].join(" ")}
-          >
+            ].join(" ")}>
             {description}
           </span>
         </span>

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import Page from "../components/Page";
 import Section from "../components/Section";
 import allMenuImage from "../assets/picnic-basket.webp";

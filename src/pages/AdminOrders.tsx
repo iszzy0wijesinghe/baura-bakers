@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+/** @format */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
 import { getCurrentUser } from "../lib/auth";
@@ -112,7 +114,7 @@ export default function AdminOrders() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState("");
 
-  async function verifyAdmin() {
+  const verifyAdmin = useCallback(async (): Promise<boolean> => {
     const user = await getCurrentUser();
 
     if (!user) {
@@ -126,40 +128,34 @@ export default function AdminOrders() {
     }
 
     return true;
-  }
+  }, [navigate]);
 
-  async function loadOrders() {
+  const loadOrders = useCallback(async () => {
     setIsLoading(true);
     setErrorText("");
 
-    const isAdmin = await verifyAdmin();
-    if (!isAdmin) return;
-
-    let rows: AdminOrder[];
-
     try {
-      rows = (await getAllAdminOrders()) as AdminOrder[];
+      const isAdmin = await verifyAdmin();
+
+      if (!isAdmin) return;
+
+      const rows = (await getAllAdminOrders()) as AdminOrder[];
+
+      setOrders(rows);
+
+      setSelectedId((current) => current ?? rows[0]?.id ?? null);
     } catch (error) {
       setErrorText(
-        error instanceof Error
-          ? error.message
-          : "Could not load MySQL orders.",
+        error instanceof Error ? error.message : "Could not load MySQL orders.",
       );
+    } finally {
       setIsLoading(false);
-      return;
     }
-    setOrders(rows);
-
-    if (!selectedId && rows.length > 0) {
-      setSelectedId(rows[0].id);
-    }
-
-    setIsLoading(false);
-  }
+  }, [verifyAdmin]);
 
   useEffect(() => {
-    loadOrders();
-  }, []);
+    void loadOrders();
+  }, [loadOrders]);
 
   const filteredOrders = useMemo(() => {
     const q = searchText.trim().toLowerCase();
@@ -214,9 +210,7 @@ export default function AdminOrders() {
       const result = await sendAdminOrderConfirmationEmail(orderId);
 
       setOrders((prev) =>
-        prev.map((order) =>
-          order.id === orderId ? result.order : order,
-        ),
+        prev.map((order) => (order.id === orderId ? result.order : order)),
       );
 
       alert(
@@ -285,16 +279,14 @@ export default function AdminOrders() {
           <div className="flex flex-wrap gap-2">
             <Link
               to="/admin/dashboard"
-              className="rounded-2xl border border-brand-ink/20 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white/80"
-            >
+              className="rounded-2xl border border-brand-ink/20 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white/80">
               Dashboard
             </Link>
 
             <button
               type="button"
               onClick={loadOrders}
-              className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95"
-            >
+              className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95">
               Refresh
             </button>
           </div>
@@ -325,8 +317,7 @@ export default function AdminOrders() {
             <select
               value={paymentFilter}
               onChange={(e) => setPaymentFilter(e.target.value)}
-              className="rounded-2xl border border-black/10 bg-white/75 px-4 py-3 text-sm font-semibold text-brand-ink outline-none"
-            >
+              className="rounded-2xl border border-black/10 bg-white/75 px-4 py-3 text-sm font-semibold text-brand-ink outline-none">
               <option value="ALL">All payments</option>
               {paymentStatuses.map((status) => (
                 <option key={status} value={status}>
@@ -338,8 +329,7 @@ export default function AdminOrders() {
             <select
               value={orderFilter}
               onChange={(e) => setOrderFilter(e.target.value)}
-              className="rounded-2xl border border-black/10 bg-white/75 px-4 py-3 text-sm font-semibold text-brand-ink outline-none"
-            >
+              className="rounded-2xl border border-black/10 bg-white/75 px-4 py-3 text-sm font-semibold text-brand-ink outline-none">
               <option value="ALL">All order status</option>
               {orderStatuses.map((status) => (
                 <option key={status} value={status}>
@@ -391,8 +381,7 @@ export default function AdminOrders() {
                             active
                               ? "border-brand-ink/30 bg-brand-bg shadow-sm"
                               : "border-black/10 bg-white/60 hover:bg-white/80",
-                          ].join(" ")}
-                        >
+                          ].join(" ")}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold text-brand-ink">
@@ -416,8 +405,7 @@ export default function AdminOrders() {
                               className={[
                                 "rounded-full border px-3 py-1 text-[10px] font-semibold",
                                 getStatusClass(order.payment_status),
-                              ].join(" ")}
-                            >
+                              ].join(" ")}>
                               {order.payment_status}
                             </span>
 
@@ -425,8 +413,7 @@ export default function AdminOrders() {
                               className={[
                                 "rounded-full border px-3 py-1 text-[10px] font-semibold",
                                 getStatusClass(order.order_status),
-                              ].join(" ")}
-                            >
+                              ].join(" ")}>
                               {order.order_status}
                             </span>
                           </div>
@@ -439,6 +426,7 @@ export default function AdminOrders() {
             </div>
 
             <OrderDetailsPanel
+              key={selectedOrder?.id ?? "no-order"}
               order={selectedOrder}
               savingId={savingId}
               onUpdate={updateOrder}
@@ -478,11 +466,7 @@ function OrderDetailsPanel({
   ) => void;
   onSendConfirmationEmail: (orderId: string) => void;
 }) {
-  const [noteDraft, setNoteDraft] = useState("");
-
-  useEffect(() => {
-    setNoteDraft(order?.admin_note || "");
-  }, [order?.id]);
+  const [noteDraft, setNoteDraft] = useState(() => order?.admin_note || "");
 
   if (!order) {
     return (
@@ -555,8 +539,7 @@ function OrderDetailsPanel({
               href={order.delivery_location_url}
               target="_blank"
               rel="noreferrer"
-              className="mt-3 inline-flex rounded-full border border-brand-ink/20 bg-white/70 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white"
-            >
+              className="mt-3 inline-flex rounded-full border border-brand-ink/20 bg-white/70 px-4 py-2 text-xs font-semibold text-brand-ink hover:bg-white">
               Open delivery location
             </a>
           )}
@@ -575,8 +558,7 @@ function OrderDetailsPanel({
                   payment_status: e.target.value,
                 })
               }
-              className="w-full rounded-2xl border border-black/10 bg-white/75 px-4 py-3 text-sm font-semibold text-brand-ink outline-none"
-            >
+              className="w-full rounded-2xl border border-black/10 bg-white/75 px-4 py-3 text-sm font-semibold text-brand-ink outline-none">
               {paymentStatuses.map((status) => (
                 <option key={status} value={status}>
                   {status}
@@ -597,8 +579,7 @@ function OrderDetailsPanel({
                   order_status: e.target.value,
                 })
               }
-              className="w-full rounded-2xl border border-black/10 bg-white/75 px-4 py-3 text-sm font-semibold text-brand-ink outline-none"
-            >
+              className="w-full rounded-2xl border border-black/10 bg-white/75 px-4 py-3 text-sm font-semibold text-brand-ink outline-none">
               {orderStatuses.map((status) => (
                 <option key={status} value={status}>
                   {status}
@@ -617,8 +598,7 @@ function OrderDetailsPanel({
             {(order.order_items || []).map((item) => (
               <div
                 key={item.id}
-                className="flex items-start justify-between gap-4 py-3"
-              >
+                className="flex items-start justify-between gap-4 py-3">
                 <div>
                   <p className="text-sm font-semibold text-brand-ink">
                     {item.product_name}
@@ -661,8 +641,7 @@ function OrderDetailsPanel({
               isSaving
                 ? "cursor-not-allowed bg-brand-ink/50"
                 : "bg-brand-ink hover:bg-brand-ink/95",
-            ].join(" ")}
-          >
+            ].join(" ")}>
             {isSaving ? "Saving..." : "Save note"}
           </button>
         </div>
@@ -680,8 +659,7 @@ function OrderDetailsPanel({
                   isSaving
                     ? "cursor-not-allowed bg-brand-ink/45"
                     : "bg-green-700 hover:bg-green-800",
-                ].join(" ")}
-              >
+                ].join(" ")}>
                 {isSaving ? "Sending email..." : "Send confirmation email"}
               </button>
             )}
@@ -696,15 +674,13 @@ function OrderDetailsPanel({
             href={`https://wa.me/${whatsappPhone}`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95"
-          >
+            className="rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg hover:bg-brand-ink/95">
             WhatsApp customer
           </a>
 
           <a
             href={`tel:${order.contact_number}`}
-            className="rounded-2xl border border-brand-ink/20 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white/80"
-          >
+            className="rounded-2xl border border-brand-ink/20 bg-white/60 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white/80">
             Call customer
           </a>
         </div>

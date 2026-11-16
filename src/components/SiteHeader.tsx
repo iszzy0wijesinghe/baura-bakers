@@ -25,6 +25,10 @@ import logo from "../../images/logos/logo.webp";
 import { logout } from "../lib/auth";
 import { useAuthSession } from "../lib/useAuthSession";
 
+type AuthSession = ReturnType<typeof useAuthSession>;
+type HeaderUser = AuthSession["user"];
+type HeaderProfile = AuthSession["profile"];
+
 const links: {
   to: string;
   label: string;
@@ -59,6 +63,13 @@ export default function SiteHeader() {
   const location = useLocation();
 
   const [open, setOpen] = useState(false);
+  const [previousPathname, setPreviousPathname] = useState(location.pathname);
+
+  if (previousPathname !== location.pathname) {
+    setPreviousPathname(location.pathname);
+    setOpen(false);
+  }
+
   const [scrolled, setScrolled] = useState(
     () =>
       typeof window !== "undefined" && window.scrollY > HEADER_SCROLL_THRESHOLD,
@@ -74,10 +85,6 @@ export default function SiteHeader() {
     setOpen(false);
     navigate("/");
   }
-
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -468,8 +475,8 @@ function DesktopAccountMenu({
   overlay,
   onLogout,
 }: {
-  user: any;
-  profile: any;
+  user: HeaderUser;
+  profile: HeaderProfile;
   canAccessWebsiteAdmin: boolean;
   isLoading: boolean;
   overlay: boolean;
@@ -768,8 +775,8 @@ function MobileAccountMenu({
   onClose,
   onLogout,
 }: {
-  user: any;
-  profile: any;
+  user: HeaderUser;
+  profile: HeaderProfile;
   canAccessWebsiteAdmin: boolean;
   isLoading: boolean;
   onClose: () => void;

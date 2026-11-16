@@ -145,8 +145,7 @@ export default function AdminUsers() {
     number | null
   >(null);
 
-  const [discardConfirmationOpen, setDiscardConfirmationOpen] =
-    useState(false);
+  const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
 
   const directoryRef = useRef<HTMLElement | null>(null);
   const panelCloseButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -160,7 +159,7 @@ export default function AdminUsers() {
     () =>
       roleFilter === null
         ? null
-        : roles.find((role) => getRoleValue(role) === roleFilter) ?? null,
+        : (roles.find((role) => getRoleValue(role) === roleFilter) ?? null),
     [roles, roleFilter],
   );
 
@@ -287,7 +286,20 @@ export default function AdminUsers() {
         return;
       }
 
-      requestClosePanel();
+      if (isDirty) {
+        setDiscardConfirmationOpen(true);
+        return;
+      }
+
+      setPanelOpen(false);
+      setPanelError("");
+      setFieldErrors({});
+      setPermissionSearch("");
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+      setDiscardConfirmationOpen(false);
+      setForm(EMPTY_FORM);
+      setInitialForm(EMPTY_FORM);
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -624,8 +636,7 @@ export default function AdminUsers() {
         <header>
           <Link
             to="/admin/dashboard"
-            className="group inline-flex items-center gap-2 text-xs font-semibold text-brand-ink/50 transition hover:text-brand-ink"
-          >
+            className="group inline-flex items-center gap-2 text-xs font-semibold text-brand-ink/50 transition hover:text-brand-ink">
             <ArrowLeft
               size={15}
               className="transition-transform duration-200 group-hover:-translate-x-0.5"
@@ -658,8 +669,7 @@ export default function AdminUsers() {
                   })
                 }
                 disabled={isRefreshing || isLoading}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-brand-ink/10 bg-white/55 px-4 text-sm font-semibold text-brand-ink/65 shadow-sm backdrop-blur transition hover:border-brand-ink/20 hover:bg-white/80 hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-45"
-              >
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-brand-ink/10 bg-white/55 px-4 text-sm font-semibold text-brand-ink/65 shadow-sm backdrop-blur transition hover:border-brand-ink/20 hover:bg-white/80 hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-45">
                 <RefreshCw
                   size={15}
                   className={isRefreshing ? "animate-spin" : ""}
@@ -672,8 +682,7 @@ export default function AdminUsers() {
                 type="button"
                 onClick={() => void openCreatePanel()}
                 disabled={roles.length === 0}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-brand-ink px-5 text-sm font-semibold text-brand-bg shadow-[0_10px_24px_rgba(55,38,25,0.15)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(55,38,25,0.2)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
-              >
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-brand-ink px-5 text-sm font-semibold text-brand-bg shadow-[0_10px_24px_rgba(55,38,25,0.15)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(55,38,25,0.2)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0">
                 <Plus size={17} />
                 Add user
               </button>
@@ -729,8 +738,7 @@ export default function AdminUsers() {
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <form
                 onSubmit={handleSearch}
-                className="flex min-w-0 flex-1 gap-2"
-              >
+                className="flex min-w-0 flex-1 gap-2">
                 <div className="relative min-w-0 flex-1 xl:max-w-[480px]">
                   <Search
                     size={16}
@@ -758,8 +766,7 @@ export default function AdminUsers() {
                         }
                       }}
                       aria-label="Clear search"
-                      className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-brand-ink/35 transition hover:bg-brand-ink/[0.06] hover:text-brand-ink"
-                    >
+                      className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-brand-ink/35 transition hover:bg-brand-ink/[0.06] hover:text-brand-ink">
                       <X size={14} />
                     </button>
                   )}
@@ -767,8 +774,7 @@ export default function AdminUsers() {
 
                 <button
                   type="submit"
-                  className="h-11 shrink-0 rounded-2xl border border-brand-ink/10 bg-white/65 px-4 text-sm font-semibold text-brand-ink/65 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink sm:px-5"
-                >
+                  className="h-11 shrink-0 rounded-2xl border border-brand-ink/10 bg-white/65 px-4 text-sm font-semibold text-brand-ink/65 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink sm:px-5">
                   Search
                 </button>
               </form>
@@ -791,15 +797,11 @@ export default function AdminUsers() {
                     setPage(1);
                   }}
                   aria-label="Filter users by role"
-                  className="h-11 min-w-[160px] rounded-2xl border border-brand-ink/10 bg-white/65 px-3.5 text-sm font-semibold text-brand-ink/65 outline-none transition hover:border-brand-ink/20 focus:border-brand-ink/25 focus:bg-white focus:ring-2 focus:ring-brand-ink/[0.06]"
-                >
+                  className="h-11 min-w-[160px] rounded-2xl border border-brand-ink/10 bg-white/65 px-3.5 text-sm font-semibold text-brand-ink/65 outline-none transition hover:border-brand-ink/20 focus:border-brand-ink/25 focus:bg-white focus:ring-2 focus:ring-brand-ink/[0.06]">
                   <option value="">All roles</option>
 
                   {roles.map((role) => (
-                    <option
-                      key={getRoleValue(role)}
-                      value={getRoleValue(role)}
-                    >
+                    <option key={getRoleValue(role)} value={getRoleValue(role)}>
                       {getRoleLabel(role)}
                     </option>
                   ))}
@@ -812,8 +814,7 @@ export default function AdminUsers() {
                     setPage(1);
                   }}
                   aria-label="Filter users by status"
-                  className="h-11 min-w-[150px] rounded-2xl border border-brand-ink/10 bg-white/65 px-3.5 text-sm font-semibold text-brand-ink/65 outline-none transition hover:border-brand-ink/20 focus:border-brand-ink/25 focus:bg-white focus:ring-2 focus:ring-brand-ink/[0.06]"
-                >
+                  className="h-11 min-w-[150px] rounded-2xl border border-brand-ink/10 bg-white/65 px-3.5 text-sm font-semibold text-brand-ink/65 outline-none transition hover:border-brand-ink/20 focus:border-brand-ink/25 focus:bg-white focus:ring-2 focus:ring-brand-ink/[0.06]">
                   <option value="">All statuses</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
@@ -823,8 +824,7 @@ export default function AdminUsers() {
                   <button
                     type="button"
                     onClick={clearFilters}
-                    className="h-11 rounded-2xl px-3 text-xs font-semibold text-brand-ink/45 transition hover:bg-brand-ink/[0.04] hover:text-brand-ink"
-                  >
+                    className="h-11 rounded-2xl px-3 text-xs font-semibold text-brand-ink/45 transition hover:bg-brand-ink/[0.04] hover:text-brand-ink">
                     Clear
                   </button>
                 )}
@@ -978,9 +978,7 @@ export default function AdminUsers() {
               : `${statusConfirmation.user.name} will no longer be able to access protected services until the account is reactivated.`
           }
           confirmLabel={
-            statusConfirmation.nextActive
-              ? "Activate user"
-              : "Deactivate user"
+            statusConfirmation.nextActive ? "Activate user" : "Deactivate user"
           }
           danger={!statusConfirmation.nextActive}
           loading={statusUpdatingUserId === statusConfirmation.user.id}
@@ -1042,14 +1040,12 @@ function UserTable({
             return (
               <tr
                 key={user.id}
-                className="group border-b border-brand-ink/[0.07] last:border-b-0 transition duration-200 hover:bg-white/65"
-              >
+                className="group border-b border-brand-ink/[0.07] last:border-b-0 transition duration-200 hover:bg-white/65">
                 <Td>
                   <button
                     type="button"
                     onClick={() => onEdit(user)}
-                    className="flex max-w-full items-center gap-3 text-left focus:outline-none"
-                  >
+                    className="flex max-w-full items-center gap-3 text-left focus:outline-none">
                     <Avatar name={user.name} active={user.is_active} />
 
                     <div className="min-w-0">
@@ -1075,10 +1071,7 @@ function UserTable({
                 <Td>
                   <div className="space-y-1">
                     <div className="flex items-center gap-1.5">
-                      <Mail
-                        size={12}
-                        className="shrink-0 text-brand-ink/30"
-                      />
+                      <Mail size={12} className="shrink-0 text-brand-ink/30" />
 
                       <p className="max-w-[220px] truncate text-[12px] font-medium text-brand-ink/65">
                         {user.email || "No email"}
@@ -1086,10 +1079,7 @@ function UserTable({
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <Phone
-                        size={12}
-                        className="shrink-0 text-brand-ink/30"
-                      />
+                      <Phone size={12} className="shrink-0 text-brand-ink/30" />
 
                       <p className="text-[11px] text-brand-ink/42">
                         {user.phone || "No phone"}
@@ -1118,8 +1108,7 @@ function UserTable({
                           user.has_password
                             ? "bg-emerald-500/10 text-emerald-700"
                             : "bg-brand-ink/[0.05] text-brand-ink/30",
-                        ].join(" ")}
-                      >
+                        ].join(" ")}>
                         {user.has_password ? (
                           <Check size={11} strokeWidth={2.5} />
                         ) : (
@@ -1155,22 +1144,18 @@ function UserTable({
                       onClick={() => onEdit(user)}
                       title="Edit user"
                       aria-label={`Edit ${user.name}`}
-                      className="grid h-9 w-9 place-items-center rounded-xl border border-transparent text-brand-ink/40 transition hover:border-brand-ink/10 hover:bg-white hover:text-brand-ink hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-ink/10"
-                    >
+                      className="grid h-9 w-9 place-items-center rounded-xl border border-transparent text-brand-ink/40 transition hover:border-brand-ink/10 hover:bg-white hover:text-brand-ink hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-ink/10">
                       <Pencil size={14} />
                     </button>
 
                     <button
                       type="button"
                       disabled={
-                        isUpdatingStatus ||
-                        (isCurrentUser && user.is_active)
+                        isUpdatingStatus || (isCurrentUser && user.is_active)
                       }
                       onClick={() => onToggleStatus(user)}
                       title={
-                        user.is_active
-                          ? "Deactivate user"
-                          : "Activate user"
+                        user.is_active ? "Deactivate user" : "Activate user"
                       }
                       aria-label={
                         user.is_active
@@ -1182,8 +1167,7 @@ function UserTable({
                         user.is_active
                           ? "text-brand-ink/35 hover:border-red-100 hover:bg-red-50/80 hover:text-red-600"
                           : "text-brand-ink/35 hover:border-emerald-100 hover:bg-emerald-50/80 hover:text-emerald-700",
-                      ].join(" ")}
-                    >
+                      ].join(" ")}>
                       {isUpdatingStatus ? (
                         <RefreshCw size={14} className="animate-spin" />
                       ) : user.is_active ? (
@@ -1197,8 +1181,7 @@ function UserTable({
                       type="button"
                       onClick={() => onEdit(user)}
                       aria-label={`Open ${user.name}`}
-                      className="grid h-9 w-8 place-items-center rounded-xl text-brand-ink/20 transition group-hover:text-brand-ink/45 hover:bg-brand-ink/[0.04] hover:text-brand-ink focus:outline-none"
-                    >
+                      className="grid h-9 w-8 place-items-center rounded-xl text-brand-ink/20 transition group-hover:text-brand-ink/45 hover:bg-brand-ink/[0.04] hover:text-brand-ink focus:outline-none">
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -1232,8 +1215,7 @@ function MobileUserCard({
       <button
         type="button"
         onClick={onEdit}
-        className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-white/55"
-      >
+        className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-white/55">
         <Avatar name={user.name} active={user.is_active} large />
 
         <div className="min-w-0 flex-1">
@@ -1263,10 +1245,7 @@ function MobileUserCard({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <RoleBadge
-              label={getUserRoleLabel(user)}
-              isStaff={user.is_staff}
-            />
+            <RoleBadge label={getUserRoleLabel(user)} isStaff={user.is_staff} />
 
             <StatusBadge active={user.is_active} compact />
           </div>
@@ -1309,26 +1288,21 @@ function MobileUserCard({
           <button
             type="button"
             onClick={onEdit}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-brand-ink/10 bg-white/60 px-3 text-xs font-semibold text-brand-ink/60 transition hover:bg-white hover:text-brand-ink"
-          >
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-brand-ink/10 bg-white/60 px-3 text-xs font-semibold text-brand-ink/60 transition hover:bg-white hover:text-brand-ink">
             <Pencil size={13} />
             Edit
           </button>
 
           <button
             type="button"
-            disabled={
-              isUpdatingStatus ||
-              (isCurrentUser && user.is_active)
-            }
+            disabled={isUpdatingStatus || (isCurrentUser && user.is_active)}
             onClick={onToggleStatus}
             className={[
               "inline-flex h-9 min-w-[94px] items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-30",
               user.is_active
                 ? "border-red-100 bg-red-50/60 text-red-600 hover:bg-red-50"
                 : "border-emerald-100 bg-emerald-50/60 text-emerald-700 hover:bg-emerald-50",
-            ].join(" ")}
-          >
+            ].join(" ")}>
             {isUpdatingStatus ? (
               <>
                 <RefreshCw size={13} className="animate-spin" />
@@ -1374,8 +1348,7 @@ function ConfirmationModal({
       className="fixed inset-0 z-[70] grid place-items-center px-4 py-8"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="confirmation-modal-title"
-    >
+      aria-labelledby="confirmation-modal-title">
       <button
         type="button"
         aria-label="Close confirmation"
@@ -1391,13 +1364,8 @@ function ConfirmationModal({
               danger
                 ? "bg-red-500/10 text-red-600"
                 : "bg-brand-ink/[0.06] text-brand-ink/60",
-            ].join(" ")}
-          >
-            {danger ? (
-              <XCircle size={20} />
-            ) : (
-              <CheckCircle2 size={20} />
-            )}
+            ].join(" ")}>
+            {danger ? <XCircle size={20} /> : <CheckCircle2 size={20} />}
           </div>
 
           <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-ink/35">
@@ -1406,8 +1374,7 @@ function ConfirmationModal({
 
           <h2
             id="confirmation-modal-title"
-            className="mt-1 text-xl font-semibold tracking-[-0.03em] text-brand-ink"
-          >
+            className="mt-1 text-xl font-semibold tracking-[-0.03em] text-brand-ink">
             {title}
           </h2>
 
@@ -1421,8 +1388,7 @@ function ConfirmationModal({
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="h-10 rounded-xl border border-brand-ink/10 bg-white/50 px-4 text-xs font-semibold text-brand-ink/55 transition hover:bg-white hover:text-brand-ink disabled:opacity-40"
-          >
+            className="h-10 rounded-xl border border-brand-ink/10 bg-white/50 px-4 text-xs font-semibold text-brand-ink/55 transition hover:bg-white hover:text-brand-ink disabled:opacity-40">
             Cancel
           </button>
 
@@ -1435,11 +1401,8 @@ function ConfirmationModal({
               danger
                 ? "bg-red-600 text-white hover:bg-red-700"
                 : "bg-brand-ink text-brand-bg hover:-translate-y-0.5",
-            ].join(" ")}
-          >
-            {loading && (
-              <RefreshCw size={13} className="animate-spin" />
-            )}
+            ].join(" ")}>
+            {loading && <RefreshCw size={13} className="animate-spin" />}
 
             {loading ? "Updating..." : confirmLabel}
           </button>
@@ -1467,8 +1430,7 @@ function Metric({
         "border-b border-brand-ink/[0.07] odd:border-r",
         "lg:border-b-0 lg:border-r",
         last ? "lg:border-r-0" : "",
-      ].join(" ")}
-    >
+      ].join(" ")}>
       <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-brand-ink/[0.07] bg-white/55 text-brand-ink/50 shadow-sm">
         {icon}
       </div>
@@ -1500,11 +1462,8 @@ function Avatar({
       <div
         className={[
           "grid place-items-center rounded-xl border border-brand-ink/10 bg-brand-ink/[0.045] font-bold tracking-[-0.025em] text-brand-ink/60",
-          large
-            ? "h-12 w-12 text-[13px]"
-            : "h-10 w-10 text-[11px]",
-        ].join(" ")}
-      >
+          large ? "h-12 w-12 text-[13px]" : "h-10 w-10 text-[11px]",
+        ].join(" ")}>
         {initials(name)}
       </div>
 
@@ -1519,13 +1478,7 @@ function Avatar({
   );
 }
 
-function RoleBadge({
-  label,
-  isStaff,
-}: {
-  label: string;
-  isStaff: boolean;
-}) {
+function RoleBadge({ label, isStaff }: { label: string; isStaff: boolean }) {
   return (
     <div>
       <span className="inline-flex rounded-full border border-brand-ink/10 bg-white/55 px-2.5 py-1 text-[10px] font-semibold text-brand-ink/65">
@@ -1550,14 +1503,11 @@ function StatusBadge({
     <span
       className={[
         "inline-flex items-center gap-1.5 rounded-full border font-semibold",
-        compact
-          ? "px-2.5 py-1 text-[10px]"
-          : "px-2.5 py-1.5 text-[10px]",
+        compact ? "px-2.5 py-1 text-[10px]" : "px-2.5 py-1.5 text-[10px]",
         active
           ? "border-emerald-200/70 bg-emerald-50/70 text-emerald-700"
           : "border-red-200/70 bg-red-50/70 text-red-600",
-      ].join(" ")}
-    >
+      ].join(" ")}>
       <span
         className={[
           "h-1.5 w-1.5 rounded-full",
@@ -1570,13 +1520,7 @@ function StatusBadge({
   );
 }
 
-function ContactRow({
-  icon,
-  value,
-}: {
-  icon: ReactNode;
-  value: string;
-}) {
+function ContactRow({ icon, value }: { icon: ReactNode; value: string }) {
   return (
     <div className="flex min-w-0 items-start gap-2 text-brand-ink/45">
       <span className="mt-0.5 shrink-0">{icon}</span>
@@ -1603,8 +1547,7 @@ function FilterChip({
         type="button"
         onClick={onRemove}
         aria-label={`Remove ${label} filter`}
-        className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-brand-ink/35 transition hover:bg-brand-ink/[0.07] hover:text-brand-ink"
-      >
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-brand-ink/35 transition hover:bg-brand-ink/[0.07] hover:text-brand-ink">
         <X size={11} />
       </button>
     </span>
@@ -1649,8 +1592,7 @@ function Pagination({
           type="button"
           disabled={disabled || pagination.current_page <= 1}
           onClick={() => onPageChange(pagination.current_page - 1)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-brand-ink/10 bg-white/45 px-3 text-xs font-semibold text-brand-ink/55 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-30"
-        >
+          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-brand-ink/10 bg-white/45 px-3 text-xs font-semibold text-brand-ink/55 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-30">
           <ArrowLeft size={13} />
           Previous
         </button>
@@ -1663,8 +1605,7 @@ function Pagination({
           type="button"
           disabled={disabled || !pagination.has_more}
           onClick={() => onPageChange(pagination.current_page + 1)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-brand-ink/10 bg-white/45 px-3 text-xs font-semibold text-brand-ink/55 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-30"
-        >
+          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-brand-ink/10 bg-white/45 px-3 text-xs font-semibold text-brand-ink/55 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-30">
           Next
           <ArrowRight size={13} />
         </button>
@@ -1690,8 +1631,7 @@ function Notice({
         type === "error"
           ? "border-red-200/80 bg-red-50/80 text-red-700"
           : "border-emerald-200/80 bg-emerald-50/80 text-emerald-800",
-      ].join(" ")}
-    >
+      ].join(" ")}>
       <div className="flex min-w-0 items-start gap-2.5">
         {type === "error" ? (
           <XCircle size={16} className="mt-0.5 shrink-0" />
@@ -1706,8 +1646,7 @@ function Notice({
         type="button"
         onClick={onClose}
         aria-label="Dismiss"
-        className="grid h-6 w-6 shrink-0 place-items-center rounded-full opacity-45 transition hover:bg-black/[0.04] hover:opacity-100"
-      >
+        className="grid h-6 w-6 shrink-0 place-items-center rounded-full opacity-45 transition hover:bg-black/[0.04] hover:opacity-100">
         <X size={13} />
       </button>
     </div>
@@ -1745,8 +1684,7 @@ function EmptyState({
         <button
           type="button"
           onClick={onClear}
-          className="mt-5 rounded-xl border border-brand-ink/10 bg-white/55 px-4 py-2 text-xs font-semibold text-brand-ink/60 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink"
-        >
+          className="mt-5 rounded-xl border border-brand-ink/10 bg-white/55 px-4 py-2 text-xs font-semibold text-brand-ink/60 transition hover:border-brand-ink/20 hover:bg-white hover:text-brand-ink">
           Clear all filters
         </button>
       )}
@@ -1758,15 +1696,10 @@ function LoadingState({ text }: { text: string }) {
   return (
     <div className="px-5 py-16 text-center">
       <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl border border-brand-ink/10 bg-white/55 shadow-sm">
-        <RefreshCw
-          size={17}
-          className="animate-spin text-brand-ink/40"
-        />
+        <RefreshCw size={17} className="animate-spin text-brand-ink/40" />
       </div>
 
-      <p className="mt-3 text-xs font-medium text-brand-ink/45">
-        {text}
-      </p>
+      <p className="mt-3 text-xs font-medium text-brand-ink/45">{text}</p>
     </div>
   );
 }
@@ -1775,8 +1708,7 @@ function UserTableSkeleton() {
   return (
     <div
       className="overflow-hidden rounded-[1.4rem] border border-brand-ink/10 bg-white/50 shadow-[0_14px_36px_rgba(55,38,25,0.04)] backdrop-blur"
-      aria-label="Loading users"
-    >
+      aria-label="Loading users">
       <div className="hidden md:block">
         <div className="grid grid-cols-[1.45fr_1.45fr_.8fr_.75fr_1fr_.7fr_100px] gap-4 border-b border-brand-ink/10 bg-brand-bg/25 px-4 py-3.5">
           {Array.from({ length: 7 }).map((_, index) => (
@@ -1790,8 +1722,7 @@ function UserTableSkeleton() {
         {Array.from({ length: 6 }).map((_, index) => (
           <div
             key={index}
-            className="grid grid-cols-[1.45fr_1.45fr_.8fr_.75fr_1fr_.7fr_100px] items-center gap-4 border-b border-brand-ink/[0.06] px-4 py-4 last:border-b-0"
-          >
+            className="grid grid-cols-[1.45fr_1.45fr_.8fr_.75fr_1fr_.7fr_100px] items-center gap-4 border-b border-brand-ink/[0.06] px-4 py-4 last:border-b-0">
             <div className="flex items-center gap-3">
               <SkeletonBlock className="h-10 w-10 rounded-xl" />
 
@@ -1828,8 +1759,7 @@ function UserTableSkeleton() {
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
-            className="rounded-[1.2rem] border border-brand-ink/[0.07] bg-white/35 p-4"
-          >
+            className="rounded-[1.2rem] border border-brand-ink/[0.07] bg-white/35 p-4">
             <div className="flex gap-3">
               <SkeletonBlock className="h-12 w-12 rounded-xl" />
 
@@ -1864,11 +1794,7 @@ function SkeletonLine({ className = "" }: { className?: string }) {
 }
 
 function SkeletonBlock({ className = "" }: { className?: string }) {
-  return (
-    <div
-      className={`animate-pulse bg-brand-ink/[0.07] ${className}`}
-    />
-  );
+  return <div className={`animate-pulse bg-brand-ink/[0.07] ${className}`} />;
 }
 
 function Th({ children }: { children: ReactNode }) {
@@ -1880,20 +1806,14 @@ function Th({ children }: { children: ReactNode }) {
 }
 
 function Td({ children }: { children: ReactNode }) {
-  return (
-    <td className="px-4 py-3.5 align-middle">
-      {children}
-    </td>
-  );
+  return <td className="px-4 py-3.5 align-middle">{children}</td>;
 }
 
 function userToForm(user: AdminManagedUser): UserForm {
   const overrides: PermissionOverrideMap = {};
 
   for (const override of user.permission_overrides ?? []) {
-    overrides[override.permission_id] = override.allowed
-      ? "allow"
-      : "deny";
+    overrides[override.permission_id] = override.allowed ? "allow" : "deny";
   }
 
   const profileIds =
@@ -1931,13 +1851,9 @@ function formsEqual(first: UserForm, second: UserForm): boolean {
     return false;
   }
 
-  const firstProfiles = [...first.permissionProfileIds].sort(
-    (a, b) => a - b,
-  );
+  const firstProfiles = [...first.permissionProfileIds].sort((a, b) => a - b);
 
-  const secondProfiles = [...second.permissionProfileIds].sort(
-    (a, b) => a - b,
-  );
+  const secondProfiles = [...second.permissionProfileIds].sort((a, b) => a - b);
 
   if (firstProfiles.length !== secondProfiles.length) {
     return false;
@@ -2072,10 +1988,7 @@ function validateUserForm(
 }
 
 function mapLaravelFieldErrors(error: unknown): FieldErrors {
-  if (
-    !(error instanceof LaravelApiError) ||
-    !error.payload?.errors
-  ) {
+  if (!(error instanceof LaravelApiError) || !error.payload?.errors) {
     return {};
   }
 
@@ -2092,9 +2005,7 @@ function mapLaravelFieldErrors(error: unknown): FieldErrors {
     default_delivery_address: "defaultDeliveryAddress",
   };
 
-  for (const [serverField, messages] of Object.entries(
-    error.payload.errors,
-  )) {
+  for (const [serverField, messages] of Object.entries(error.payload.errors)) {
     const localField = fieldMap[serverField];
 
     if (localField && messages?.[0]) {
@@ -2110,10 +2021,7 @@ function isValidEmail(value: string): boolean {
 }
 
 function initials(name: string): string {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const parts = name.trim().split(/\s+/).filter(Boolean);
 
   if (!parts.length) {
     return "?";
@@ -2143,10 +2051,7 @@ function formatDate(value: string | null): string {
   }).format(date);
 }
 
-function getErrorMessage(
-  error: unknown,
-  fallback: string,
-): string {
+function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof LaravelApiError) {
     if (error.payload?.errors) {
       for (const messages of Object.values(error.payload.errors)) {
@@ -2175,9 +2080,7 @@ function getRoleValue(role: AdminUserRole): number {
     return role.id;
   }
 
-  throw new Error(
-    "Admin role does not contain a numeric identifier.",
-  );
+  throw new Error("Admin role does not contain a numeric identifier.");
 }
 
 function getRoleLabel(role: AdminUserRole): string {
@@ -2222,17 +2125,12 @@ function getUserRoleLabel(user: AdminManagedUser): string {
   return "Unassigned";
 }
 
-function isExplicitStaffRole(
-  role: AdminUserRole | null,
-): boolean {
+function isExplicitStaffRole(role: AdminUserRole | null): boolean {
   if (!role || typeof role !== "object") {
     return false;
   }
 
-  if (
-    "is_staff" in role &&
-    typeof role.is_staff === "boolean"
-  ) {
+  if ("is_staff" in role && typeof role.is_staff === "boolean") {
     return role.is_staff;
   }
 

@@ -129,15 +129,6 @@ export function Field({
   );
 }
 
-export function getFieldClassName(hasError: boolean) {
-  return [
-    "h-11 w-full rounded-2xl border bg-white/60 px-3.5 text-sm font-medium text-brand-ink outline-none transition placeholder:text-brand-ink/28 disabled:cursor-not-allowed disabled:opacity-45",
-    hasError
-      ? "border-red-300 focus:border-red-400 focus:bg-white focus:ring-2 focus:ring-red-500/[0.08]"
-      : "border-brand-ink/10 hover:border-brand-ink/15 focus:border-brand-ink/25 focus:bg-white focus:ring-2 focus:ring-brand-ink/[0.055]",
-  ].join(" ");
-}
-
 export function Toggle({
   checked,
   disabled,

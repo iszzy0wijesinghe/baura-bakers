@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+/** @format */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Page from "../components/Page";
 import {
@@ -105,7 +107,7 @@ export default function AdminPromotions() {
   const [message, setMessage] = useState("");
   const [errorText, setErrorText] = useState("");
 
-  async function verifyAdmin() {
+  const verifyAdmin = useCallback(async () => {
     const user = await getCurrentUser();
 
     if (!user) {
@@ -119,9 +121,9 @@ export default function AdminPromotions() {
     }
 
     return true;
-  }
+  }, [navigate]);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
       setErrorText("");
@@ -147,11 +149,11 @@ export default function AdminPromotions() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [verifyAdmin]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadData();
+  }, [loadData]);
 
   const targetOptions = useMemo(() => {
     if (targetType === "CATEGORY") {
@@ -276,8 +278,7 @@ export default function AdminPromotions() {
 
           <Link
             to="/admin/dashboard"
-            className="rounded-2xl border border-brand-ink/20 bg-white/55 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white/75"
-          >
+            className="rounded-2xl border border-brand-ink/20 bg-white/55 px-5 py-3 text-sm font-semibold text-brand-ink hover:bg-white/75">
             Back to dashboard
           </Link>
         </header>
@@ -302,8 +303,7 @@ export default function AdminPromotions() {
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
             <form
               onSubmit={handleSave}
-              className="space-y-5 rounded-3xl border border-black/10 bg-white/55 p-5 shadow-sm backdrop-blur sm:p-6"
-            >
+              className="space-y-5 rounded-3xl border border-black/10 bg-white/55 p-5 shadow-sm backdrop-blur sm:p-6">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-xl font-semibold text-brand-ink">
                   {form.id ? "Edit promotion" : "Add promotion"}
@@ -313,8 +313,7 @@ export default function AdminPromotions() {
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="rounded-2xl border border-brand-ink/15 bg-white/60 px-4 py-2 text-xs font-semibold text-brand-ink"
-                  >
+                    className="rounded-2xl border border-brand-ink/15 bg-white/60 px-4 py-2 text-xs font-semibold text-brand-ink">
                     New promotion
                   </button>
                 )}
@@ -344,8 +343,7 @@ export default function AdminPromotions() {
                         promotionType: e.target.value as PromotionType,
                       }))
                     }
-                    className="input-admin"
-                  >
+                    className="input-admin">
                     {promotionTypes.map((type) => (
                       <option key={type} value={type}>
                         {type.replaceAll("_", " ")}
@@ -379,8 +377,7 @@ export default function AdminPromotions() {
                         discountType: e.target.value as DiscountType,
                       }))
                     }
-                    className="input-admin"
-                  >
+                    className="input-admin">
                     {discountTypes.map((type) => (
                       <option key={type} value={type}>
                         {type.replaceAll("_", " ")}
@@ -458,8 +455,7 @@ export default function AdminPromotions() {
                           couponCode: generateCouponCode("BAURA"),
                         }))
                       }
-                      className="rounded-2xl bg-brand-ink px-3 py-2 text-xs font-semibold text-brand-bg"
-                    >
+                      className="rounded-2xl bg-brand-ink px-3 py-2 text-xs font-semibold text-brand-bg">
                       Gen
                     </button>
                   </div>
@@ -546,8 +542,7 @@ export default function AdminPromotions() {
                       setTargetType(e.target.value as PromotionTargetType);
                       setTargetId("");
                     }}
-                    className="input-admin"
-                  >
+                    className="input-admin">
                     {targetTypes.map((type) => (
                       <option key={type} value={type}>
                         {type}
@@ -561,8 +556,7 @@ export default function AdminPromotions() {
                     value={targetId}
                     onChange={(e) => setTargetId(e.target.value)}
                     disabled={targetType === "ALL"}
-                    className="input-admin disabled:cursor-not-allowed disabled:bg-black/5"
-                  >
+                    className="input-admin disabled:cursor-not-allowed disabled:bg-black/5">
                     <option value="">
                       {targetType === "ALL" ? "All products" : "Select target"}
                     </option>
@@ -625,8 +619,7 @@ export default function AdminPromotions() {
               <button
                 type="submit"
                 disabled={isSaving || (targetType !== "ALL" && !targetId)}
-                className="w-full rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/45"
-              >
+                className="w-full rounded-2xl bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg disabled:cursor-not-allowed disabled:bg-brand-ink/45">
                 {isSaving ? "Saving..." : "Save promotion"}
               </button>
             </form>
@@ -640,8 +633,7 @@ export default function AdminPromotions() {
                 {promotions.map((promotion) => (
                   <article
                     key={promotion.id}
-                    className="rounded-2xl border border-black/10 bg-white/60 p-4"
-                  >
+                    className="rounded-2xl border border-black/10 bg-white/60 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h3 className="font-semibold text-brand-ink">
@@ -666,8 +658,7 @@ export default function AdminPromotions() {
                           promotion.isActive
                             ? "border-green-200 bg-green-50 text-green-700"
                             : "border-red-200 bg-red-50 text-red-700",
-                        ].join(" ")}
-                      >
+                        ].join(" ")}>
                         {promotion.isActive ? "Active" : "Inactive"}
                       </span>
                     </div>
@@ -675,8 +666,7 @@ export default function AdminPromotions() {
                     <button
                       type="button"
                       onClick={() => editPromotion(promotion)}
-                      className="mt-3 rounded-xl border border-brand-ink/20 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-white"
-                    >
+                      className="mt-3 rounded-xl border border-brand-ink/20 bg-white/70 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-white">
                       Edit
                     </button>
                   </article>

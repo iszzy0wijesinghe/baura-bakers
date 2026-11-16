@@ -1,8 +1,3 @@
-// const pickmeFoodLogo = "../../images/logos/pickme-food2.webp";
-// const uberEatsLogo = "../../images/logos/ubereats.webp";
-
-import pickmeFoodLogo from "../../images/logos/pickme-food2.webp";
-import uberEatsLogo from "../../images/logos/ubereats.webp";
 import pickmeFlashLogo from "../../images/logos/pickme-logo.webp";
 import uberParcelLogo from "../../images/logos/uber-icon.webp";
 
