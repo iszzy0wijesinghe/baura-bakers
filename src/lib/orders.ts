@@ -1,12 +1,12 @@
 /** @format */
-
 import type { CartItem } from "../app/cart";
 import { claimAccountOrders } from "./accountApi";
-import { checkCheckoutEmailExists, createCheckoutOrder, type FulfillmentType } from "./checkoutApi";
+import { checkCheckoutEmailExists, createCheckoutOrder, type FulfillmentType, type CollectionArrangement, type CourierProvider } from "./checkoutApi";
 import { getBauraDeviceId } from "./device";
 import { laravelGet } from "./laravelApi";
 
 export type DeliveryTarget = "SENDER" | "RECEIVER";
+export type { CollectionArrangement, CourierProvider } from "./checkoutApi";
 export type PublicOrderItem = {
   product_name: string;
   size_label: string;
@@ -19,6 +19,9 @@ export type PublicOrderTracking = {
   id: string;
   order_no: string;
   fulfillment_type?: FulfillmentType;
+  // Optional for legacy orders and API responses that predate the collection feature.
+  collection_arrangement?: CollectionArrangement | null;
+  courier_provider?: CourierProvider | null;
   pickup_date?: string | null;
   pickup_start_time?: string | null;
   pickup_end_time?: string | null;
@@ -51,6 +54,9 @@ type CreateGuestOrderInput = {
   pickupDate?: string;
   pickupStartTime?: string;
   pickupEndTime?: string;
+  // These are sent as structured order fields, not merely stored in notes.
+  collectionArrangement?: CollectionArrangement | null;
+  courierProvider?: CourierProvider | null;
   senderName: string;
   senderEmail?: string;
   senderContactNumber: string;
@@ -95,6 +101,18 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
   if (!pickup && (input.deliveryLat == null || input.deliveryLng == null || !input.deliverySlotId)) {
     throw new Error("Add your exact delivery location and choose a delivery time.");
   }
+  if (pickup) {
+    if (!input.collectionArrangement) {
+      throw new Error("Choose who will collect your order.");
+    }
+    const courierPickup = input.collectionArrangement !== "SELF_PICKUP";
+    if (courierPickup && !input.courierProvider) {
+      throw new Error("Choose PickMe Flash or Uber Parcel for collection.");
+    }
+    if (!courierPickup && input.courierProvider) {
+      throw new Error("Personal collection cannot have a courier provider.");
+    }
+  }
   const needsReceiver = !pickup && (input.hasDifferentReceiver || input.isGift);
   const result = await createCheckoutOrder({
     order_no: input.orderNo,
@@ -104,6 +122,8 @@ export async function createGuestOrder(input: CreateGuestOrderInput) {
     pickup_date: pickup ? input.pickupDate : null,
     pickup_start_time: pickup ? input.pickupStartTime : null,
     pickup_end_time: pickup ? input.pickupEndTime : null,
+    collection_arrangement: pickup ? input.collectionArrangement : null,
+    courier_provider: pickup && input.collectionArrangement !== "SELF_PICKUP" ? input.courierProvider : null,
     sender_name: input.senderName.trim(),
     sender_email: input.senderEmail?.trim().toLowerCase() || "",
     sender_contact_number: input.senderContactNumber.trim(),

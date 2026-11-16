@@ -3,6 +3,8 @@
 import { laravelGet, laravelPost } from "./laravelApi";
 
 export type FulfillmentType = "PICKUP" | "DELIVERY";
+export type CollectionArrangement = "SELF_PICKUP" | "CUSTOMER_COURIER" | "BAKERY_ASSISTED_COURIER";
+export type CourierProvider = "PICKME_FLASH" | "UBER_PARCEL";
 
 export type CheckoutDeliverySlot = {
   id: string;
@@ -15,11 +17,24 @@ export type CheckoutDeliverySlot = {
   is_available: boolean;
 };
 
+export type CheckoutPickupDay = {
+  date: string;
+  weekday: number;
+  isOpen: boolean;
+  openingTime: string | null;
+  closingTime: string | null;
+  source: "WEEKLY" | "EXCEPTION";
+  reason: string | null;
+};
+
 export type CheckoutBootstrap = {
   configuration_version: number;
   delivery_mode: "SCHEDULED" | "EVERYDAY" | "SPECIAL";
   delivery_enabled: boolean;
   pickup_enabled: boolean;
+  pickup_time_zone: "Asia/Colombo";
+  pickup_calendar: CheckoutPickupDay[];
+  /** Legacy settings; do not use these for pickup schedule decisions. */
   business_open_time: string;
   business_close_time: string;
   pickup_preview_days: number;
@@ -54,6 +69,8 @@ export type CreateCheckoutOrderInput = {
   pickup_date?: string | null;
   pickup_start_time?: string | null;
   pickup_end_time?: string | null;
+  collection_arrangement?: CollectionArrangement | null;
+  courier_provider?: CourierProvider | null;
   sender_name: string;
   sender_email: string;
   sender_contact_number: string;
@@ -81,6 +98,11 @@ export type CreatedCheckoutOrder = {
   id: string;
   order_no: string;
   fulfillment_type?: FulfillmentType;
+  collection_arrangement?: CollectionArrangement | null;
+  courier_provider?: CourierProvider | null;
+  pickup_date?: string | null;
+  pickup_start_time?: string | null;
+  pickup_end_time?: string | null;
   user_id?: number | null;
   subtotal_lkr: number;
   delivery_fee_lkr: number;
