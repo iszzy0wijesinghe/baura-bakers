@@ -4,7 +4,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   CalendarDays,
-  Check,
   ChevronDown,
   Clock3,
   CreditCard,

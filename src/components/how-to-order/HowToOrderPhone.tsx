@@ -1,3 +1,4 @@
+/** @format */
 
 import {
   AnimatePresence,
@@ -36,7 +37,7 @@ const PICKME_LOGO = "/checkout-partners/pickme-logo.webp";
 const PHONE_WIDTH = 342;
 const PHONE_HEIGHT = 520;
 
-export const orderingJourney = [
+const orderingJourney = [
   {
     label: "Welcome",
     title: "Something good starts here.",
@@ -89,8 +90,6 @@ export const orderingJourney = [
   },
 ] as const;
 
-export type OrderingJourneyStep = (typeof orderingJourney)[number];
-
 function Label({ children }: { children: ReactNode }) {
   return (
     <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[#9c8d7e]">
@@ -115,8 +114,7 @@ function Action({
         light
           ? "border border-[#e5dbce] bg-white text-[#38271d]"
           : "bg-[#38271d] text-white",
-      ].join(" ")}
-    >
+      ].join(" ")}>
       {children}
     </button>
   );
@@ -146,11 +144,7 @@ function Heading({
   );
 }
 
-function Product({
-  small = false,
-}: {
-  small?: boolean;
-}) {
+function Product({ small = false }: { small?: boolean }) {
   return (
     <div className="overflow-hidden rounded-xl border border-[#e9dfd2] bg-white p-3">
       <div className="overflow-hidden rounded-lg bg-[#f4eadf]">
@@ -167,25 +161,15 @@ function Product({
       <p className="mt-1 text-[10px] text-[#8e8073]">
         A beautifully crafted birthday cake.
       </p>
-      <p className="mt-2 text-[11px] font-bold text-[#39291f]">
-        1.5 kg
-      </p>
+      <p className="mt-2 text-[11px] font-bold text-[#39291f]">1.5 kg</p>
     </div>
   );
 }
 
-function Field({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1.5">
-      <span className="text-[10px] font-semibold text-[#89796a]">
-        {label}
-      </span>
+      <span className="text-[10px] font-semibold text-[#89796a]">{label}</span>
       <div className="rounded-xl border border-[#e9dfd2] bg-white px-3 py-2.5 text-[11px] text-[#39291f]">
         {value}
       </div>
@@ -206,8 +190,7 @@ function CheckoutProgress({ active }: { active: number }) {
               index + 1 <= active
                 ? "bg-[#38271d] text-white"
                 : "bg-white text-[#a69b8e]",
-            ].join(" ")}
-          >
+            ].join(" ")}>
             {index + 1}
           </span>
           <span className="text-[8px] text-[#887b70]">{label}</span>
@@ -235,14 +218,12 @@ function Choice({
         active
           ? "border-[#38271d] bg-[#38271d] text-white"
           : "border-[#e7ded2] bg-white text-[#39291f]",
-      ].join(" ")}
-    >
+      ].join(" ")}>
       <div
         className={[
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
           active ? "bg-white/15" : "bg-[#f4ede3]",
-        ].join(" ")}
-      >
+        ].join(" ")}>
         {icon}
       </div>
       <div className="min-w-0 flex-1">
@@ -251,8 +232,7 @@ function Choice({
           <p
             className={`mt-0.5 text-[9px] ${
               active ? "text-white/65" : "text-[#928477]"
-            }`}
-          >
+            }`}>
             {subtitle}
           </p>
         )}
@@ -320,8 +300,7 @@ function HomepageScreen() {
           {["Signature cakes", "Sweet treats"].map((name, index) => (
             <div
               key={name}
-              className="overflow-hidden rounded-xl border border-[#e8ded1] bg-white"
-            >
+              className="overflow-hidden rounded-xl border border-[#e8ded1] bg-white">
               <img
                 src={PRODUCT_IMAGE}
                 alt=""
@@ -367,8 +346,7 @@ function HomepageScreen() {
         <button
           type="button"
           data-demo-action
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#38271d] px-4 py-3.5 text-[11px] font-semibold text-white"
-        >
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#38271d] px-4 py-3.5 text-[11px] font-semibold text-white">
           Explore the menu <ArrowRight size={14} />
         </button>
       </div>
@@ -579,8 +557,7 @@ function ScheduleScreen() {
           {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
             <span
               key={index}
-              className="py-1 text-center text-[9px] text-[#a29587]"
-            >
+              className="py-1 text-center text-[9px] text-[#a29587]">
               {day}
             </span>
           ))}
@@ -592,8 +569,7 @@ function ScheduleScreen() {
                 index === 9
                   ? "bg-[#38271d] font-bold text-white"
                   : "bg-[#f8f3ea] text-[#6a584b]",
-              ].join(" ")}
-            >
+              ].join(" ")}>
               {index + 1}
             </span>
           ))}
@@ -688,8 +664,7 @@ function WhatsAppScreen() {
           backgroundImage:
             "radial-gradient(#c8c7bd 0.65px, transparent 0.65px)",
           backgroundSize: "18px 18px",
-        }}
-      >
+        }}>
         <div className="mx-auto mb-5 w-fit rounded-lg bg-[#d8e9f1] px-3 py-1.5 text-[9px] text-[#536b75]">
           Today
         </div>
@@ -697,8 +672,7 @@ function WhatsAppScreen() {
           initial={{ opacity: 0, y: 25 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35, duration: 0.5 }}
-          className="ml-auto max-w-[94%] rounded-xl rounded-tr-sm bg-[#dcf8c6] p-3 shadow-sm"
-        >
+          className="ml-auto max-w-[94%] rounded-xl rounded-tr-sm bg-[#dcf8c6] p-3 shadow-sm">
           <p className="text-[11px] font-bold leading-5 text-[#263f2b]">
             Baura Bakers — Order Confirmation
           </p>
@@ -728,9 +702,7 @@ function WhatsAppScreen() {
               Example link — not an actual order
             </p>
           </div>
-          <p className="mt-2 text-right text-[9px] text-[#719179]">
-            10:42 ✓✓
-          </p>
+          <p className="mt-2 text-right text-[9px] text-[#719179]">10:42 ✓✓</p>
         </motion.div>
         <p className="mt-4 text-center text-[9px] text-[#657466]">
           Simulated WhatsApp message
@@ -745,8 +717,7 @@ function WhatsAppScreen() {
           type="button"
           data-demo-action
           aria-label="Continue demonstration to order tracking"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#128c7e] text-white"
-        >
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#128c7e] text-white">
           <ArrowRight size={17} />
         </button>
       </div>
@@ -771,9 +742,7 @@ function TrackingScreen() {
       />
       <div className="rounded-xl border border-[#e8dfd3] bg-white p-4">
         <Label>Order reference</Label>
-        <p className="mt-1 text-base font-bold text-[#38271d]">
-          BB-DEMO-001
-        </p>
+        <p className="mt-1 text-base font-bold text-[#38271d]">BB-DEMO-001</p>
         <div className="mt-5 space-y-5">
           {statuses.map(([title, description], index) => (
             <div key={title} className="flex gap-3">
@@ -783,8 +752,7 @@ function TrackingScreen() {
                     index === 0
                       ? "bg-[#477a53] text-white"
                       : "border border-[#d8cfc3] text-[#b2a495]"
-                  }`}
-                >
+                  }`}>
                   {index === 0 ? (
                     <Check size={12} />
                   ) : (
@@ -799,9 +767,7 @@ function TrackingScreen() {
                 <p className="text-[11px] font-semibold text-[#38271d]">
                   {title}
                 </p>
-                <p className="mt-1 text-[9px] text-[#8b7d70]">
-                  {description}
-                </p>
+                <p className="mt-1 text-[9px] text-[#8b7d70]">{description}</p>
               </div>
             </div>
           ))}
@@ -871,8 +837,6 @@ function PhoneFrame({
   }, [onAdvance]);
 
   useEffect(() => {
-    setTap(null);
-
     const screen = scrollRef.current;
     if (!screen) return;
 
@@ -896,10 +860,7 @@ function PhoneFrame({
     }
 
     function scrollToFraction(fraction: number) {
-      const maximum = Math.max(
-        0,
-        screen!.scrollHeight - screen!.clientHeight
-      );
+      const maximum = Math.max(0, screen!.scrollHeight - screen!.clientHeight);
       screen!.scrollTo({
         top: maximum * fraction,
         behavior: "smooth",
@@ -936,12 +897,7 @@ function PhoneFrame({
       const x = actionRect.left + actionRect.width / 2 - viewportRect.left;
       const y = actionRect.top + actionRect.height / 2 - viewportRect.top;
 
-      if (
-        x < 0 ||
-        x > viewportRect.width ||
-        y < 0 ||
-        y > viewportRect.height
-      ) {
+      if (x < 0 || x > viewportRect.width || y < 0 || y > viewportRect.height) {
         return;
       }
 
@@ -981,10 +937,7 @@ function PhoneFrame({
   }
 
   return (
-    <div
-      className="relative mx-auto w-full"
-      style={{ maxWidth: PHONE_WIDTH }}
-    >
+    <div className="relative mx-auto w-full" style={{ maxWidth: PHONE_WIDTH }}>
       <div className="rounded-[34px] border-[5px] border-[#241b17] bg-[#241b17] p-[4px] shadow-[0_28px_75px_-20px_rgba(47,31,18,0.40)]">
         <div className="relative overflow-hidden rounded-[26px] bg-[#fbf5e7]">
           <div className="relative z-20 flex h-8 items-center justify-between bg-[#241b17] px-6 text-[10px] font-semibold text-white">
@@ -996,8 +949,7 @@ function PhoneFrame({
           <div
             ref={viewportRef}
             className="relative overflow-hidden bg-[#fbf5e7]"
-            style={{ height: PHONE_HEIGHT }}
-          >
+            style={{ height: PHONE_HEIGHT }}>
             <div className="absolute inset-0 flex flex-col">
               {!whatsapp && (
                 <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#ede2d4] bg-[#fbf6eb] px-4">
@@ -1022,15 +974,9 @@ function PhoneFrame({
                 style={{
                   scrollbarWidth: "none",
                   WebkitOverflowScrolling: "touch",
-                }}
-              >
+                }}>
                 <div
-                  className={
-                    whatsapp
-                      ? "h-full"
-                      : "min-h-full px-4 pb-8 pt-4"
-                  }
-                >
+                  className={whatsapp ? "h-full" : "min-h-full px-4 pb-8 pt-4"}>
                   <Screen step={step} />
                 </div>
               </div>
@@ -1087,7 +1033,7 @@ export default function HowToOrderPhone({
 
   const advance = useCallback(() => {
     setStep((current) =>
-      current >= orderingJourney.length - 1 ? 0 : current + 1
+      current >= orderingJourney.length - 1 ? 0 : current + 1,
     );
   }, []);
 
@@ -1099,8 +1045,7 @@ export default function HowToOrderPhone({
     <div
       ref={rootRef}
       className={className}
-      aria-label="Animated Baura Bakers ordering demonstration"
-    >
+      aria-label="Animated Baura Bakers ordering demonstration">
       <PhoneFrame
         key={step}
         step={step}

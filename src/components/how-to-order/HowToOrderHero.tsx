@@ -893,8 +893,6 @@ function DemoPhone({
   }, [onAdvance]);
 
   useEffect(() => {
-    setTap(null);
-
     const screen = screenRef.current;
     if (!screen) return;
 
@@ -992,7 +990,7 @@ function DemoPhone({
       cancelled = true;
       timers.forEach(window.clearTimeout);
     };
-  }, [step, inView, reduceMotion]);
+  }, [step, inView, reduceMotion, whatsapp]);
 
   const handleDemoClick = (event: MouseEvent<HTMLDivElement>) => {
     const element = event.target;
