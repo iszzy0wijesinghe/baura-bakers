@@ -18,6 +18,8 @@ import imageTwo from "../../images/home/hero-image2.webp";
 import imageThree from "../../images/home/hero-image5.webp";
 import imageFour from "../../images/home/hero-image6.webp";
 
+import { useDeliveryPaused } from "../hooks/useDeliveryPaused";
+
 const ease = [0.22, 1, 0.36, 1] as const;
 const HERO_INTERVAL_MS = 6500;
 
@@ -72,6 +74,7 @@ function isOfferItem(item: MenuItem) {
 export default function Home() {
   const reduceMotion = Boolean(useReducedMotion());
 
+  const deliveryPaused = useDeliveryPaused();
   const [items, setItems] = useState<MenuItem[]>([]);
   const [heroSlides, setHeroSlides] = useState<StorefrontHeroSlide[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,11 +169,41 @@ export default function Home() {
 
         <FreshComposition reduceMotion={reduceMotion} />
 
+        {deliveryPaused && <HowToOrderPreview />}
+
         <Celebration reduceMotion={reduceMotion} />
 
         <FinalOrder />
       </main>
     </Page>
+  );
+}
+
+function HowToOrderPreview() {
+  return (
+    <section className="mx-auto w-full max-w-[1540px] px-5 py-12 sm:px-8 lg:px-12">
+      <div className="border-t border-brand-ink/15 pt-10">
+        <p className="text-xs font-semibold uppercase tracking-widest text-brand-ink/50">
+          ORDERING AT BAURA
+        </p>
+
+        <h2 className="mt-3 text-3xl font-semibold tracking-tight text-brand-ink">
+          Your favourites, your way.
+        </h2>
+
+        <p className="mt-4 max-w-xl text-sm leading-7 text-brand-ink/65">
+          Our delivery service is currently paused, but you can still explore
+          available collection and courier arrangements.
+        </p>
+
+        <Link
+          to="/how-to-order"
+          className="mt-6 inline-flex items-center gap-2 rounded-full bg-brand-ink px-5 py-3 text-sm font-semibold text-brand-bg">
+          How to Order
+          <ArrowRight size={16} />
+        </Link>
+      </div>
+    </section>
   );
 }
 

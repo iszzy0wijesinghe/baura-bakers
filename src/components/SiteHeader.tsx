@@ -25,6 +25,8 @@ import logo from "../../images/logos/logo.webp";
 import { logout } from "../lib/auth";
 import { useAuthSession } from "../lib/useAuthSession";
 
+import { useDeliveryPaused } from "../hooks/useDeliveryPaused";
+
 type AuthSession = ReturnType<typeof useAuthSession>;
 type HeaderUser = AuthSession["user"];
 type HeaderProfile = AuthSession["profile"];
@@ -79,6 +81,20 @@ export default function SiteHeader() {
 
   const isHome = location.pathname === "/";
   const isOverlay = isHome && !scrolled && !open;
+
+  const deliveryPaused = useDeliveryPaused();
+
+  const navigationLinks = deliveryPaused
+    ? [
+        ...links.slice(0, 2),
+        {
+          to: "/how-to-order",
+          label: "How to Order",
+          icon: ClipboardList,
+        },
+        ...links.slice(2),
+      ]
+    : links;
 
   async function handleLogout() {
     await logout();
@@ -214,7 +230,7 @@ export default function SiteHeader() {
                   : "",
               ].join(" ")}
               aria-label="Primary navigation">
-              {links.map((link) => (
+              {navigationLinks.map((link) => (
                 <DesktopNavLink
                   key={link.to}
                   to={link.to}
@@ -361,7 +377,7 @@ export default function SiteHeader() {
                 </p>
 
                 <nav className="mt-3" aria-label="Mobile navigation">
-                  {links.map((link, index) => (
+                  {navigationLinks.map((link, index) => (
                     <MobileNavLink
                       key={link.to}
                       to={link.to}

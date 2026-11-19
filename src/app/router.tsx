@@ -37,6 +37,8 @@ import CriticalBreakPage from "../pages/system/CriticalBreakPage";
 import ErrorStatusPage from "../pages/system/ErrorStatusPage";
 import MaintenancePage from "../pages/system/MaintenancePage";
 
+import HowToOrder from "../pages/HowToOrder";
+
 export const router = createBrowserRouter([
   /*
   |--------------------------------------------------------------------------
@@ -120,6 +122,11 @@ export const router = createBrowserRouter([
       {
         path: "/menu",
         element: <Menu />,
+      },
+
+      {
+        path: "/how-to-order",
+        element: <HowToOrder />,
       },
 
       {
