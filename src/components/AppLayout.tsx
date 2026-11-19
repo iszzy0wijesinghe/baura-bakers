@@ -1,3 +1,4 @@
+
 import { AnimatePresence } from "framer-motion";
 import { Outlet, useLocation } from "react-router-dom";
 import FloatingCartButton from "./FloatingCartButton";
@@ -9,6 +10,8 @@ import SiteHeader from "./SiteHeader";
 export default function AppLayout() {
   const location = useLocation();
   const isHome = location.pathname === "/";
+  const isHowToOrder = location.pathname === "/how-to-order";
+  const isFullWidth = isHome || isHowToOrder;
 
   return (
     <div className="min-h-dvh bg-brand-bg text-brand-ink">
@@ -25,10 +28,11 @@ export default function AppLayout() {
 
         <main
           id="main"
-          className={[
-            "mx-auto w-full max-w-6xl px-4",
-            isHome ? "pb-10 pt-5 sm:pt-7" : "py-10",
-          ].join(" ")}
+          className={
+            isFullWidth
+              ? "relative w-full min-w-0"
+              : "mx-auto w-full max-w-6xl px-4 py-10"
+          }
         >
           <AnimatePresence mode="wait" initial={false}>
             <Outlet key={location.pathname} />
