@@ -29,9 +29,8 @@ import {
   type ReactNode,
 } from "react";
 
-const BAURA_LOGO = "../../images/logos/logo.webp";
-const PRODUCT_IMAGE =
-  "../../images/how-to-order/sapphire-gild-birthday-cake.webp";
+const BAURA_LOGO = "/images/logos/logo.webp";
+const PRODUCT_IMAGE = "/images/how-to-order/sapphire-gild-birthday-cake.webp";
 const PICKME_LOGO = "/checkout-partners/pickme-logo.webp";
 
 const PHONE_WIDTH = 342;
